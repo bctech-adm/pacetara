@@ -52,6 +52,8 @@ export const envSchema = z.object({
 
   PRIVACY_POLICY_VERSION: z.string().min(1).default('2026-11-10'),
   PRIVACY_POLICY_URL: z.string().url().default('https://pace.bimacreative.tech/privasi'),
+  /** Situs publik; dipakai untuk tautan undangan komunitas (`/j/<kode>`). */
+  PUBLIC_WEB_URL: z.string().url().default('https://pace.bimacreative.tech'),
 });
 
 export type Env = z.infer<typeof envSchema>;

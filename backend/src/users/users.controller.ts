@@ -69,13 +69,13 @@ export class UsersController {
   }
 
   @Get('users/:id')
-  publicProfile(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.users.publicProfile(id);
+  publicProfile(@CurrentUser() u: AuthUser, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.users.publicProfile(u.id, id);
   }
 
   @Get('users/:id/avatar')
-  async avatarFile(@Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response) {
-    const file = await this.users.avatarFile(id);
+  async avatarFile(@CurrentUser() u: AuthUser, @Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response) {
+    const file = await this.users.avatarFile(u.id, id);
     if (!file) throw new ApiError(404, 'not_found', 'Foto tidak ditemukan');
     res.setHeader('Content-Type', file.contentType);
     res.setHeader('Cache-Control', 'private, max-age=86400');

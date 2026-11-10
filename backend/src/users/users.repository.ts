@@ -19,6 +19,7 @@ export interface UserRow {
   avg_pace_sec_per_km: number | null;
   verification_level: number;
   role: 'user' | 'super_admin';
+  plan: 'free' | 'premium';
   status: 'active' | 'suspended' | 'banned' | 'deleted';
   created_at: Date;
 }
@@ -37,12 +38,13 @@ export interface MyProfile {
   city: string | null;
   avgPaceSecPerKm: number | null;
   verificationLevel: number;
+  plan: 'free' | 'premium';
   badges: string[];
   createdAt: string;
 }
 
 const COLUMNS = `id, email_enc, email_verified_at, phone_enc, phone_verified_at, password_hash, google_sub,
-  display_name, avatar_key, avatar_updated_at, city, avg_pace_sec_per_km, verification_level, role, status, created_at`;
+  display_name, avatar_key, avatar_updated_at, city, avg_pace_sec_per_km, verification_level, role, plan, status, created_at`;
 
 export const emailAad = (id: string) => `users.email:${id}`;
 export const phoneAad = (id: string) => `users.phone:${id}`;
@@ -135,8 +137,9 @@ export class UsersRepository {
       city: row.city,
       avgPaceSecPerKm: row.avg_pace_sec_per_km,
       verificationLevel: row.verification_level,
-      // Premium/Pro ditambahkan modul 2.5; Terverifikasi = Level 2 (modul 3.1).
-      badges: row.verification_level >= 2 ? ['verified'] : [],
+      plan: row.plan,
+      // Terverifikasi = Level 2 (modul 3.1). Paket diubah hanya oleh server (modul 2.5).
+      badges: [...(row.plan === 'premium' ? ['premium'] : []), ...(row.verification_level >= 2 ? ['verified'] : [])],
       createdAt: row.created_at.toISOString(),
     };
   }

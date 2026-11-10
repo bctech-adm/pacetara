@@ -5,6 +5,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { verifyPassword } from '../auth/password.js';
 import { TokenService } from '../auth/token.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
@@ -28,6 +29,7 @@ export class UsersService {
     private readonly repo: UsersRepository,
     private readonly storage: StorageService,
     private readonly tokens: TokenService,
+    private readonly communities: CommunitiesService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -82,10 +84,13 @@ export class UsersService {
   }
 
   /**
-   * Profil publik pengguna lain. Untuk modul 1.2 terbatas pada pengguna aktif; aturan "hanya
-   * sesama anggota komunitas" ditambahkan di modul 1.3 saat tabel komunitas tersedia.
+   * Profil pengguna lain. PRD (Akses): pengguna hanya bisa mengambil data miliknya atau komunitas
+   * tempat ia terdaftar, jadi profil hanya terlihat oleh diri sendiri dan sesama anggota komunitas.
    */
-  async publicProfile(userId: string): Promise<PublicProfile> {
+  async publicProfile(viewerId: string, userId: string): Promise<PublicProfile> {
+    if (viewerId !== userId && !(await this.communities.shareCommunity(viewerId, userId))) {
+      throw new ApiError(404, 'not_found', 'Pengguna tidak ditemukan');
+    }
     const row = await this.repo.findById(userId);
     if (!row || row.status !== 'active') throw new ApiError(404, 'not_found', 'Pengguna tidak ditemukan');
     return {
@@ -97,7 +102,8 @@ export class UsersService {
     };
   }
 
-  async avatarFile(userId: string) {
+  async avatarFile(viewerId: string, userId: string) {
+    if (viewerId !== userId && !(await this.communities.shareCommunity(viewerId, userId))) return undefined;
     const row = await this.repo.findById(userId);
     if (!row?.avatar_key || row.status !== 'active') return undefined;
     return this.storage.get(row.avatar_key);
@@ -115,7 +121,9 @@ export class UsersService {
       throw new ApiError(401, 'invalid_credentials', 'Kata sandi salah');
     }
 
-    await withTx(this.pool, async (db) => {
+    const logos = await withTx(this.pool, async (db) => {
+      // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
+      const communityLogos = await this.communities.onAccountDeletion(db, userId);
       await this.tokens.revokeAllForUser(userId, db);
       await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
       await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
@@ -130,7 +138,9 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
+      return communityLogos;
     });
+    for (const key of logos) await this.storage.delete(key).catch(() => undefined);
     if (row.avatar_key) await this.storage.delete(row.avatar_key).catch(() => this.logger.warn('Gagal menghapus avatar akun terhapus'));
   }
 }
