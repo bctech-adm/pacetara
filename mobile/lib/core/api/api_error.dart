@@ -41,6 +41,11 @@ class ApiError implements Exception {
       if (error.type == DioExceptionType.badCertificate) {
         return const ApiError(0, 'bad_certificate', 'Koneksi tidak aman ditolak');
       }
+      // Jawaban tanpa JSON (mis. ditolak proxy/WAF di depan API): tampilkan kode HTTP agar mudah dilacak.
+      final status = res?.statusCode;
+      if (status != null) {
+        return ApiError(status, 'http_$status', 'Permintaan ditolak server (HTTP $status). Coba lagi nanti');
+      }
     }
     return const ApiError(0, 'unknown', 'Terjadi kesalahan. Coba lagi');
   }

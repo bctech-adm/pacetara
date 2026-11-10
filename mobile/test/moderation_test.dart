@@ -101,6 +101,14 @@ void main() {
     expect(find.text('Pesan diturunkan karena melanggar aturan'), findsOneWidget);
   });
 
+  test('galat tanpa JSON (ditolak proxy) menampilkan kode HTTP', () {
+    final o = RequestOptions(path: '/v1/me', method: 'PATCH');
+    final e = ApiError.from(DioException(requestOptions: o, response: Response(requestOptions: o, statusCode: 403, data: '')));
+    expect(e.status, 403);
+    expect(e.code, 'http_403');
+    expect(e.message, contains('HTTP 403'));
+  });
+
   test('ringkasan percakapan dan deteksi akun diblokir', () {
     final hidden = LastMessage.fromJson({'kind': 'text', 'preview': null, 'deleted': false, 'hidden': true, 'isMine': false, 'senderName': 'Ani', 'createdAt': '2026-11-10T06:00:00Z'});
     expect(hidden.describe(showSender: true), 'Ani: Pesan disembunyikan');
