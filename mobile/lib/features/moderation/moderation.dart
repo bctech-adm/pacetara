@@ -92,7 +92,9 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
       child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
-          child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(widget.title, style: theme.textTheme.titleLarge),
             const SizedBox(height: 4),
             Text('Pelapor tidak diberitahukan kepada orang yang dilaporkan.', style: theme.textTheme.bodySmall),
@@ -118,7 +120,8 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
               onPressed: _reason == null || _busy ? null : _submit,
               child: Text(_busy ? 'Mengirim…' : 'Kirim laporan'),
             ),
-          ]),
+            ]),
+          ),
         ),
       ),
     );
