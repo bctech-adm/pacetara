@@ -10,7 +10,11 @@ RUN npm run build && npm prune --omit=dev --ignore-scripts
 FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /app
-RUN apk add --no-cache tini && mkdir -p /data/session && chown node:node /data/session
+# Patch Alpine terbaru; npm/npx/corepack tidak dipakai saat runtime dan dibuang (permukaan serangan + temuan Trivy).
+RUN apk upgrade --no-cache && apk add --no-cache tini \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+  && mkdir -p /data/session && chown node:node /data/session
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./

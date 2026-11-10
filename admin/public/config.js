@@ -1,2 +1,3 @@
-// Konfigurasi runtime. Di container, Caddy mengisi nilainya dari environment (directive templates).
-window.__PACETARA__ = { apiBaseUrl: "{{env "API_PUBLIC_URL"}}" };
+// Diganti saat container berjalan (admin/entrypoint.sh) dengan URL API dari environment.
+// Saat `npm run dev`, src/config.ts memakai VITE_API_BASE_URL.
+window.__PACETARA__ = {};

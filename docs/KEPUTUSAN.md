@@ -44,3 +44,12 @@ Catat setiap keputusan baru di bawah, dengan tanggal dan modul. Jangan ubah kepu
 32. **Email:** SMTP via nodemailer, STARTTLS wajib di produksi. Lokal memakai Mailpit (`docker compose --profile dev up`, UI di http://127.0.0.1:8025).
 33. **Tes e2e** (`backend/test/*.e2e.spec.ts`) memakai Postgres+PostGIS dan Redis sungguhan (`TEST_DATABASE_URL`, `TEST_REDIS_URL`), dengan email/WhatsApp/Google/S3 dipalsukan. Tanpa variabel itu suite dilewati. CI menjalankannya di job "Migrasi + tes e2e".
 34. **gitleaks di CI** dijalankan sebagai CLI atas seluruh riwayat, karena gitleaks-action gagal pada push pertama ke repo kosong (tidak memindai apa pun tetapi tetap merah).
+
+## Pengerasan image (10 Nov 2026)
+
+35. **Gerbang Trivy di CI** (HIGH/CRITICAL yang sudah ada perbaikannya) memblokir push image. Pemindaian pertama menemukan: npm bawaan `node:22-alpine` (10 HIGH, bukan dependensi aplikasi), `gosu` di image server `postgres` (26, termasuk 1 CRITICAL), dan `golang.org/x/net` di Caddy v2.11.9 (1 HIGH, belum diperbaiki di rilis Caddy mana pun). Perbaikannya:
+    - Runtime Node (backend, wa-otp): `apk upgrade` + npm, npx, corepack dihapus. Perintah container memanggil `node` langsung, jadi npm tidak dibutuhkan.
+    - Backup: `alpine:3.24` + `postgresql16-client` (pg_dump/pg_restore 16.15), bukan image server postgres. Backup → restore diuji ulang.
+    - Panel admin: Caddy diganti nginx dari `alpine:3.24`, berjalan sebagai user `nginx` (non-root). `config.js` dan CSP ditulis `admin/entrypoint.sh` dari `API_PUBLIC_URL` (divalidasi ketat: hanya `https://domain[:port]`). Menggantikan keputusan #8 (directive templates Caddy).
+    - Semua image akhir menjalankan `apk upgrade` agar patch Alpine terbaru ikut walau base image tertinggal.
+36. **Action pihak ketiga di CI dikunci ke commit SHA** (mulai dari trivy-action v0.36.0), karena tag bisa dipindah ke kode lain.
