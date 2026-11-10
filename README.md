@@ -11,6 +11,15 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | 1.3 Komunitas | Selesai (backend + aplikasi), belum di-deploy. Batas paket mengikuti tabel PRD, menunggu keputusan A2/B1 |
 | 1.4 – 1.10 | Belum |
 
+## Mencoba aplikasi di HP (APK uji)
+
+1. Buka [Releases](https://github.com/bctech-adm/pacetara/releases) dan unduh `pacetara-<versi>.apk` dari rilis terbaru.
+2. Pasang di HP Android (izinkan "Instal aplikasi tidak dikenal" untuk browser/file manager).
+3. Aplikasi otomatis terhubung ke server produksi (pace-api.bimacreative.tech).
+4. Setiap ada commit baru di `main` yang lolos CI, rilis APK baru terbit otomatis. Aplikasi menawarkan pembaruan saat dibuka, atau lewat Profil → Periksa pembaruan.
+
+Server juga diperbarui otomatis: container `pacetara-deployer` di VPS menarik image baru setiap 5 menit (docs/KEPUTUSAN.md #58). Lihat lognya dengan `sudo docker logs pacetara-deployer`.
+
 ## Menjalankan di mesin sendiri
 
 Butuh Docker dan `openssl`.

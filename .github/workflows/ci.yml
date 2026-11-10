@@ -5,6 +5,8 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  # Tombol "Run workflow" di tab Actions (mis. menerbitkan APK setelah secrets diisi).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -139,14 +141,14 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - name: Login GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           REF=${{ steps.img.outputs.ref }}
           docker tag $REF:ci $REF:${GITHUB_SHA::12}
@@ -157,7 +159,7 @@ jobs:
   # (yang memantau `latest`) tidak pernah menarik campuran versi lama dan baru.
   promote:
     name: Tandai image sebagai latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: [images, mobile]
     runs-on: ubuntu-latest
     permissions:
@@ -232,7 +234,7 @@ jobs:
             --dart-define=API_BASE_URL=$API_BASE_URL --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
           cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/pacetara-$CODE.apk"
       - name: Terbitkan rilis
-        if: steps.signing.outputs.signed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.signing.outputs.signed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
