@@ -59,9 +59,12 @@ Jika port 80/443 sudah dipakai layanan lain di VPS, ubah `HTTP_PORT`/`HTTPS_PORT
 
 ## Super admin (panel https://pace-admin.bimacreative.tech)
 
-Super admin tidak bisa dibuat dari web. Daftarkan akun biasa di aplikasi **dengan email dan kata sandi**, lalu di server:
+Super admin tidak bisa dibuat dari web. Daftarkan akun biasa di aplikasi **dengan email dan kata sandi** (akun Google: atur kata sandi lewat "Lupa kata sandi?"), lalu di server:
 
 ```sh
+# VPS bersama (stack di /opt/infra/web/clients/pacetara), bisa dari folder mana pun:
+sudo docker exec pacetara-api node dist/scripts/admin.js promote email@contoh.com
+# VPS khusus / lokal, dari folder repo:
 docker compose exec api node dist/scripts/admin.js promote email@contoh.com
 ```
 
