@@ -6,6 +6,7 @@ import { PG_POOL } from '../core.module.js';
 import { verifyPassword } from '../auth/password.js';
 import { TokenService } from '../auth/token.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { LiveService } from '../live/live.service.js';
 import { RunsService } from '../runs/runs.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -32,6 +33,7 @@ export class UsersService {
     private readonly tokens: TokenService,
     private readonly communities: CommunitiesService,
     private readonly runs: RunsService,
+    private readonly live: LiveService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -144,6 +146,8 @@ export class UsersService {
       );
       return [...communityLogos, ...runPhotos];
     });
+    // Status lari langsung (Redis) ikut dihapus.
+    await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));
     for (const key of logos) await this.storage.delete(key).catch(() => undefined);
     if (row.avatar_key) await this.storage.delete(row.avatar_key).catch(() => this.logger.warn('Gagal menghapus avatar akun terhapus'));
   }

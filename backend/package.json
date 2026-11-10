@@ -33,6 +33,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.35.5",
+    "ws": "^8.22.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -44,6 +45,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "@types/ws": "^8.18.2",
     "supertest": "^7.3.2",
     "typescript": "~5.9",
     "unplugin-swc": "^2.0.0",

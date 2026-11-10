@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
+import '../../live/live_widgets.dart';
 import '../communities_repository.dart';
 import '../models.dart';
 import '../widgets.dart';
@@ -80,6 +81,7 @@ class _DetailBody extends ConsumerWidget {
               Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(detail.description)),
             Padding(padding: const EdgeInsets.all(16), child: _PrimaryAction(detail: detail)),
             if (c.isStaff) _AdminPanel(detail: detail),
+            if (isMember) CommunityLiveSection(communityId: c.id),
             if (isMember) _MembersSection(detail: detail),
           ],
         ),

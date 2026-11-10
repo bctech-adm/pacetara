@@ -7,6 +7,7 @@ import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
+import { LiveService } from '../live/live.service.js';
 import { RUN_HISTORY_DAYS, type UserPlan } from '../plans/plans.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -58,10 +59,13 @@ export class RunsService {
     private readonly crypto: FieldCrypto,
     private readonly storage: StorageService,
     private readonly communities: CommunitiesService,
+    private readonly live: LiveService,
   ) {}
 
   /** Simpan lari. Idempoten per (pengguna, clientRunId): upload ulang mengembalikan lari yang sama. */
   async create(userId: string, input: CreateRunInput) {
+    // Lari selesai dan diunggah: status lari langsung (beserta titik lokasinya) dihapus dari server.
+    await this.live.end(userId, input.clientRunId);
     const existing = await this.pool.query<{ id: string }>('SELECT id FROM runs WHERE user_id = $1 AND client_run_id = $2', [
       userId,
       input.clientRunId,

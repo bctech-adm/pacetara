@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../live/live_share.dart';
+import '../../live/live_widgets.dart';
 import '../recorder.dart';
 import '../route_map.dart';
 import '../runner_character.dart';
@@ -124,6 +126,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
   Widget build(BuildContext context) {
     final s = ref.watch(recorderProvider);
     final rec = ref.read(recorderProvider.notifier);
+    ref.watch(liveShareProvider); // pengirim status lari hidup selama layar Lari ada
     final theme = Theme.of(context);
     final track = s.track;
     final segments = [for (final seg in track?.segments ?? const <List<TrackPoint>>[]) [for (final p in seg) LatLng(p.lat, p.lng)]];
@@ -181,6 +184,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                   ]),
                   const SizedBox(height: 8),
                   _GpsBadge(accuracy: s.gpsAccuracy, active: s.status == RecorderStatus.recording || s.status == RecorderStatus.paused),
+                  // Status lari: mati secara bawaan, dipilih per komunitas sebelum/saat merekam.
+                  if (s.status != RecorderStatus.finished) const Padding(padding: EdgeInsets.only(top: 8), child: LiveShareChip()),
                   const SizedBox(height: 16),
                   switch (s.status) {
                     RecorderStatus.idle || RecorderStatus.finished => SizedBox(

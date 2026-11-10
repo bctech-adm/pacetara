@@ -103,7 +103,7 @@ class _RouteMapState extends State<RouteMap> {
         ),
       ),
       children: [
-        TileLayer(urlTemplate: AppConfig.mapTileUrl, userAgentPackageName: 'tech.bimacreative.pacetara', maxZoom: 19),
+        mapTileLayer(),
         PolylineLayer(
           polylines: [
             for (final s in widget.segments)
@@ -137,23 +137,28 @@ class _RouteMapState extends State<RouteMap> {
               ),
             ),
           ),
-        // Lisensi data OpenStreetMap (ODbL) mewajibkan atribusi. Tampil 5 detik lalu mengecil menjadi
-        // ikon (i) yang bisa diketuk, sesuai pedoman atribusi OSM untuk layar kecil.
-        RichAttributionWidget(
-          showFlutterMapAttribution: false,
-          popupInitialDisplayDuration: const Duration(seconds: 5),
-          attributions: [
-            TextSourceAttribution(
-              AppConfig.mapAttribution,
-              onTap: () => launchUrl(Uri.parse(AppConfig.mapAttributionUrl), mode: LaunchMode.externalApplication),
-            ),
-          ],
-        ),
+        mapAttribution(),
       ],
     );
     return widget.height == null ? map : SizedBox(height: widget.height, child: map);
   }
 }
+
+/// Lapisan tile peta, dipakai semua peta di aplikasi.
+Widget mapTileLayer() => TileLayer(urlTemplate: AppConfig.mapTileUrl, userAgentPackageName: 'tech.bimacreative.pacetara', maxZoom: 19);
+
+/// Lisensi data OpenStreetMap (ODbL) mewajibkan atribusi. Tampil 5 detik lalu mengecil menjadi
+/// ikon (i) yang bisa diketuk, sesuai pedoman atribusi OSM untuk layar kecil.
+Widget mapAttribution() => RichAttributionWidget(
+      showFlutterMapAttribution: false,
+      popupInitialDisplayDuration: const Duration(seconds: 5),
+      attributions: [
+        TextSourceAttribution(
+          AppConfig.mapAttribution,
+          onTap: () => launchUrl(Uri.parse(AppConfig.mapAttributionUrl), mode: LaunchMode.externalApplication),
+        ),
+      ],
+    );
 
 class _Dot extends StatelessWidget {
   const _Dot({required this.color});
