@@ -4,7 +4,7 @@
 name: pacetara
 
 x-backend: &backend
-  image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-backend:${IMAGE_TAG:-latest}
+  image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-backend:${IMAGE_TAG:-latest}
   build: ./backend
   restart: unless-stopped
   env_file: .env
@@ -70,7 +70,7 @@ services:
       redis: { condition: service_healthy }
 
   wa-otp:
-    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-wa-otp:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-wa-otp:${IMAGE_TAG:-latest}
     build: ./wa-otp
     restart: unless-stopped
     environment:
@@ -84,7 +84,7 @@ services:
     security_opt: ["no-new-privileges:true"]
 
   admin:
-    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-admin:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-admin:${IMAGE_TAG:-latest}
     build: ./admin
     restart: unless-stopped
     environment:
@@ -173,7 +173,7 @@ services:
     networks: [internal]
 
   backup:
-    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-backup:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-backup:${IMAGE_TAG:-latest}
     build: ./infra/backup
     restart: unless-stopped
     environment:
