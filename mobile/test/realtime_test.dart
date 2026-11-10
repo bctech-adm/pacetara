@@ -1,6 +1,5 @@
 // Tes ini memakai socket sungguhan (server WebSocket lokal), jadi sengaja tanpa testWidgets:
 // binding widget memalsukan HttpClient untuk seluruh berkas.
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
