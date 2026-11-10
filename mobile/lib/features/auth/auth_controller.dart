@@ -89,22 +89,26 @@ class AuthController extends AsyncNotifier<MyProfile?> {
         await _applyAuthResult(res.data!);
       });
 
-  /// Masuk dengan Google. Jika akun belum ada dan [privacyVersion] null, melempar
-  /// ApiError `privacy_required`; layar lalu meminta persetujuan dan memanggil ulang.
-  Future<void> loginWithGoogle({String? privacyVersion}) async {
-    final String idToken;
+  /// Membuka pemilih akun Google dan mengembalikan ID token (berlaku ±1 jam).
+  Future<String> googleIdToken() async {
     try {
       await _ensureGoogleInitialized();
       final account = await GoogleSignIn.instance.authenticate();
       final token = account.authentication.idToken;
       if (token == null) throw const ApiError(0, 'google_failed', 'Login Google gagal, coba lagi');
-      idToken = token;
+      return token;
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         throw const ApiError(0, 'canceled', 'Login Google dibatalkan');
       }
       throw const ApiError(0, 'google_failed', 'Login Google gagal, coba lagi');
     }
+  }
+
+  /// Masuk dengan ID token Google. Jika akun belum ada dan [privacyVersion] null, melempar
+  /// ApiError `privacy_required`; layar meminta persetujuan lalu memanggil ulang dengan token
+  /// YANG SAMA (pemilih akun tidak dibuka dua kali).
+  Future<void> loginWithGoogle({required String idToken, String? privacyVersion}) async {
     await _call(() async {
       final res = await _bare.post<Map<String, dynamic>>('/v1/auth/google', data: {
         'idToken': idToken,

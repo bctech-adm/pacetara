@@ -18,7 +18,8 @@ class AppConfig {
     'MAP_TILE_URL',
     defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   );
-  static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: '© OpenStreetMap contributors');
+  static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: 'OpenStreetMap contributors');
+  static const mapAttributionUrl = String.fromEnvironment('MAP_ATTRIBUTION_URL', defaultValue: 'https://www.openstreetmap.org/copyright');
 
   /// Hanya untuk development dengan Caddy lokal (CA internal). Diabaikan di build rilis.
   static const allowDevCa = bool.fromEnvironment('ALLOW_DEV_CA');

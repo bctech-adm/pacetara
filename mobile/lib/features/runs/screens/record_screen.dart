@@ -7,7 +7,28 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/widgets/common.dart';
 import '../recorder.dart';
 import '../route_map.dart';
+import '../runner_character.dart';
 import '../track.dart';
+
+/// Posisi saat belum merekam, hanya jika izin lokasi SUDAH diberikan (tidak memunculkan dialog izin).
+final idlePositionProvider = FutureProvider.autoDispose<LatLng?>((ref) async {
+  try {
+    if (!await Geolocator.isLocationServiceEnabled()) return null;
+    final perm = await Geolocator.checkPermission();
+    if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) return null;
+    Position? p;
+    try {
+      p = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
+      );
+    } catch (_) {
+      p = await Geolocator.getLastKnownPosition();
+    }
+    return p == null ? null : LatLng(p.latitude, p.longitude);
+  } catch (_) {
+    return null;
+  }
+});
 
 /// Tab "Lari": mulai, jeda, lanjut, selesai. Rekaman berjalan di foreground service.
 class RecordScreen extends ConsumerStatefulWidget {
@@ -94,16 +115,39 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     final theme = Theme.of(context);
     final track = s.track;
     final segments = [for (final seg in track?.segments ?? const <List<TrackPoint>>[]) [for (final p in seg) LatLng(p.lat, p.lng)]];
+    final character = ref.watch(runnerCharacterProvider);
+    final lastPoint = track?.last;
+    final runnerAt = lastPoint != null
+        ? LatLng(lastPoint.lat, lastPoint.lng)
+        : (s.status == RecorderStatus.idle ? ref.watch(idlePositionProvider).value : null);
 
     return Scaffold(
-      appBar: AppBar(title: Text(switch (s.status) {
-        RecorderStatus.recording => 'Merekam lari',
-        RecorderStatus.paused => 'Dijeda',
-        _ => 'Lari',
-      })),
+      appBar: AppBar(
+        title: Text(switch (s.status) {
+          RecorderStatus.recording => 'Merekam lari',
+          RecorderStatus.paused => 'Dijeda',
+          _ => 'Lari',
+        }),
+        actions: [
+          IconButton(
+            tooltip: 'Karakter di peta',
+            onPressed: () => showCharacterPicker(context, ref),
+            icon: Text(character.emoji, style: const TextStyle(fontSize: 22)),
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          Expanded(child: RouteMap(segments: segments, follow: s.status == RecorderStatus.recording, showEndpoints: false)),
+          Expanded(
+            child: RouteMap(
+              segments: segments,
+              follow: s.status == RecorderStatus.recording,
+              showEndpoints: false,
+              runnerAt: runnerAt,
+              runnerHeading: track == null ? null : headingFromTrack(track.segments.last),
+              character: character,
+            ),
+          ),
           Container(
             color: theme.colorScheme.surface,
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

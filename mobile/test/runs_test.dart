@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pacetara/features/runs/recorder.dart';
+import 'package:pacetara/features/runs/runner_character.dart';
 import 'package:pacetara/features/runs/runs_repository.dart';
 import 'package:pacetara/features/runs/screens/save_run_screen.dart';
 import 'package:pacetara/features/runs/track.dart';
@@ -155,6 +156,27 @@ void main() {
       await rec.reset();
       expect(container.read(recorderProvider).status, RecorderStatus.idle);
       expect(drafts.saved, isNull);
+    });
+  });
+
+  group('arah karakter', () {
+    test('bearing: utara 0°, timur 90°', () {
+      expect(bearing(0, 0, 1, 0), closeTo(0, 0.01));
+      expect(bearing(0, 0, 0, 1), closeTo(90, 0.01));
+      expect(bearing(0, 0, -1, 0), closeTo(180, 0.01));
+    });
+
+    test('heading dari track mengabaikan derau < 15 m', () {
+      final t = Track(startedAt: start);
+      for (final f in straight(start, meters: 100)) {
+        t.add(f);
+      }
+      expect(headingFromTrack(t.segments.last), closeTo(0, 1));
+      expect(headingFromTrack(t.segments.last.sublist(0, 1)), isNull);
+    });
+
+    test('semua karakter punya id unik', () {
+      expect(runnerCharacters.map((c) => c.id).toSet(), hasLength(runnerCharacters.length));
     });
   });
 

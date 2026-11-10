@@ -34,16 +34,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _google() async {
     final auth = ref.read(authControllerProvider.notifier);
+    final String idToken;
     try {
-      await auth.loginWithGoogle();
+      idToken = await auth.googleIdToken(); // pemilih akun Google dibuka SEKALI
     } on ApiError catch (e) {
       if (e.code == 'canceled') return;
+      rethrow;
+    }
+    try {
+      await auth.loginWithGoogle(idToken: idToken);
+    } on ApiError catch (e) {
       if (e.code != 'privacy_required' || !mounted) rethrow;
-      // Akun Google baru: minta persetujuan kebijakan privasi dulu.
+      // Akun Google baru: minta persetujuan kebijakan privasi, lalu kirim ulang token yang sama.
       final config = await ref.read(authConfigProvider.future);
       if (!mounted) return;
       final agreed = await showPrivacyConsentSheet(context, config);
-      if (agreed == true) await auth.loginWithGoogle(privacyVersion: config.privacyVersion);
+      if (agreed == true) await auth.loginWithGoogle(idToken: idToken, privacyVersion: config.privacyVersion);
     }
   }
 
