@@ -6,7 +6,7 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 
 | Modul | Status |
 | --- | --- |
-| 1.1 Fondasi | Selesai di lokal; HTTPS di domain produksi menunggu DNS dan deploy ke VPS |
+| 1.1 Fondasi | Selesai. Produksi: https://pace-api.bimacreative.tech/health dan https://pace-admin.bimacreative.tech |
 | 1.2 – 1.10 | Belum |
 
 ## Menjalankan di mesin sendiri
@@ -22,7 +22,17 @@ curl -k --resolve api.localhost:8443:127.0.0.1 https://api.localhost:8443/health
 
 Panel admin: https://admin.localhost:8443 (sertifikat dari CA internal Caddy).
 
-## Deploy ke VPS
+## Deploy ke VPS bersama (Traefik sudah ada) — kondisi saat ini
+
+Stack di `/opt/infra/web/clients/pacetara`, dijalankan dengan:
+
+```sh
+sudo docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
+```
+
+Rute Traefik: `infra/traefik/pacetara.yml` → `/opt/infra/traefik/dynamic/clients/`, lalu `sudo docker exec traefik kill -HUP 1`. Detail di docs/KEPUTUSAN.md #18–21.
+
+## Deploy ke VPS khusus (Caddy)
 
 1. Arahkan DNS `pace-api.bimacreative.tech` dan `pace-admin.bimacreative.tech` ke VPS.
 2. Salin `docker-compose.yml`, folder `infra/`, dan `.env` (dari `./scripts/init-env.sh`, lalu lengkapi `BACKUP_AGE_RECIPIENT` dan `BACKUP_REMOTE`).

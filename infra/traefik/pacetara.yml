@@ -3,7 +3,7 @@
 # `docker exec traefik kill -HUP 1` (JANGAN `docker kill`).
 # DNS pre-check WAJIB: dig +short A pace-api.bimacreative.tech @1.1.1.1 & @8.8.8.8 = 31.97.50.221, AAAA kosong.
 # Urutan middleware = konvensi router lain: crowdsec → security-headers → ratelimit-*.
-# Rute panel admin (pace-admin.bimacreative.tech → pacetara-admin:8080) ditambahkan setelah DNS-nya aktif.
+# Panel admin: pace-admin.bimacreative.tech → pacetara-admin:8080.
 http:
   routers:
     # Login/daftar/OTP: batas ketat terhadap brute-force dan spam OTP (API juga membatasi sendiri).
@@ -21,6 +21,15 @@ http:
       priority: 1
       middlewares: [crowdsec, security-headers, ratelimit-default]
       service: pacetara-api
+      tls:
+        certResolver: le-http
+    # Panel super admin (login + 2FA dibangun di modul 1.8). CSP diatur container admin sendiri.
+    pacetara-admin:
+      entryPoints: [websecure]
+      rule: "Host(`pace-admin.bimacreative.tech`)"
+      priority: 1
+      middlewares: [crowdsec, security-headers, ratelimit-default]
+      service: pacetara-admin
       tls:
         certResolver: le-http
 
@@ -41,3 +50,7 @@ http:
           path: /health/live
           interval: 15s
           timeout: 3s
+    pacetara-admin:
+      loadBalancer:
+        servers:
+          - url: "http://pacetara-admin:8080"

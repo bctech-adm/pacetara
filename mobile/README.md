@@ -32,6 +32,6 @@ flutter run --dart-define=API_BASE_URL=https://api.localhost:8443 --dart-define=
 
 ## Keamanan
 
-- **Certificate pinning ke CA:** hanya root ISRG X1/X2 (`assets/certs/`) yang dipercaya. Kedua root berlaku sampai 2035 dan 2040.
+- **Certificate pinning ke CA:** hanya root Let's Encrypt ISRG X1/X2 dan Root YE/YR (`assets/certs/`) yang dipercaya.
 - **Token** di Android Keystore (`flutter_secure_storage`), lihat `lib/core/storage/token_storage.dart`.
 - **Tanpa cleartext:** `usesCleartextTraffic=false` dan `allowBackup=false` di manifest.

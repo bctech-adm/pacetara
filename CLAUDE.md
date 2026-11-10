@@ -37,7 +37,7 @@ Sebuah modul belum selesai jika salah satu syarat ini belum terpenuhi.
 
 **Data dalam perjalanan**
 - HTTPS (TLS 1.2+) untuk semua permintaan, termasuk WebSocket. Permintaan tanpa enkripsi ditolak.
-- Certificate pinning di aplikasi: hanya root ISRG X1/X2 yang dipercaya, Caddy dikunci ke Let's Encrypt (lihat KEPUTUSAN.md).
+- Certificate pinning di aplikasi: hanya root ISRG X1/X2 dan Root YE/YR yang dipercaya, TLS dari Let's Encrypt (lihat KEPUTUSAN.md).
 - Data pribadi tidak pernah masuk ke URL atau query string.
 
 **Data tersimpan**
