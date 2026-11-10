@@ -1,0 +1,10 @@
+# Aturan bawaan gitleaks + pengecualian sempit untuk positif palsu yang sudah diperiksa.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Referensi ke variabel environment, bukan nilai rahasia"
+regexTarget = "line"
+regexes = [
+  '''(secretAccessKey|accessKeyId)\s*:\s*env\.[A-Z0-9_]+''',
+]

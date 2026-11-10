@@ -15,5 +15,6 @@ mobile/android/key.properties
 *.jks
 *.keystore
 # Sesi WhatsApp tidak boleh pernah masuk repo
-**/session/
+wa-otp/session/
+/session/
 .claude/settings.local.json
