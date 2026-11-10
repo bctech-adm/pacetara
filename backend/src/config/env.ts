@@ -54,6 +54,13 @@ export const envSchema = z.object({
   PRIVACY_POLICY_URL: z.string().url().default('https://pace.bimacreative.tech/privasi'),
   /** Situs publik; dipakai untuk tautan undangan komunitas (`/j/<kode>`). */
   PUBLIC_WEB_URL: z.string().url().default('https://pace.bimacreative.tech'),
+
+  /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
+  APP_UPDATE_MANIFEST_URL: z
+    .string()
+    .url()
+    .default('https://github.com/bctech-adm/pacetara/releases/latest/download/latest.json'),
+  APP_UPDATE_APK_URL_PREFIX: z.string().url().default('https://github.com/bctech-adm/pacetara/releases/download/'),
 });
 
 export type Env = z.infer<typeof envSchema>;

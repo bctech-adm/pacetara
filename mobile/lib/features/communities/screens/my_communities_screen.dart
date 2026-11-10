@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../auth/auth_controller.dart';
+import '../../auth/models.dart';
+import '../models.dart';
 import '../../profile/profile_screen.dart';
+import '../../update/update_service.dart';
 import '../communities_repository.dart';
 import '../widgets.dart';
 
@@ -16,6 +19,10 @@ class MyCommunitiesScreen extends ConsumerWidget {
     final profile = ref.watch(authControllerProvider).value;
     final mine = ref.watch(myCommunitiesProvider);
 
+    return UpdateChecker(child: _scaffold(context, ref, profile, mine));
+  }
+
+  Widget _scaffold(BuildContext context, WidgetRef ref, MyProfile? profile, AsyncValue<MyCommunities> mine) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Komunitasku'),

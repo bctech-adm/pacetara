@@ -73,6 +73,26 @@ services:
     <<: *logging
     mem_limit: 256m
 
+  # Deploy otomatis berbasis tarik (infra/deployer/deploy-loop.sh). Memegang docker.sock (setara
+  # akses root ke Docker), jadi: image resmi `docker` dengan versi terkunci, tanpa jaringan sendiri
+  # (penarikan image dilakukan daemon Docker), dan berkas stack dipasang read-only.
+  # Path harus sama dengan di host karena bind mount Compose di-resolve oleh daemon di host.
+  deployer:
+    image: docker:29.9.3-cli
+    container_name: pacetara-deployer
+    restart: unless-stopped
+    network_mode: none
+    environment:
+      STACK_DIR: /opt/infra/web/clients/pacetara
+      INTERVAL: "300"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/infra/web/clients/pacetara:/opt/infra/web/clients/pacetara:ro
+    entrypoint: ["/bin/sh", "/opt/infra/web/clients/pacetara/infra/deployer/deploy-loop.sh"]
+    <<: *logging
+    mem_limit: 128m
+    security_opt: ["no-new-privileges:true"]
+
 networks:
   web-edge:
     external: true

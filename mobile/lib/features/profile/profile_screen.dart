@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../auth/models.dart';
+import '../update/update_service.dart';
 
 class Avatar extends ConsumerWidget {
   const Avatar({super.key, required this.profile, this.radius = 28});
@@ -151,6 +152,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: Text(profile.phoneVerified ? 'Nomor HP terverifikasi' : 'Nomor HP belum terverifikasi'),
         ),
         const Divider(),
+        const _VersionTile(),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.logout),
@@ -241,6 +243,31 @@ class _DeleteAccountDialogState extends ConsumerState<DeleteAccountDialog> {
           child: const Text('Hapus permanen'),
         ),
       ],
+    );
+  }
+}
+
+class _VersionTile extends ConsumerWidget {
+  const _VersionTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = ref.watch(packageInfoProvider).value;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.system_update_outlined),
+      title: const Text('Periksa pembaruan'),
+      subtitle: Text(info == null ? 'Versi ...' : 'Versi ${info.version} (build ${info.buildNumber})'),
+      onTap: () async {
+        ref.invalidate(availableUpdateProvider);
+        final release = await ref.read(availableUpdateProvider.future);
+        if (!context.mounted) return;
+        if (release == null) {
+          showInfo(context, 'Aplikasi sudah versi terbaru');
+        } else {
+          await showUpdateDialog(context, release);
+        }
+      },
     );
   }
 }
