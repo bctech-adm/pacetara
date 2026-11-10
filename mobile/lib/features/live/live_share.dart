@@ -51,7 +51,7 @@ class LiveShareController extends Notifier<LiveShareState> {
     final rec = ref.read(recorderProvider);
     if (!_isActive(rec.status)) return;
     if (shares.isEmpty) {
-      _stop(rec.clientRunId);
+      _stop();
     } else {
       _activeRunId = rec.clientRunId;
       _ensureTimer();
@@ -69,7 +69,7 @@ class LiveShareController extends Notifier<LiveShareState> {
       if (firstTick || prev?.status != next.status) unawaited(sendNow());
     } else if (prev != null && _isActive(prev.status) && !active) {
       // Selesai atau dibuang: hapus status di server dan kembali ke bawaan (mati) untuk lari berikutnya.
-      _stop(prev.clientRunId ?? _activeRunId);
+      _stop();
       state = const LiveShareState();
     }
   }
@@ -107,9 +107,11 @@ class LiveShareController extends Notifier<LiveShareState> {
     _timer ??= Timer.periodic(interval, (_) => unawaited(sendNow()));
   }
 
-  void _stop(String? runId) {
+  /// Hentikan pengiriman. DELETE ke server hanya jika status lari ini memang pernah dinyalakan.
+  void _stop() {
     _timer?.cancel();
     _timer = null;
+    final runId = _activeRunId;
     _activeRunId = null;
     if (runId != null) unawaited(_endQuietly(runId));
   }
