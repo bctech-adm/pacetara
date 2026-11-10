@@ -1,6 +1,7 @@
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
@@ -56,7 +57,8 @@ export class BaileysProvider implements OtpProvider {
       version,
       auth: state,
       logger: log.child({ module: 'baileys' }, { level: 'warn' }) as never,
-      browser: ['PaceTara OTP', 'Chrome', '1.0'],
+      // Harus preset platform yang dikenal WhatsApp; nilai bebas membuat kode pairing ditolak di HP.
+      browser: Browsers.ubuntu('Chrome'),
       markOnlineOnConnect: false,
       syncFullHistory: false,
     });
@@ -104,7 +106,15 @@ export class BaileysProvider implements OtpProvider {
         }
         if (status === DisconnectReason.restartRequired) {
           // Normal setelah pairing berhasil: sambung ulang segera dengan kredensial baru.
+          log.info('Pairing diterima, menyambung ulang...');
           this.scheduleReconnect(500, false);
+          return;
+        }
+        if (!state.creds.registered && !state.creds.me) {
+          // Pairing belum selesai dan kodenya kedaluwarsa (biasanya 408). Kredensial setengah jadi
+          // akan ditolak, jadi langsung mulai sesi baru dan minta kode baru.
+          log.warn('Kode pairing kedaluwarsa, membuat kode baru...');
+          this.scheduleReconnect(3_000, true);
           return;
         }
         const delay = Math.min(60_000, 2_000 * 2 ** this.retry++);
