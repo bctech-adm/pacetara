@@ -13,6 +13,7 @@ import '../../core/http/api_client.dart';
 import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../communities/widgets.dart';
+import '../moderation/moderation.dart';
 import 'chat_repository.dart';
 import 'chat_room.dart';
 import 'inbox.dart';
@@ -236,8 +237,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _messageActions(ChatMessage m) async {
-    if (m.isPending) return;
-    if (!m.isMine || m.deleted) return;
+    if (m.isPending || m.deleted) return;
+    if (!m.isMine) {
+      // Pesan orang lain: laporkan.
+      await showReportSheet(context, ref, target: ReportTarget.message, targetId: m.id, title: 'Laporkan pesan ${m.senderName}');
+      return;
+    }
     final ok = await confirm(context, title: 'Hapus pesan?', message: 'Pesan dihapus untuk semua orang di percakapan ini.', action: 'Hapus', destructive: true);
     if (ok && mounted) await _guard(() => _room.delete(m));
   }
@@ -255,6 +260,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (conv != null) ...[CommunityLogo(name: conv.title, logoUrl: conv.avatarUrl, size: 32), const SizedBox(width: 12)],
           Expanded(child: Text(conv?.title ?? 'Chat', overflow: TextOverflow.ellipsis)),
         ]),
+        actions: [
+          if (conv != null && conv.kind == ConversationKind.direct && conv.otherUserId != null && conv.otherUserActive)
+            PopupMenuButton<String>(
+              onSelected: (_) => showReportSheet(context, ref, target: ReportTarget.user, targetId: conv.otherUserId!, title: 'Laporkan ${conv.title}'),
+              itemBuilder: (_) => const [PopupMenuItem(value: 'report', child: Text('Laporkan pengguna'))],
+            ),
+        ],
       ),
       body: Column(children: [
         Expanded(
@@ -345,8 +357,11 @@ class MessageBubble extends StatelessWidget {
     final fg = m.isMine ? scheme.onPrimaryContainer : scheme.onSurface;
 
     final Widget content;
+    final muted = TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7));
     if (m.deleted) {
-      content = Text('Pesan dihapus', style: TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7)));
+      content = Text(m.removedByAdmin ? 'Pesan diturunkan karena melanggar aturan' : 'Pesan dihapus', style: muted);
+    } else if (m.hidden) {
+      content = Text('Pesan disembunyikan sambil ditinjau', style: muted);
     } else {
       content = switch (m.kind) {
         'image' => m.localImagePath != null

@@ -51,6 +51,8 @@ interface MessageRow {
   image_key: string | null;
   image_expired_at: Date | null;
   deleted_at: Date | null;
+  hidden_at: Date | null;
+  removed_by_admin: boolean;
   created_at: Date;
   display_name: string;
   avatar_key: string | null;
@@ -58,7 +60,7 @@ interface MessageRow {
 }
 
 const MSG_COLS = `m.id, m.seq, m.conversation_id, m.sender_id, m.kind, m.body_enc, m.image_key, m.image_expired_at,
-  m.deleted_at, m.created_at, u.display_name, u.avatar_key, u.avatar_updated_at`;
+  m.deleted_at, m.hidden_at, m.removed_by_admin, m.created_at, u.display_name, u.avatar_key, u.avatar_updated_at`;
 
 /**
  * Chat pribadi dan komunitas. Isi pesan terenkripsi di database (FieldCrypto), tidak ujung-ke-ujung.
@@ -262,21 +264,36 @@ export class ChatService implements OnModuleInit {
     return rows.map((r) => r.image_key).filter((k): k is string => Boolean(k));
   }
 
+  /** Untuk laporan: pesan harus terlihat oleh pelapor. Mengembalikan pengirim dan percakapannya. */
+  async reportableMessage(userId: string, messageId: string): Promise<{ senderId: string; conversationId: string }> {
+    const row = await this.visibleMessage(userId, messageId);
+    return { senderId: row.sender_id, conversationId: row.conversation_id };
+  }
+
+  /** Untuk laporan pengguna: pernah berada di chat pribadi yang sama. */
+  async haveDirectConversation(a: string, b: string): Promise<boolean> {
+    const [x, y] = a < b ? [a, b] : [b, a];
+    const { rowCount } = await this.pool.query('SELECT 1 FROM conversations WHERE user_a = $1 AND user_b = $2', [x, y]);
+    return (rowCount ?? 0) > 0;
+  }
+
   // ---------- Bantuan ----------
 
   /** Hak akses ke percakapan. Bukan peserta = 404 (seolah tidak ada). */
   private async access(userId: string, convId: string): Promise<ConvAccess> {
-    const { rows } = await this.pool.query<ConvAccess & { member_status: string | null }>(
-      `SELECT c.id, c.kind, c.community_id, c.user_a, c.user_b, m.history_from, m.status AS member_status
+    const { rows } = await this.pool.query<ConvAccess & { member_status: string | null; community_removed: boolean }>(
+      `SELECT c.id, c.kind, c.community_id, c.user_a, c.user_b, m.history_from, m.status AS member_status,
+              cm.removed_at IS NOT NULL AS community_removed
          FROM conversations c
          LEFT JOIN community_members m ON c.kind = 'community' AND m.community_id = c.community_id AND m.user_id = $2
+         LEFT JOIN communities cm ON cm.id = c.community_id
         WHERE c.id = $1`,
       [convId, userId],
     );
     const c = rows[0];
     if (!c) throw notFound();
     if (c.kind === 'direct' && c.user_a !== userId && c.user_b !== userId) throw notFound();
-    if (c.kind === 'community' && c.member_status !== 'active') throw notFound();
+    if (c.kind === 'community' && (c.member_status !== 'active' || c.community_removed)) throw notFound();
     return c;
   }
 
@@ -398,8 +415,11 @@ export class ChatService implements OnModuleInit {
         kind: r.kind,
         createdAt: r.created_at.toISOString(),
         deleted: Boolean(r.deleted_at),
+        ...(r.removed_by_admin ? { removedByAdmin: true } : {}),
       };
       if (r.deleted_at) return base;
+      // Disembunyikan otomatis karena banyak laporan: pengirim tetap melihat isinya, orang lain tidak.
+      if (r.hidden_at && r.sender_id !== viewerId) return { ...base, hidden: true };
       switch (r.kind) {
         case 'text':
           return { ...base, text: this.decrypt(r) };
@@ -421,7 +441,7 @@ export class ChatService implements OnModuleInit {
 
   private async querySummaries(userId: string, onlyId?: string) {
     const params: unknown[] = [userId];
-    let filter = `((c.kind = 'community' AND mem.status = 'active') OR (c.kind = 'direct' AND (c.user_a = $1 OR c.user_b = $1) AND c.last_message_at IS NOT NULL))`;
+    let filter = `((c.kind = 'community' AND mem.status = 'active' AND cm.removed_at IS NULL) OR (c.kind = 'direct' AND (c.user_a = $1 OR c.user_b = $1) AND c.last_message_at IS NOT NULL))`;
     if (onlyId) {
       params.push(onlyId);
       filter = `c.id = $2`;
@@ -443,6 +463,7 @@ export class ChatService implements OnModuleInit {
       lm_kind: MessageKind | null;
       lm_body: Buffer | null;
       lm_deleted: Date | null;
+      lm_hidden: boolean | null;
       lm_created: Date | null;
       lm_sender: string | null;
       lm_sender_name: string | null;
@@ -454,6 +475,7 @@ export class ChatService implements OnModuleInit {
                 WHERE x.conversation_id = c.id AND x.seq > COALESCE(r.last_read_seq, 0) AND x.sender_id <> $1
                   AND x.deleted_at IS NULL AND (mem.history_from IS NULL OR x.created_at >= mem.history_from)) AS unread,
               lm.id AS lm_id, lm.kind AS lm_kind, lm.body_enc AS lm_body, lm.deleted_at AS lm_deleted,
+              (lm.hidden_at IS NOT NULL AND lm.sender_id <> $1) AS lm_hidden,
               lm.created_at AS lm_created, lm.sender_id AS lm_sender, lu.display_name AS lm_sender_name
          FROM conversations c
          LEFT JOIN community_members mem ON c.kind = 'community' AND mem.community_id = c.community_id AND mem.user_id = $1
@@ -461,7 +483,7 @@ export class ChatService implements OnModuleInit {
          LEFT JOIN users o ON c.kind = 'direct' AND o.id = CASE WHEN c.user_a = $1 THEN c.user_b ELSE c.user_a END
          LEFT JOIN chat_reads r ON r.conversation_id = c.id AND r.user_id = $1
          LEFT JOIN LATERAL (
-           SELECT x.id, x.kind, x.body_enc, x.deleted_at, x.created_at, x.sender_id FROM chat_messages x
+           SELECT x.id, x.kind, x.body_enc, x.deleted_at, x.hidden_at, x.created_at, x.sender_id FROM chat_messages x
             WHERE x.conversation_id = c.id AND (mem.history_from IS NULL OR x.created_at >= mem.history_from)
             ORDER BY x.seq DESC LIMIT 1
          ) lm ON true
@@ -472,9 +494,11 @@ export class ChatService implements OnModuleInit {
     );
     return rows.map((r) => {
       let preview: string | null = null;
-      if (r.lm_id && !r.lm_deleted && r.lm_kind === 'text') preview = this.decrypt({ id: r.lm_id, body_enc: r.lm_body }).slice(0, PREVIEW_CHARS);
-      if (r.lm_id && !r.lm_deleted && r.lm_kind === 'run_invite') {
-        preview = (JSON.parse(this.decrypt({ id: r.lm_id, body_enc: r.lm_body })) as RunInvite).title.slice(0, PREVIEW_CHARS);
+      const lmId = r.lm_id;
+      const showBody = lmId !== null && !r.lm_deleted && !r.lm_hidden;
+      if (showBody && r.lm_kind === 'text') preview = this.decrypt({ id: lmId!, body_enc: r.lm_body }).slice(0, PREVIEW_CHARS);
+      if (showBody && r.lm_kind === 'run_invite') {
+        preview = (JSON.parse(this.decrypt({ id: lmId!, body_enc: r.lm_body })) as RunInvite).title.slice(0, PREVIEW_CHARS);
       }
       return {
         id: r.id,
@@ -494,6 +518,7 @@ export class ChatService implements OnModuleInit {
               kind: r.lm_kind!,
               preview,
               deleted: Boolean(r.lm_deleted),
+              hidden: Boolean(r.lm_hidden),
               isMine: r.lm_sender === userId,
               senderName: r.lm_sender_name,
               createdAt: r.lm_created!.toISOString(),

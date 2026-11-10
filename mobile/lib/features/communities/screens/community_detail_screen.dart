@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
 import '../../chat/chat_screens.dart';
+import '../../moderation/moderation.dart';
 import '../../live/live_widgets.dart';
 import '../communities_repository.dart';
 import '../models.dart';
@@ -48,7 +49,16 @@ class _DetailBody extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(c.name, overflow: TextOverflow.ellipsis),
-        actions: [if (isMember) _MenuButton(detail: detail)],
+        actions: [
+          if (isMember)
+            _MenuButton(detail: detail)
+          else
+            IconButton(
+              tooltip: 'Laporkan komunitas',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => showReportSheet(context, ref, target: ReportTarget.community, targetId: c.id, title: 'Laporkan ${c.name}'),
+            ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => refreshCommunity(ref, c.id),
@@ -172,6 +182,8 @@ class _MenuButton extends ConsumerWidget {
                 if (context.mounted) context.pop();
               }
             }
+          case 'report':
+            await showReportSheet(context, ref, target: ReportTarget.community, targetId: c.id, title: 'Laporkan ${c.name}');
           case 'delete':
             if (await confirm(context,
                     title: 'Hapus ${c.name}?',
@@ -191,6 +203,7 @@ class _MenuButton extends ConsumerWidget {
         if (c.isStaff) const PopupMenuItem(value: 'settings', child: Text('Pengaturan')),
         if (c.myRole != Role.owner) const PopupMenuItem(value: 'leave', child: Text('Keluar dari komunitas')),
         if (c.myRole == Role.owner) const PopupMenuItem(value: 'delete', child: Text('Hapus komunitas')),
+        if (c.myRole != Role.owner) const PopupMenuItem(value: 'report', child: Text('Laporkan komunitas')),
       ],
     );
   }

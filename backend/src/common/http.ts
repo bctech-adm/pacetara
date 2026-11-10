@@ -42,6 +42,8 @@ export interface AuthUser {
   id: string;
   sessionId: string;
   role: 'user' | 'super_admin';
+  /** Token dari login panel admin (kata sandi + TOTP). Hanya token ini yang boleh membuka /v1/admin. */
+  admin?: boolean;
 }
 
 export type AuthedRequest = Request & { user?: AuthUser };

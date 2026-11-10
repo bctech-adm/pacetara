@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/config.dart';
 import '../../../core/widgets/common.dart';
+import '../../moderation/moderation.dart';
 import '../auth_controller.dart';
 import 'privacy_consent.dart';
 
@@ -29,7 +30,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     if (!_form.currentState!.validate()) return;
-    await ref.read(authControllerProvider.notifier).login(_email.text.trim(), _password.text);
+    try {
+      await ref.read(authControllerProvider.notifier).login(_email.text.trim(), _password.text);
+    } on ApiError catch (e) {
+      if (!isAccountBlocked(e) || !mounted) rethrow;
+      await showBlockedAccountDialog(context, ref, e, PasswordCredentials(_email.text.trim(), _password.text));
+    }
   }
 
   Future<void> _google() async {
@@ -44,6 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await auth.loginWithGoogle(idToken: idToken);
     } on ApiError catch (e) {
+      if (isAccountBlocked(e) && mounted) return showBlockedAccountDialog(context, ref, e, GoogleCredentials(idToken));
       if (e.code != 'privacy_required' || !mounted) rethrow;
       // Akun Google baru: minta persetujuan kebijakan privasi, lalu kirim ulang token yang sama.
       final config = await ref.read(authConfigProvider.future);

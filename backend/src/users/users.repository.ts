@@ -22,6 +22,7 @@ export interface UserRow {
   plan: 'free' | 'premium';
   privacy_radius_m: number;
   status: 'active' | 'suspended' | 'banned' | 'deleted';
+  suspended_until: Date | null;
   created_at: Date;
 }
 
@@ -47,7 +48,7 @@ export interface MyProfile {
 }
 
 const COLUMNS = `id, email_enc, email_verified_at, phone_enc, phone_verified_at, password_hash, google_sub,
-  display_name, avatar_key, avatar_updated_at, city, avg_pace_sec_per_km, verification_level, role, plan, privacy_radius_m, status, created_at`;
+  display_name, avatar_key, avatar_updated_at, city, avg_pace_sec_per_km, verification_level, role, plan, privacy_radius_m, status, suspended_until, created_at`;
 
 export const emailAad = (id: string) => `users.email:${id}`;
 export const phoneAad = (id: string) => `users.phone:${id}`;

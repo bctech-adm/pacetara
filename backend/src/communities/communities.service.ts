@@ -64,7 +64,8 @@ export class CommunitiesService {
   // ---------- Baca ----------
 
   async directory(userId: string, q: { city?: string; search?: string; limit: number; cursor?: string }) {
-    const where: string[] = [`m.status IS DISTINCT FROM 'banned'`];
+    // Disembunyikan (banyak laporan) atau diturunkan super admin: tidak tampil di direktori.
+    const where: string[] = [`m.status IS DISTINCT FROM 'banned'`, 'c.hidden_at IS NULL', 'c.removed_at IS NULL'];
     const params: unknown[] = [userId];
     if (q.city) {
       params.push(q.city.trim().toLowerCase());
@@ -100,7 +101,7 @@ export class CommunitiesService {
   /** Daftar kota yang punya komunitas, untuk filter direktori. */
   async cities(): Promise<{ city: string; communities: number }[]> {
     const { rows } = await this.pool.query<{ city: string; n: string }>(
-      `SELECT min(city) AS city, count(*) AS n FROM communities GROUP BY lower(city) ORDER BY count(*) DESC, min(city) LIMIT 200`,
+      `SELECT min(city) AS city, count(*) AS n FROM communities WHERE hidden_at IS NULL AND removed_at IS NULL GROUP BY lower(city) ORDER BY count(*) DESC, min(city) LIMIT 200`,
     );
     return rows.map((r) => ({ city: r.city, communities: Number(r.n) }));
   }
@@ -109,7 +110,7 @@ export class CommunitiesService {
     const { rows } = await this.pool.query<CommunityRow & { my_status: MemberStatus; my_role: Role }>(
       `SELECT ${COLS}, m.status AS my_status, m.role AS my_role
          FROM community_members m JOIN communities c ON c.id = m.community_id
-        WHERE m.user_id = $1 AND m.status IN ('active', 'pending')
+        WHERE m.user_id = $1 AND m.status IN ('active', 'pending') AND c.removed_at IS NULL
         ORDER BY (m.status = 'active') DESC, m.joined_at DESC NULLS LAST, m.requested_at DESC`,
       [userId],
     );
@@ -122,7 +123,7 @@ export class CommunitiesService {
       `SELECT ${COLS}, m.status AS my_status, m.role AS my_role
          FROM communities c
          LEFT JOIN community_members m ON m.community_id = c.id AND m.user_id = $2
-        WHERE c.id = $1`,
+        WHERE c.id = $1 AND c.removed_at IS NULL`,
       [communityId, userId],
     );
     const r = rows[0];
@@ -267,7 +268,7 @@ export class CommunitiesService {
 
   async remove(userId: string, communityId: string): Promise<void> {
     const keys = await withTx(this.pool, async (db) => {
-      const c = await this.lockCommunity(db, communityId);
+      const c = await this.lockCommunity(db, communityId, true);
       if (c.owner_id !== userId) throw new ApiError(403, 'not_owner', 'Hanya pemilik yang bisa menghapus komunitas');
       // Chat komunitas (pesan + gambar) ikut terhapus.
       const images = await chatImageKeysOfCommunities(db, [communityId]);
@@ -642,8 +643,12 @@ export class CommunitiesService {
     return rows[0];
   }
 
-  private async lockCommunity(db: Queryable, communityId: string): Promise<CommunityRow> {
-    const { rows } = await db.query<CommunityRow>(`SELECT ${COLS} FROM communities c WHERE c.id = $1 FOR UPDATE`, [communityId]);
+  /** Komunitas yang diturunkan super admin dianggap tidak ada (kecuali untuk dihapus pemiliknya). */
+  private async lockCommunity(db: Queryable, communityId: string, allowRemoved = false): Promise<CommunityRow> {
+    const { rows } = await db.query<CommunityRow>(
+      `SELECT ${COLS} FROM communities c WHERE c.id = $1 ${allowRemoved ? '' : 'AND c.removed_at IS NULL'} FOR UPDATE`,
+      [communityId],
+    );
     if (!rows[0]) throw notFound();
     return rows[0];
   }

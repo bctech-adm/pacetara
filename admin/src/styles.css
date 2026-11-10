@@ -33,3 +33,36 @@ dt { color: var(--muted); }
 dd { margin: 0; font-weight: 600; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
+
+/* Panel admin (modul 1.8). Tanpa style inline: CSP hanya mengizinkan style-src 'self'. */
+.shell.wide { max-width: 1100px; }
+.shell.narrow { max-width: 420px; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: wait; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+button.link { border: none; background: none; padding: 0; color: var(--accent); }
+.tab.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+input, select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+label input { color: var(--fg); }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+.row input { flex: 1; min-width: 200px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--bg); }
+.list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.list > li { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.quote { margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid var(--border); white-space: pre-wrap; }
+.chat { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.chat li { padding: 8px 12px; border-radius: 8px; background: var(--bg); }
+.chat li.reported { outline: 2px solid var(--bad); }
+.mono { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; }
+@media (max-width: 640px) {
+  th:nth-child(4), td:nth-child(4) { display: none; }
+}

@@ -68,8 +68,7 @@ export class AuthService {
     const ok = user?.password_hash ? await verifyPassword(user.password_hash, input.password) : await burnPasswordCheck(input.password);
     // Pesan sama untuk email tidak terdaftar dan kata sandi salah (mencegah enumerasi akun).
     if (!user || !ok) throw new ApiError(401, 'invalid_credentials', 'Email atau kata sandi salah');
-    this.assertActive(user);
-    return this.session(user, input.device);
+    return this.session(await this.assertActive(user), input.device);
   }
 
   async loginWithGoogle(input: {
@@ -81,8 +80,7 @@ export class AuthService {
 
     const bySub = await this.users.findByGoogleSub(g.sub);
     if (bySub) {
-      this.assertActive(bySub);
-      return { ...(await this.session(bySub, input.device)), created: false };
+      return { ...(await this.session(await this.assertActive(bySub), input.device)), created: false };
     }
 
     const byEmail = await this.users.findByEmail(g.email);
@@ -90,7 +88,7 @@ export class AuthService {
       // Menautkan Google ke akun email yang sudah ada hanya jika Google menjamin email itu
       // (email_verified). Tanpa ini, orang lain bisa mengambil alih akun lewat akun Google palsu.
       if (!g.emailVerified) throw new ApiError(409, 'email_taken', 'Email sudah terdaftar. Masuk dengan kata sandi');
-      this.assertActive(byEmail);
+      await this.assertActive(byEmail);
       await this.pool.query(
         `UPDATE users SET google_sub = $2, email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1`,
         [byEmail.id, g.sub],
@@ -238,6 +236,24 @@ export class AuthService {
 
   // ---------- Bantuan ----------
 
+  /**
+   * Banding (PRD 1.8): akun yang ditangguhkan/diblokir tidak bisa login, jadi kredensialnya
+   * (kata sandi atau ID token Google) diverifikasi di sini. Pesan galat sama dengan login.
+   */
+  async userForAppeal(input: { email: string; password: string } | { googleIdToken: string }): Promise<UserRow> {
+    let user: UserRow | undefined;
+    if ('googleIdToken' in input) {
+      user = await this.users.findByGoogleSub((await this.google.verify(input.googleIdToken)).sub);
+    } else {
+      const found = await this.users.findByEmail(input.email);
+      const ok = found?.password_hash ? await verifyPassword(found.password_hash, input.password) : await burnPasswordCheck(input.password);
+      user = ok ? found : undefined;
+    }
+    if (!user) throw new ApiError(401, 'invalid_credentials', 'Email atau kata sandi salah');
+    if (user.status !== 'suspended' && user.status !== 'banned') throw new ApiError(409, 'not_suspended', 'Akun ini tidak sedang ditangguhkan');
+    return user;
+  }
+
   private async session(user: UserRow, device?: string): Promise<AuthResult> {
     const pair = await this.tokens.issue(user.id, user.role, device);
     return { ...pair, user: this.users.toMyProfile(user) };
@@ -246,13 +262,27 @@ export class AuthService {
   private async requireUser(userId: string): Promise<UserRow> {
     const user = await this.users.findById(userId);
     if (!user) throw new ApiError(401, 'unauthorized', 'Perlu login');
-    this.assertActive(user);
-    return user;
+    return this.assertActive(user);
   }
 
-  private assertActive(user: UserRow) {
-    if (user.status === 'suspended') throw new ApiError(403, 'account_suspended', 'Akun sedang ditangguhkan');
+  /**
+   * Akun harus aktif. Penangguhan sementara yang sudah lewat dipulihkan otomatis di sini.
+   * Akun ditangguhkan/diblokir mendapat kode yang bisa diajukan banding (PRD 1.8).
+   */
+  private async assertActive(user: UserRow): Promise<UserRow> {
+    if (user.status === 'suspended' && user.suspended_until && user.suspended_until.getTime() <= Date.now()) {
+      await this.pool.query(`UPDATE users SET status = 'active', suspended_until = NULL WHERE id = $1 AND status = 'suspended'`, [user.id]);
+      return { ...user, status: 'active', suspended_until: null };
+    }
+    if (user.status === 'suspended') {
+      throw new ApiError(403, 'account_suspended', 'Akun sedang ditangguhkan', {
+        until: user.suspended_until?.toISOString() ?? null,
+        appealable: true,
+      });
+    }
+    if (user.status === 'banned') throw new ApiError(403, 'account_banned', 'Akun diblokir', { appealable: true });
     if (user.status !== 'active') throw new ApiError(403, 'account_disabled', 'Akun tidak aktif');
+    return user;
   }
 
   private assertPrivacyVersion(version: string) {

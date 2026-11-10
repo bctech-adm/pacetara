@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AdminAuthController, AdminController } from './admin/admin.controller.js';
+import { AdminAuthService, AdminGuard } from './admin/admin-auth.service.js';
+import { ModerationService } from './admin/moderation.service.js';
 import { AppUpdateController } from './app-update/app-update.controller.js';
 import { AuthController } from './auth/auth.controller.js';
 import { AuthGuard } from './auth/auth.guard.js';
@@ -19,6 +22,8 @@ import { UserThrottlerGuard } from './http/user-throttler.guard.js';
 import { LiveController } from './live/live.controller.js';
 import { LiveService } from './live/live.service.js';
 import { RealtimeService } from './realtime/realtime.service.js';
+import { AppealController, ReportsController } from './moderation/reports.controller.js';
+import { ReportsService } from './moderation/reports.service.js';
 import { RunsController } from './runs/runs.controller.js';
 import { RunsService } from './runs/runs.service.js';
 import { StorageService } from './storage/storage.service.js';
@@ -33,7 +38,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -52,6 +57,10 @@ import { UsersService } from './users/users.service.js';
     RealtimeService,
     LiveService,
     ChatService,
+    ReportsService,
+    ModerationService,
+    AdminAuthService,
+    AdminGuard,
     LevelGuard,
   ],
 })

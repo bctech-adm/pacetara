@@ -7,10 +7,21 @@ import '../../core/http/api_client.dart';
 enum ConversationKind { direct, community }
 
 class LastMessage {
-  const LastMessage({required this.kind, required this.preview, required this.deleted, required this.isMine, required this.senderName, required this.createdAt});
+  const LastMessage({
+    required this.kind,
+    required this.preview,
+    required this.deleted,
+    required this.isMine,
+    required this.senderName,
+    required this.createdAt,
+    this.hidden = false,
+  });
   final String kind;
   final String? preview;
   final bool deleted;
+
+  /// Disembunyikan sambil ditinjau (banyak laporan).
+  final bool hidden;
   final bool isMine;
   final String? senderName;
   final DateTime createdAt;
@@ -19,6 +30,7 @@ class LastMessage {
         kind: j['kind'] as String,
         preview: j['preview'] as String?,
         deleted: j['deleted'] as bool? ?? false,
+        hidden: j['hidden'] as bool? ?? false,
         isMine: j['isMine'] as bool? ?? false,
         senderName: j['senderName'] as String?,
         createdAt: DateTime.parse(j['createdAt'] as String),
@@ -28,7 +40,9 @@ class LastMessage {
   String describe({required bool showSender}) {
     final body = deleted
         ? 'Pesan dihapus'
-        : switch (kind) {
+        : hidden
+            ? 'Pesan disembunyikan'
+            : switch (kind) {
             'image' => 'Gambar',
             'run_invite' => 'Ajakan lari: ${preview ?? ''}',
             _ => preview ?? '',
@@ -122,6 +136,8 @@ class ChatMessage {
     required this.kind,
     required this.createdAt,
     this.deleted = false,
+    this.removedByAdmin = false,
+    this.hidden = false,
     this.text,
     this.imageUrl,
     this.imageExpired = false,
@@ -142,6 +158,12 @@ class ChatMessage {
   final String kind;
   final DateTime createdAt;
   final bool deleted;
+
+  /// Diturunkan tim moderasi.
+  final bool removedByAdmin;
+
+  /// Disembunyikan otomatis sambil ditinjau (banyak laporan); pengirim tetap melihat isinya.
+  final bool hidden;
   final String? text;
   final String? imageUrl;
   final bool imageExpired;
@@ -167,6 +189,8 @@ class ChatMessage {
       kind: j['kind'] as String,
       createdAt: DateTime.parse(j['createdAt'] as String),
       deleted: j['deleted'] as bool? ?? false,
+      removedByAdmin: j['removedByAdmin'] as bool? ?? false,
+      hidden: j['hidden'] as bool? ?? false,
       text: j['text'] as String?,
       imageUrl: j['imageUrl'] as String?,
       imageExpired: j['imageExpired'] as bool? ?? false,

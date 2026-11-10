@@ -12,7 +12,8 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | 1.4 Tracking lari | Selesai (backend + aplikasi), teruji lewat simulasi; **uji lapangan 5 km layar mati belum** |
 | 1.5 Status lari | Selesai (backend + aplikasi + WebSocket `/v1/ws`), teruji e2e; **uji dua HP sungguhan belum** |
 | 1.6 Chat | Selesai (backend + aplikasi), teruji e2e; kartu "bagikan event" menyusul di 1.7 |
-| 1.7 – 1.10 | Belum |
+| 1.8 Laporan dan panel super admin | Selesai (backend + panel web + aplikasi), teruji e2e; **super admin pertama perlu dibuat dengan CLI** (lihat bawah) |
+| 1.7, 1.9, 1.10 | Belum |
 
 ## Mencoba aplikasi di HP (APK uji)
 
@@ -55,6 +56,16 @@ Rute Traefik: `infra/traefik/pacetara.yml` → `/opt/infra/traefik/dynamic/clien
 5. Tautkan nomor WhatsApp OTP: `docker compose logs -f wa-otp`, pindai QR dari WhatsApp > Perangkat tertaut.
 
 Jika port 80/443 sudah dipakai layanan lain di VPS, ubah `HTTP_PORT`/`HTTPS_PORT` dan teruskan kedua domain dari proxy yang sudah ada ke Caddy PaceTara.
+
+## Super admin (panel https://pace-admin.bimacreative.tech)
+
+Super admin tidak bisa dibuat dari web. Daftarkan akun biasa di aplikasi **dengan email dan kata sandi**, lalu di server:
+
+```sh
+docker compose exec api node dist/scripts/admin.js promote email@contoh.com
+```
+
+Perintah mencetak URI `otpauth://` dan kunci manual satu kali. Pindai dengan aplikasi authenticator (Google Authenticator, Aegis, 1Password), lalu bersihkan layar terminal. Login panel memakai email + kata sandi + kode 6 digit. HP hilang: `reset-totp <email>`. Mencabut: `demote <email>`. Setiap perintah dan tindakan di panel tercatat di log (tab Log).
 
 ## Cadangan dan pemulihan
 

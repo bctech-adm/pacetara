@@ -16,6 +16,8 @@ export interface TokenPair {
 }
 
 const ISSUER = 'pacetara';
+/** Sesi panel admin berakhir paling lambat 12 jam setelah login, tidak diperpanjang saat rotasi. */
+export const ADMIN_SESSION_HOURS = 12;
 const revokedKey = (sessionId: string) => `auth:revoked:${sessionId}`;
 const sha256 = (v: string) => createHash('sha256').update(v).digest();
 
@@ -38,15 +40,16 @@ export class TokenService {
     this.key = Buffer.from(env.JWT_SECRET, 'base64');
   }
 
-  async issue(userId: string, role: AuthUser['role'], deviceLabel?: string): Promise<TokenPair> {
+  async issue(userId: string, role: AuthUser['role'], deviceLabel?: string, opts: { admin?: boolean } = {}): Promise<TokenPair> {
     const familyId = randomUUID();
     const refreshToken = randomBytes(32).toString('base64url');
+    const admin = opts.admin === true;
     await this.pool.query(
-      `INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_label, expires_at)
-       VALUES ($1, $2, $3, $4, now() + make_interval(days => $5))`,
-      [userId, familyId, sha256(refreshToken), deviceLabel?.slice(0, 80) ?? null, this.env.REFRESH_TOKEN_TTL_DAYS],
+      `INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_label, expires_at, admin_session)
+       VALUES ($1, $2, $3, $4, CASE WHEN $6 THEN now() + make_interval(hours => $7) ELSE now() + make_interval(days => $5) END, $6)`,
+      [userId, familyId, sha256(refreshToken), deviceLabel?.slice(0, 80) ?? null, this.env.REFRESH_TOKEN_TTL_DAYS, admin, ADMIN_SESSION_HOURS],
     );
-    return { accessToken: await this.signAccess(userId, familyId, role), refreshToken, expiresIn: this.env.ACCESS_TOKEN_TTL_SEC };
+    return { accessToken: await this.signAccess(userId, familyId, role, admin), refreshToken, expiresIn: this.env.ACCESS_TOKEN_TTL_SEC };
   }
 
   async rotate(refreshToken: string): Promise<TokenPair> {
@@ -60,9 +63,11 @@ export class TokenService {
         revoked_at: Date | null;
         role: AuthUser['role'];
         status: string;
+        admin_session: boolean;
+        expires_at: Date;
       }>(
         `SELECT t.id, t.user_id, t.family_id, t.device_label, t.expires_at < now() AS expired,
-                t.revoked_at, u.role, u.status
+                t.revoked_at, u.role, u.status, t.admin_session, t.expires_at
            FROM refresh_tokens t JOIN users u ON u.id = t.user_id
           WHERE t.token_hash = $1
           FOR UPDATE OF t`,
@@ -75,9 +80,10 @@ export class TokenService {
 
       const next = randomBytes(32).toString('base64url');
       const { rows: inserted } = await db.query<{ id: string }>(
-        `INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_label, expires_at)
-         VALUES ($1, $2, $3, $4, now() + make_interval(days => $5)) RETURNING id`,
-        [row.user_id, row.family_id, sha256(next), row.device_label, this.env.REFRESH_TOKEN_TTL_DAYS],
+        // Sesi admin: batas 12 jam sejak login tetap (tidak diperpanjang). Sesi biasa: diperpanjang.
+        `INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_label, expires_at, admin_session)
+         VALUES ($1, $2, $3, $4, CASE WHEN $6 THEN $7::timestamptz ELSE now() + make_interval(days => $5) END, $6) RETURNING id`,
+        [row.user_id, row.family_id, sha256(next), row.device_label, this.env.REFRESH_TOKEN_TTL_DAYS, row.admin_session, row.expires_at],
       );
       await db.query('UPDATE refresh_tokens SET revoked_at = now(), replaced_by = $2 WHERE id = $1', [
         row.id,
@@ -94,7 +100,7 @@ export class TokenService {
 
     const { row, next } = outcome;
     return {
-      accessToken: await this.signAccess(row.user_id, row.family_id, row.role),
+      accessToken: await this.signAccess(row.user_id, row.family_id, row.role, row.admin_session),
       refreshToken: next,
       expiresIn: this.env.ACCESS_TOKEN_TTL_SEC,
     };
@@ -131,24 +137,24 @@ export class TokenService {
 
   /** Memverifikasi token akses. Melempar 401 jika tidak valid, kedaluwarsa, atau sesinya dicabut. */
   async verifyAccess(token: string): Promise<AuthUser> {
-    let payload: { sub?: string; sid?: unknown; role?: unknown };
+    let payload: { sub?: string; sid?: unknown; role?: unknown; adm?: unknown };
     try {
       ({ payload } = await jwtVerify(token, this.key, { issuer: ISSUER, algorithms: ['HS256'] }));
     } catch {
       throw new ApiError(401, 'invalid_access_token', 'Token akses tidak valid atau kedaluwarsa');
     }
-    const { sub, sid, role } = payload;
+    const { sub, sid, role, adm } = payload;
     if (typeof sub !== 'string' || typeof sid !== 'string' || (role !== 'user' && role !== 'super_admin')) {
       throw new ApiError(401, 'invalid_access_token', 'Token akses tidak valid');
     }
     if (await this.redis.exists(revokedKey(sid))) {
       throw new ApiError(401, 'session_revoked', 'Sesi sudah berakhir, silakan masuk lagi');
     }
-    return { id: sub, sessionId: sid, role };
+    return { id: sub, sessionId: sid, role, ...(adm === true ? { admin: true } : {}) };
   }
 
-  private signAccess(userId: string, familyId: string, role: AuthUser['role']): Promise<string> {
-    return new SignJWT({ sid: familyId, role })
+  private signAccess(userId: string, familyId: string, role: AuthUser['role'], admin = false): Promise<string> {
+    return new SignJWT({ sid: familyId, role, ...(admin ? { adm: true } : {}) })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
       .setIssuer(ISSUER)
