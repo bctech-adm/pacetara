@@ -29,7 +29,10 @@ class Avatar extends ConsumerWidget {
 }
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.asTab = false});
+
+  /// Ditampilkan sebagai tab di beranda (tanpa tombol kembali).
+  final bool asTab;
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -87,6 +90,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return FormPage(
       title: 'Profil',
+      showBack: !widget.asTab,
       children: [
         Center(
           child: Stack(
@@ -261,8 +265,7 @@ class _VersionTile extends ConsumerWidget {
       title: const Text('Periksa pembaruan'),
       subtitle: Text(info == null ? 'Versi ...' : 'Versi ${info.version} (build ${info.buildNumber})'),
       onTap: () async {
-        ref.invalidate(availableUpdateProvider);
-        final release = await ref.read(availableUpdateProvider.future);
+        final release = await checkForUpdate(ref);
         if (!context.mounted) return;
         if (release == null) {
           showInfo(context, 'Aplikasi sudah versi terbaru');

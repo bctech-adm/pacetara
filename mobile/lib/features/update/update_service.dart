@@ -32,18 +32,22 @@ class AppRelease {
 final packageInfoProvider = FutureProvider<PackageInfo>((ref) => PackageInfo.fromPlatform());
 
 /// Rilis terbaru jika lebih baru dari yang terpasang; null jika sudah terbaru atau info tidak tersedia.
-final availableUpdateProvider = FutureProvider.autoDispose<AppRelease?>((ref) async {
+///
+/// Fungsi biasa, bukan FutureProvider.autoDispose: provider autoDispose yang dibaca dengan
+/// `ref.read(...future)` tanpa pendengar bisa dibuang sebelum selesai, sehingga dialog tidak muncul.
+Future<AppRelease?> checkForUpdate(WidgetRef ref) async {
   if (!Platform.isAndroid) return null;
-  final info = await ref.watch(packageInfoProvider.future);
   try {
-    final res = await ref.watch(bareDioProvider).get<Map<String, dynamic>>('/v1/app/android/latest');
+    final info = await ref.read(packageInfoProvider.future);
+    final res = await ref.read(bareDioProvider).get<Map<String, dynamic>>('/v1/app/android/latest');
     final release = AppRelease.fromJson(res.data!);
     final current = int.tryParse(info.buildNumber) ?? 0;
     return release.versionCode > current ? release : null;
-  } catch (_) {
+  } catch (e) {
+    if (kDebugMode) debugPrint('cek pembaruan gagal: $e');
     return null; // pembaruan tidak boleh mengganggu pemakaian aplikasi
   }
-});
+}
 
 class UpdateException implements Exception {
   const UpdateException(this.message);
@@ -191,18 +195,37 @@ class UpdateChecker extends ConsumerStatefulWidget {
   ConsumerState<UpdateChecker> createState() => _UpdateCheckerState();
 }
 
+/// Memeriksa saat aplikasi dibuka dan setiap kembali dari latar belakang (maks. sekali per 15 menit).
+/// Versi yang ditolak ("Nanti") tidak ditawarkan lagi di sesi yang sama.
 class _UpdateCheckerState extends ConsumerState<UpdateChecker> {
-  static bool _checkedThisSession = false;
+  static DateTime? _lastCheck;
+  static int? _dismissedVersion;
+  late final AppLifecycleListener _lifecycle;
+  bool _showing = false;
 
   @override
   void initState() {
     super.initState();
-    if (_checkedThisSession) return;
-    _checkedThisSession = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final release = await ref.read(availableUpdateProvider.future);
-      if (release != null && mounted) await showUpdateDialog(context, release);
-    });
+    _lifecycle = AppLifecycleListener(onResume: _check);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  Future<void> _check() async {
+    final now = DateTime.now();
+    if (_showing || (_lastCheck != null && now.difference(_lastCheck!) < const Duration(minutes: 15))) return;
+    _lastCheck = now;
+    final release = await checkForUpdate(ref);
+    if (release == null || release.versionCode == _dismissedVersion || !mounted) return;
+    _showing = true;
+    await showUpdateDialog(context, release);
+    _showing = false;
+    _dismissedVersion = release.versionCode;
   }
 
   @override

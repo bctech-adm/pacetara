@@ -22,7 +22,8 @@ const Manifest = z.object({
 });
 type Manifest = z.infer<typeof Manifest>;
 
-const CACHE_MS = 5 * 60_000;
+// Pendek agar rilis baru cepat terlihat; GitHub tetap tidak terbebani (maks. 1 permintaan/menit).
+const CACHE_MS = 60_000;
 
 @Controller('app')
 export class AppUpdateController {
