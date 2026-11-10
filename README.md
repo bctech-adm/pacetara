@@ -47,6 +47,8 @@ sudo docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
 
 Rute Traefik: `infra/traefik/pacetara.yml` → `/opt/infra/traefik/dynamic/clients/`, lalu `sudo docker exec traefik kill -HUP 1`. Detail di docs/KEPUTUSAN.md #18–21.
 
+WAF CrowdSec (OWASP CRS) di VPS menolak PATCH/PUT/DELETE secara bawaan. Pengecualian PaceTara ada di `infra/crowdsec/pacetara-api-exclusions.yaml`; pasang ke `/opt/infra/security/crowdsec/appsec-configs/` dan daftarkan di `acquis.d/appsec.yaml` (detail: docs/KEPUTUSAN.md #103).
+
 ## Deploy ke VPS khusus (Caddy)
 
 1. Arahkan DNS `pace-api.bimacreative.tech` dan `pace-admin.bimacreative.tech` ke VPS.

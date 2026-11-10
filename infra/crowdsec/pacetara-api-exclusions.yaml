@@ -1,0 +1,31 @@
+# PaceTara — pengecualian SEMPIT OWASP CRS (crowdsecurity/crs-inband) untuk API pace-api.bimacreative.tech.
+# Pasang di VPS sebagai /opt/infra/security/crowdsec/appsec-configs/pacetara-api-exclusions.yaml, dimuat lewat
+# acquis.d/appsec.yaml (appsec_configs: `- local/pacetara-api-exclusions`) dan di-mount seperti
+# keycloak-admin-exclusions.yaml. Langkah lengkap: docs/KEPUTUSAN.md #103 dan README (Deploy ke VPS bersama).
+# Sintaks sama dengan keycloak-admin-exclusions.yaml (H4, diverifikasi terhadap crowdsec v1.8.1):
+# `pre_eval`, `IsInBand`, `req.Host`, `req.URL.Path`, `req.Method`, `RemoveInBandRuleByID(id int)`.
+#
+# Masalah (2026-11-11): PATCH/PUT/DELETE ke https://pace-api.bimacreative.tech/v1/... → 403 tanpa body dari
+# AppSec, rule CRS 911100 "Method is not allowed by policy" (CRS default hanya GET/HEAD/POST/OPTIONS).
+# API REST PaceTara memakai metode itu secara sah: PATCH /v1/me (simpan profil), PUT/DELETE /v1/live (status
+# lari), PATCH/DELETE /v1/runs/:id, DELETE /v1/chat/messages/:id, DELETE .../rsvp, PATCH /v1/communities/:id.
+#
+# Cakupan:
+#   - HANYA rule 911100 — semua rule CRS lain (XSS/SQLi/RCE/LFI/protocol, anomaly scoring), virtual
+#     patching & generic rules TETAP aktif pada path ini;
+#   - HANYA in-band, host pace-api.bimacreative.tech, path diawali /v1/, metode PATCH/PUT/DELETE.
+#     /health, panel admin (pace-admin), situs publik (pace), dan host lain tetap kena 911100.
+#   - Tanpa batasan IP: klien adalah aplikasi Android dari IP mana pun. Setiap endpoint /v1/ tetap wajib
+#     token akses, dan hak akses diperiksa API di setiap permintaan (CLAUDE.md, Akses).
+# Rollback: hapus file ini + barisnya di acquis.d/appsec.yaml + mount di docker-compose.yml CrowdSec →
+# `docker compose up -d` (recreate, fail-closed ±50 s).
+name: local/pacetara-api-exclusions
+default_remediation: ban
+pre_eval:
+  - filter: >-
+      IsInBand &&
+      req.Host == "pace-api.bimacreative.tech" &&
+      req.URL.Path startsWith "/v1/" &&
+      req.Method in ["PATCH", "PUT", "DELETE"]
+    apply:
+      - RemoveInBandRuleByID(911100)
