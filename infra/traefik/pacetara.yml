@@ -1,0 +1,43 @@
+# PaceTara API pace-api.bimacreative.tech → container `pacetara-api:3000` (network web-edge).
+# Stack: /opt/infra/web/clients/pacetara. Pasang: salin ke /opt/infra/traefik/dynamic/clients/, lalu
+# `docker exec traefik kill -HUP 1` (JANGAN `docker kill`).
+# DNS pre-check WAJIB: dig +short A pace-api.bimacreative.tech @1.1.1.1 & @8.8.8.8 = 31.97.50.221, AAAA kosong.
+# Urutan middleware = konvensi router lain: crowdsec → security-headers → ratelimit-*.
+# Rute panel admin (pace-admin.bimacreative.tech → pacetara-admin:8080) ditambahkan setelah DNS-nya aktif.
+http:
+  routers:
+    # Login/daftar/OTP: batas ketat terhadap brute-force dan spam OTP (API juga membatasi sendiri).
+    pacetara-api-auth:
+      entryPoints: [websecure]
+      rule: "Host(`pace-api.bimacreative.tech`) && Method(`POST`) && PathPrefix(`/v1/auth/`)"
+      priority: 100
+      middlewares: [crowdsec, security-headers, pacetara-ratelimit-auth]
+      service: pacetara-api
+      tls:
+        certResolver: le-http
+    pacetara-api:
+      entryPoints: [websecure]
+      rule: "Host(`pace-api.bimacreative.tech`)"
+      priority: 1
+      middlewares: [crowdsec, security-headers, ratelimit-default]
+      service: pacetara-api
+      tls:
+        certResolver: le-http
+
+  middlewares:
+    # 10 req/menit per IP, burst 10 (pengguna seluler di balik NAT bisa berbagi IP).
+    pacetara-ratelimit-auth:
+      rateLimit:
+        average: 10
+        period: 1m
+        burst: 10
+
+  services:
+    pacetara-api:
+      loadBalancer:
+        servers:
+          - url: "http://pacetara-api:3000"
+        healthCheck:
+          path: /health/live
+          interval: 15s
+          timeout: 3s

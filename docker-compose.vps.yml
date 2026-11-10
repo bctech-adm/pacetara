@@ -1,0 +1,72 @@
+# Override untuk VPS bersama (Hostinger) yang sudah punya Traefik di 80/443.
+#   docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
+# Caddy tidak dijalankan; Traefik meneruskan domain ke container lewat network `web-edge`
+# (rute: infra/traefik/pacetara.yml → /opt/infra/traefik/dynamic/clients/).
+# Di VPS khusus nanti, cukup jalankan docker-compose.yml saja (Caddy aktif lagi).
+
+x-limits: &logging
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  caddy:
+    profiles: ["caddy"]   # nonaktif di VPS bersama
+
+  api:
+    container_name: pacetara-api
+    <<: *logging
+    networks: [internal, edge, web-edge]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    cap_drop: [ALL]
+
+  admin:
+    container_name: pacetara-admin
+    <<: *logging
+    networks: [internal, web-edge]
+    mem_limit: 64m
+    cpus: 0.25
+
+  worker:
+    container_name: pacetara-worker
+    <<: *logging
+    mem_limit: 512m
+    cpus: 0.5
+    cap_drop: [ALL]
+
+  migrate:
+    container_name: pacetara-migrate
+    <<: *logging
+
+  wa-otp:
+    container_name: pacetara-wa-otp
+    <<: *logging
+    mem_limit: 384m
+    cpus: 0.5
+
+  postgres:
+    container_name: pacetara-postgres
+    <<: *logging
+    mem_limit: 1g
+
+  redis:
+    container_name: pacetara-redis
+    <<: *logging
+    mem_limit: 256m
+
+  s3:
+    container_name: pacetara-s3
+    <<: *logging
+    mem_limit: 512m
+
+  backup:
+    container_name: pacetara-backup
+    <<: *logging
+    mem_limit: 256m
+
+networks:
+  web-edge:
+    external: true
+    name: web-edge
