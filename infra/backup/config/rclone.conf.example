@@ -1,0 +1,8 @@
+# Salin menjadi rclone.conf (tidak di-commit) dan isi kredensial remote di luar VPS.
+# Lalu set BACKUP_REMOTE=offsite:pacetara-backup di .env
+[offsite]
+type = s3
+provider = Cloudflare
+access_key_id = GANTI
+secret_access_key = GANTI
+endpoint = https://<account-id>.r2.cloudflarestorage.com

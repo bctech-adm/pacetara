@@ -1,0 +1,46 @@
+# Pintu masuk tunggal. Domain diambil dari .env; untuk lokal pakai "localhost" (CA internal Caddy).
+{
+	email {$ACME_EMAIL}
+	# Hanya Let's Encrypt (tanpa fallback ZeroSSL): aplikasi mem-pin root ISRG X1/X2.
+	# Jika CA diganti, perbarui mobile/assets/certs dan rilis aplikasi lebih dulu.
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+}
+
+{$API_DOMAIN} {
+	import security_headers
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	# Batas ukuran body di proxy; unggahan gambar punya endpoint sendiri dengan batas lebih besar.
+	request_body {
+		max_size 15MB
+	}
+	# Caddy meneruskan X-Forwarded-Proto/For secara bawaan; API memakai trust proxy = 1.
+	reverse_proxy api:3000
+	log {
+		output stdout
+		# Jangan catat query string atau header Authorization.
+		format filter {
+			request>uri regexp "\?.*$" ""
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+		}
+	}
+}
+
+{$ADMIN_DOMAIN} {
+	import security_headers
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	reverse_proxy admin:8080
+}

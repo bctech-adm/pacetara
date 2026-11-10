@@ -1,0 +1,55 @@
+# PaceTara
+
+Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs/PRD.md) · Keputusan teknis: [docs/KEPUTUSAN.md](docs/KEPUTUSAN.md) · Review PRD: [docs/REVIEW-PRD.md](docs/REVIEW-PRD.md)
+
+## Status
+
+| Modul | Status |
+| --- | --- |
+| 1.1 Fondasi | Selesai di lokal; HTTPS di domain produksi menunggu DNS dan deploy ke VPS |
+| 1.2 – 1.10 | Belum |
+
+## Menjalankan di mesin sendiri
+
+Butuh Docker dan `openssl`.
+
+```sh
+./scripts/init-env.sh --local      # membuat .env dengan rahasia acak, port 8080/8443
+docker compose up -d --build
+curl -k --resolve api.localhost:8443:127.0.0.1 https://api.localhost:8443/health
+# {"status":"ok","database":"ok","redis":"ok"}
+```
+
+Panel admin: https://admin.localhost:8443 (sertifikat dari CA internal Caddy).
+
+## Deploy ke VPS
+
+1. Arahkan DNS `pace-api.bimacreative.tech` dan `pace-admin.bimacreative.tech` ke VPS.
+2. Salin `docker-compose.yml`, folder `infra/`, dan `.env` (dari `./scripts/init-env.sh`, lalu lengkapi `BACKUP_AGE_RECIPIENT` dan `BACKUP_REMOTE`).
+3. Isi `infra/backup/config/rclone.conf` (contoh di `rclone.conf.example`).
+4. `docker compose pull && docker compose up -d`
+5. Tautkan nomor WhatsApp OTP: `docker compose logs -f wa-otp`, pindai QR dari WhatsApp > Perangkat tertaut.
+
+Jika port 80/443 sudah dipakai layanan lain di VPS, ubah `HTTP_PORT`/`HTTPS_PORT` dan teruskan kedua domain dari proxy yang sudah ada ke Caddy PaceTara.
+
+## Cadangan dan pemulihan
+
+- Otomatis setiap hari 02:30 WIB (`BACKUP_CRON`), terenkripsi `age`, diunggah ke `BACKUP_REMOTE`.
+- Manual: `docker compose exec backup backup.sh`
+- Pulihkan (di mesin yang memegang private key age):
+
+  ```sh
+  docker compose stop api worker s3
+  docker compose run --rm -v /path/kunci-age.txt:/key.txt:ro -e AGE_IDENTITY=/key.txt backup restore.sh <STAMP>
+  docker compose up -d
+  ```
+
+## Struktur
+
+| Folder | Isi |
+| --- | --- |
+| `backend/` | API NestJS, worker BullMQ, migrasi SQL |
+| `wa-otp/` | Layanan OTP WhatsApp (Baileys) |
+| `admin/` | Panel super admin dan dasbor sponsor |
+| `mobile/` | Aplikasi Flutter (lihat `mobile/README.md`) |
+| `infra/` | Caddy, image cadangan |

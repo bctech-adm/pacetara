@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+infra/backup/config/rclone.conf
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins*
+mobile/android/local.properties
+mobile/android/key.properties
+*.jks
+*.keystore
+# Sesi WhatsApp tidak boleh pernah masuk repo
+**/session/
+.claude/settings.local.json

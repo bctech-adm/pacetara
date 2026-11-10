@@ -1,0 +1,210 @@
+# Seluruh stack PaceTara. Pindah VPS: salin berkas ini + .env, pulihkan cadangan, arahkan DNS.
+# Hanya Caddy yang mem-publish port. Database, Redis, S3, dan wa-otp tidak terbuka ke internet.
+
+name: pacetara
+
+x-backend: &backend
+  image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-backend:${IMAGE_TAG:-latest}
+  build: ./backend
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    WA_OTP_URL: http://wa-otp:4000
+    S3_ENDPOINT: http://s3:8333
+  # edge: API/worker butuh keluar ke Google, FCM, Midtrans, dll. Tidak ada port yang dipublish.
+  networks: [internal, edge]
+  security_opt: ["no-new-privileges:true"]
+  read_only: true
+  tmpfs: [/tmp]
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [internal, edge]
+    security_opt: ["no-new-privileges:true"]
+
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["node", "dist/scripts/migrate.js"]
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    command: ["node", "dist/src/main.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      s3-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+  worker:
+    <<: *backend
+    command: ["node", "dist/src/worker.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  wa-otp:
+    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-wa-otp:${IMAGE_TAG:-latest}
+    build: ./wa-otp
+    restart: unless-stopped
+    environment:
+      WA_OTP_SHARED_SECRET: ${WA_OTP_SHARED_SECRET}
+      WA_PROVIDER: ${WA_PROVIDER:-baileys}
+      WA_PAIRING_NUMBER: ${WA_PAIRING_NUMBER:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - baileys_session:/data/session
+    networks: [internal, edge]   # edge: butuh keluar ke server WhatsApp; tidak ada port yang dipublish
+    security_opt: ["no-new-privileges:true"]
+
+  admin:
+    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-admin:${IMAGE_TAG:-latest}
+    build: ./admin
+    restart: unless-stopped
+    environment:
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-https://${API_DOMAIN}}
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+
+  postgres:
+    image: postgis/postgis:16-3.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+
+  # Penyimpanan objek kompatibel S3 (pengganti MinIO; lihat docs/KEPUTUSAN.md).
+  # Konsol admin dan port S3 tidak dipublish; akses berkas lewat URL bertanda tangan dari API.
+  s3:
+    image: chrislusf/seaweedfs:4.53
+    restart: unless-stopped
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        umask 077
+        mkdir -p /etc/seaweedfs
+        printf '{"identities":[{"name":"pacetara","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /etc/seaweedfs/s3.json
+        exec weed server -dir=/data -ip=s3 -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=1024 -volume.max=0 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+
+  s3-init:
+    image: chrislusf/seaweedfs:4.53
+    restart: "no"
+    depends_on:
+      s3: { condition: service_healthy }
+    environment:
+      S3_BUCKET: ${S3_BUCKET}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          echo "s3.bucket.list" | weed shell -master=s3:9333 2>/dev/null | grep -qw "$$S3_BUCKET" && exit 0
+          echo "s3.bucket.create -name $$S3_BUCKET" | weed shell -master=s3:9333 && exit 0
+          sleep 3
+        done
+        exit 1
+    networks: [internal]
+
+  backup:
+    image: ${REGISTRY:-ghcr.io/bimacreative}/pacetara-backup:${IMAGE_TAG:-latest}
+    build: ./infra/backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_CRON: ${BACKUP_CRON:-30 19 * * *}
+    volumes:
+      - backups:/backups
+      - s3data:/s3-data   # rw agar restore.sh bisa memulihkan berkas
+      - ./infra/backup/config:/config:ro   # rclone.conf (tidak di-commit)
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [internal, edge]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  # Tanpa akses internet keluar maupun masuk. Database dan Redis hanya di sini.
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  redisdata:
+  s3data:
+  baileys_session:
+  caddy_data:
+  caddy_config:
+  backups:
