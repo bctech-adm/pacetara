@@ -24,7 +24,8 @@ dependencies:
   geolocator: ^14.1.2
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
-  permission_handler: ^13.0.2
+  # 13.x memakai permission_handler_android 14 yang mewajibkan compileSdk 37 (belum didukung AGP saat ini).
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:
