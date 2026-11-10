@@ -379,7 +379,7 @@ class MessageBubble extends StatelessWidget {
                 if (m.sendState == SendState.sending) ...[const SizedBox(width: 4), Icon(Icons.schedule, size: 12, color: fg.withValues(alpha: 0.6))],
                 if (m.sendState == SendState.failed) ...[
                   const SizedBox(width: 6),
-                  Text('Gagal terkirim · ketuk untuk kirim ulang', style: theme.textTheme.labelSmall?.copyWith(color: scheme.error)),
+                  Flexible(child: Text('Gagal terkirim · ketuk untuk kirim ulang', style: theme.textTheme.labelSmall?.copyWith(color: scheme.error))),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Buang',
@@ -412,12 +412,12 @@ class RunInviteCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.directions_run, size: 18, color: theme.colorScheme.primary),
           const SizedBox(width: 6),
-          Text('Ajakan lari bareng', style: theme.textTheme.labelMedium),
+          Expanded(child: Text('Ajakan lari bareng', style: theme.textTheme.labelMedium, overflow: TextOverflow.ellipsis)),
         ]),
         const SizedBox(height: 4),
         Text(invite.title, style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
-        Row(children: [const Icon(Icons.event, size: 16), const SizedBox(width: 6), Text(formatDayTime(invite.startsAt))]),
+        Row(children: [const Icon(Icons.event, size: 16), const SizedBox(width: 6), Expanded(child: Text(formatDayTime(invite.startsAt)))]),
         Row(children: [const Icon(Icons.place_outlined, size: 16), const SizedBox(width: 6), Expanded(child: Text(invite.place))]),
         if (invite.note.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(invite.note)),
         const SizedBox(height: 6),
