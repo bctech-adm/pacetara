@@ -12,8 +12,10 @@ import 'features/communities/screens/community_detail_screen.dart';
 import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
 import 'features/communities/screens/join_by_code_screen.dart';
-import 'features/communities/screens/my_communities_screen.dart';
+import 'features/home/home_shell.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/runs/screens/run_detail_screen.dart';
+import 'features/runs/screens/save_run_screen.dart';
 
 const _publicRoutes = {'/login', '/register', '/forgot-password'};
 
@@ -48,7 +50,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
       GoRoute(path: '/verify-email', builder: (_, _) => const VerifyEmailScreen()),
       GoRoute(path: '/verify-phone', builder: (_, _) => const VerifyPhoneScreen()),
-      GoRoute(path: '/', builder: (_, _) => const MyCommunitiesScreen()),
+      GoRoute(path: '/', builder: (_, _) => const HomeShell()),
+      GoRoute(path: '/runs/save', builder: (_, _) => const SaveRunScreen()),
+      GoRoute(path: '/runs/:id', builder: (_, state) => RunDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/communities/explore', builder: (_, _) => const DirectoryScreen()),
       GoRoute(path: '/communities/new', builder: (_, _) => const CommunityFormScreen()),
       GoRoute(

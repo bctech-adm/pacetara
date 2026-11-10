@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../auth/models.dart';
+import '../runs/runs_repository.dart';
 import '../update/update_service.dart';
 
 class Avatar extends ConsumerWidget {
@@ -152,6 +153,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: Text(profile.phoneVerified ? 'Nomor HP terverifikasi' : 'Nomor HP belum terverifikasi'),
         ),
         const Divider(),
+        _PrivacyZoneTile(profile: profile),
         const _VersionTile(),
         ListTile(
           contentPadding: EdgeInsets.zero,
@@ -266,6 +268,50 @@ class _VersionTile extends ConsumerWidget {
           showInfo(context, 'Aplikasi sudah versi terbaru');
         } else {
           await showUpdateDialog(context, release);
+        }
+      },
+    );
+  }
+}
+
+class _PrivacyZoneTile extends ConsumerWidget {
+  const _PrivacyZoneTile({required this.profile});
+  final MyProfile profile;
+
+  static const _options = [100, 250, 500, 1000];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.shield_moon_outlined),
+      title: const Text('Zona privasi lari'),
+      subtitle: Text('Area ${profile.privacyRadiusM} m dari titik awal dan akhir disembunyikan dari orang lain'),
+      onTap: () async {
+        final chosen = await showDialog<int>(
+          context: context,
+          builder: (context) => SimpleDialog(
+            title: const Text('Radius zona privasi'),
+            children: [
+              for (final m in _options)
+                RadioGroup<int>(
+                  groupValue: profile.privacyRadiusM,
+                  onChanged: (v) => Navigator.pop(context, v),
+                  child: RadioListTile<int>(value: m, title: Text(m >= 1000 ? '${m ~/ 1000} km' : '$m m')),
+                ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(24, 8, 24, 0),
+                child: Text('Berlaku untuk lari yang disimpan setelah ini.'),
+              ),
+            ],
+          ),
+        );
+        if (chosen == null || chosen == profile.privacyRadiusM) return;
+        try {
+          await ref.read(runsRepositoryProvider).setPrivacyRadius(chosen);
+          await ref.read(authControllerProvider.notifier).reload();
+        } catch (e) {
+          if (context.mounted) showError(context, e);
         }
       },
     );

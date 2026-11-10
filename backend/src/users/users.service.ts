@@ -6,6 +6,7 @@ import { PG_POOL } from '../core.module.js';
 import { verifyPassword } from '../auth/password.js';
 import { TokenService } from '../auth/token.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { RunsService } from '../runs/runs.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
@@ -30,6 +31,7 @@ export class UsersService {
     private readonly storage: StorageService,
     private readonly tokens: TokenService,
     private readonly communities: CommunitiesService,
+    private readonly runs: RunsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -124,6 +126,8 @@ export class UsersService {
     const logos = await withTx(this.pool, async (db) => {
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
+      // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya.
+      const runPhotos = await this.runs.onAccountDeletion(db, userId);
       await this.tokens.revokeAllForUser(userId, db);
       await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
       await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
@@ -138,7 +142,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return communityLogos;
+      return [...communityLogos, ...runPhotos];
     });
     for (const key of logos) await this.storage.delete(key).catch(() => undefined);
     if (row.avatar_key) await this.storage.delete(row.avatar_key).catch(() => this.logger.warn('Gagal menghapus avatar akun terhapus'));

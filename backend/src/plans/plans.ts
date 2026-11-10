@@ -44,3 +44,9 @@ export interface LimitInfo {
 export function limitInfo(limit: number | null, used: number): LimitInfo {
   return { limit, used, reached: limit !== null && used >= limit };
 }
+
+/** Riwayat lari yang terlihat oleh pemiliknya (hari). null = penuh. Data lama tidak dihapus. */
+export const RUN_HISTORY_DAYS: Record<UserPlan, number | null> = {
+  free: 90,
+  premium: null,
+};

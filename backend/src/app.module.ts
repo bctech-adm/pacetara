@@ -13,6 +13,8 @@ import { CommunitiesService } from './communities/communities.service.js';
 import { TokenService } from './auth/token.service.js';
 import { CoreModule } from './core.module.js';
 import { HealthController } from './health/health.controller.js';
+import { RunsController } from './runs/runs.controller.js';
+import { RunsService } from './runs/runs.service.js';
 import { StorageService } from './storage/storage.service.js';
 import { UsersController } from './users/users.controller.js';
 import { UsersRepository } from './users/users.repository.js';
@@ -25,7 +27,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
@@ -40,6 +42,7 @@ import { UsersService } from './users/users.service.js';
     UsersService,
     StorageService,
     CommunitiesService,
+    RunsService,
     LevelGuard,
   ],
 })

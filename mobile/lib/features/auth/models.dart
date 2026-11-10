@@ -14,6 +14,7 @@ class MyProfile {
     required this.avgPaceSecPerKm,
     required this.verificationLevel,
     required this.badges,
+    this.privacyRadiusM = 250,
   });
 
   final String id;
@@ -29,6 +30,9 @@ class MyProfile {
   final int? avgPaceSecPerKm;
   final int verificationLevel;
   final List<String> badges;
+
+  /// Radius zona privasi rute lari (meter).
+  final int privacyRadiusM;
 
   bool get isLevel1 => verificationLevel >= 1;
 
@@ -46,6 +50,7 @@ class MyProfile {
         avgPaceSecPerKm: (j['avgPaceSecPerKm'] as num?)?.toInt(),
         verificationLevel: (j['verificationLevel'] as num?)?.toInt() ?? 0,
         badges: (j['badges'] as List<dynamic>? ?? const []).whereType<String>().toList(),
+        privacyRadiusM: (j['privacyRadiusM'] as num?)?.toInt() ?? 250,
       );
 }
 

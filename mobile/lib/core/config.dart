@@ -12,6 +12,14 @@ class AppConfig {
   /// ber-`aud` client ini dan bisa diverifikasi server. Kosong = tombol Google disembunyikan.
   static const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
 
+  /// Sumber tile peta. Bawaan OpenStreetMap hanya untuk uji: kebijakan OSM melarang pemakaian berat
+  /// oleh aplikasi, jadi sebelum rilis ganti ke penyedia tile berbayar (lihat KEPUTUSAN.md).
+  static const mapTileUrl = String.fromEnvironment(
+    'MAP_TILE_URL',
+    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+  static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: '© OpenStreetMap contributors');
+
   /// Hanya untuk development dengan Caddy lokal (CA internal). Diabaikan di build rilis.
   static const allowDevCa = bool.fromEnvironment('ALLOW_DEV_CA');
 
