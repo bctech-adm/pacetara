@@ -1,3 +1,5 @@
+import { readdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
@@ -61,20 +63,27 @@ export class BaileysProvider implements OtpProvider {
     this.sock = sock;
     sock.ev.on('creds.update', saveCreds);
 
-    if (this.opts.pairingNumber && !state.creds.registered) {
-      // Beri waktu socket membuka koneksi sebelum meminta kode pairing.
-      setTimeout(() => {
-        sock
-          .requestPairingCode(this.opts.pairingNumber!)
-          .then((code) => log.warn(`Kode pairing WhatsApp: ${code} (WhatsApp > Perangkat tertaut > Tautkan dengan nomor)`))
-          .catch((e: unknown) => log.error({ err: e }, 'Gagal meminta kode pairing'));
-      }, 3000);
-    }
+    let pairingRequested = false;
 
     sock.ev.on('connection.update', (u) => {
-      if (u.qr && !this.opts.pairingNumber) {
-        log.warn('Pindai QR berikut dari WhatsApp nomor OTP (Perangkat tertaut):');
-        qrcode.generate(u.qr, { small: true });
+      // Event `qr` menandakan socket siap dipasangkan; saat itulah kode pairing boleh diminta.
+      if (u.qr && !state.creds.registered) {
+        if (this.opts.pairingNumber) {
+          if (!pairingRequested) {
+            pairingRequested = true;
+            sock
+              .requestPairingCode(this.opts.pairingNumber)
+              .then((code) =>
+                log.warn(
+                  `Kode pairing WhatsApp: ${code} — masukkan dalam ±1 menit di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon`,
+                ),
+              )
+              .catch((e: unknown) => log.error({ err: e }, 'Gagal meminta kode pairing'));
+          }
+        } else {
+          log.warn('Pindai QR berikut dari WhatsApp nomor OTP (Perangkat tertaut):');
+          qrcode.generate(u.qr, { small: true });
+        }
       }
       if (u.connection === 'open') {
         this.ready = true;
@@ -83,17 +92,37 @@ export class BaileysProvider implements OtpProvider {
       }
       if (u.connection === 'close') {
         this.ready = false;
+        if (this.stopped) return;
         const status = (u.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
+
         if (status === DisconnectReason.loggedOut) {
-          log.error('Sesi WhatsApp keluar (logged out). Hapus volume sesi lalu pindai ulang. API akan memakai OTP email.');
+          // Sesi ditolak (perangkat dilepas, atau pairing sebelumnya tidak selesai). Mulai sesi baru
+          // dengan jeda panjang agar tidak membanjiri WhatsApp dengan permintaan pairing.
+          log.error('Sesi WhatsApp ditolak (logged out). Membuat sesi baru; API memakai OTP email sementara.');
+          this.scheduleReconnect(30_000, true);
           return;
         }
-        if (this.stopped) return;
+        if (status === DisconnectReason.restartRequired) {
+          // Normal setelah pairing berhasil: sambung ulang segera dengan kredensial baru.
+          this.scheduleReconnect(500, false);
+          return;
+        }
         const delay = Math.min(60_000, 2_000 * 2 ** this.retry++);
         log.warn(`Koneksi WhatsApp terputus (kode ${status ?? '?'}), mencoba lagi dalam ${delay / 1000} dtk`);
-        setTimeout(() => void this.connect().catch((e: unknown) => log.error({ err: e }, 'Gagal menyambung ulang')), delay);
+        this.scheduleReconnect(delay, false);
       }
     });
+  }
+
+  private scheduleReconnect(delayMs: number, resetSession: boolean) {
+    const log = this.opts.logger;
+    setTimeout(() => {
+      void (async () => {
+        if (this.stopped) return;
+        if (resetSession) await clearDir(this.opts.sessionDir);
+        await this.connect();
+      })().catch((e: unknown) => log.error({ err: e }, 'Gagal menyambung ulang'));
+    }, delayMs);
   }
 
   async sendOtp(phoneE164: string, code: string) {
@@ -103,5 +132,13 @@ export class BaileysProvider implements OtpProvider {
     if (!result?.exists) throw new NotOnWhatsAppError();
     await this.sock.sendMessage(result.jid, { text: otpMessage(code) });
     this.opts.logger.info(`OTP terkirim ke ${maskPhone(phoneE164)}`);
+  }
+}
+
+/** Menghapus isi folder sesi (bukan foldernya, karena itu titik mount volume). */
+async function clearDir(dir: string) {
+  if (!dir || dir === '/' || !dir.startsWith('/')) throw new Error(`Folder sesi tidak aman dihapus: ${dir}`);
+  for (const entry of await readdir(dir)) {
+    await rm(join(dir, entry), { recursive: true, force: true });
   }
 }
