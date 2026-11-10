@@ -29,6 +29,13 @@ services:
     mem_limit: 64m
     cpus: 0.25
 
+  web:
+    container_name: pacetara-web
+    <<: *logging
+    networks: [internal, web-edge]
+    mem_limit: 32m
+    cpus: 0.25
+
   worker:
     container_name: pacetara-worker
     <<: *logging

@@ -44,3 +44,11 @@
 	}
 	reverse_proxy admin:8080
 }
+
+{$WEB_DOMAIN} {
+	import security_headers
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	reverse_proxy web:8080
+}

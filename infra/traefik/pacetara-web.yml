@@ -1,0 +1,20 @@
+# Situs publik PaceTara pace.bimacreative.tech → container `pacetara-web:8080` (network web-edge).
+# Berkas terpisah dari pacetara.yml agar baru dipasang SETELAH DNS aktif (mencegah ACME gagal berulang).
+# Pasang: salin ke /opt/infra/traefik/dynamic/clients/, lalu `docker exec traefik kill -HUP 1`.
+# DNS pre-check WAJIB: dig +short A pace.bimacreative.tech @1.1.1.1 & @8.8.8.8 = 31.97.50.221, AAAA kosong.
+http:
+  routers:
+    pacetara-web:
+      entryPoints: [websecure]
+      rule: "Host(`pace.bimacreative.tech`)"
+      priority: 1
+      middlewares: [crowdsec, security-headers, ratelimit-default]
+      service: pacetara-web
+      tls:
+        certResolver: le-http
+
+  services:
+    pacetara-web:
+      loadBalancer:
+        servers:
+          - url: "http://pacetara-web:8080"

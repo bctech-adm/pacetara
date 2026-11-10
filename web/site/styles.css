@@ -1,0 +1,53 @@
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --fg: #1b1d21;
+  --muted: #5c6370;
+  --border: #e6e3de;
+  --accent: #d94e0b;
+  --accent-soft: #fdeee6;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121316;
+    --surface: #1a1c20;
+    --fg: #eceef1;
+    --muted: #9aa1ad;
+    --border: #2b2e35;
+    --accent: #ff8a4c;
+    --accent-soft: #2a1d16;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+header.site { border-bottom: 1px solid var(--border); background: var(--surface); }
+header.site .wrap { display: flex; align-items: center; gap: 10px; height: 60px; }
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--fg); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+.brand svg { width: 26px; height: 26px; color: var(--accent); }
+main { padding: 32px 0 64px; }
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 8px; }
+h2 { font-size: 1.25rem; margin: 40px 0 8px; padding-top: 8px; }
+h3 { font-size: 1.05rem; margin: 24px 0 4px; }
+.meta { color: var(--muted); margin: 0 0 24px; }
+.summary { background: var(--accent-soft); border-radius: 12px; padding: 16px 20px; margin: 24px 0; }
+.summary ul { margin: 8px 0 0; padding-left: 20px; }
+nav.toc { border: 1px solid var(--border); border-radius: 12px; padding: 12px 20px; background: var(--surface); }
+nav.toc ol { margin: 8px 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+@media (max-width: 560px) { nav.toc ol { columns: 1; } }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95rem; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+footer.site { border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; padding: 24px 0 40px; }
+.hero { padding: 48px 0 24px; }
+.hero p { font-size: 1.1rem; color: var(--muted); max-width: 560px; }
+.links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.links a { border: 1px solid var(--border); background: var(--surface); padding: 10px 16px; border-radius: 10px; text-decoration: none; color: var(--fg); }

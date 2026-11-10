@@ -53,3 +53,10 @@ Catat setiap keputusan baru di bawah, dengan tanggal dan modul. Jangan ubah kepu
     - Panel admin: Caddy diganti nginx dari `alpine:3.24`, berjalan sebagai user `nginx` (non-root). `config.js` dan CSP ditulis `admin/entrypoint.sh` dari `API_PUBLIC_URL` (divalidasi ketat: hanya `https://domain[:port]`). Menggantikan keputusan #8 (directive templates Caddy).
     - Semua image akhir menjalankan `apk upgrade` agar patch Alpine terbaru ikut walau base image tertinggal.
 36. **Action pihak ketiga di CI dikunci ke commit SHA** (mulai dari trivy-action v0.36.0), karena tag bisa dipindah ke kode lain.
+
+## Situs publik dan deploy 1.2 (10 Nov 2026)
+
+37. **Situs publik `web/`** (pace.bimacreative.tech): HTML statis tanpa JavaScript, nginx non-root dari Alpine, container `read_only`, CSP `default-src 'none'`. Berisi beranda dan `/privasi`. Kebijakan transaksi marketplace (PRD 3.2) ditambahkan di sini nanti. Rute Traefik terpisah (`infra/traefik/pacetara-web.yml`) agar baru dipasang setelah DNS aktif.
+38. **Naskah kebijakan privasi versi 2026-11-10** ditulis berdasarkan PRD dan perilaku kode yang sudah ada. Naskah ini perlu ditinjau konsultan hukum terhadap UU PDP (PRD: "Yang harus diverifikasi"), terutama nama badan hukum pengendali, alamat kontak, batas usia, dan transfer data ke luar negeri. Setiap perubahan naskah wajib menaikkan `PRIVACY_POLICY_VERSION` di server.
+39. **SMTP produksi** memakai mail server bimacreative.tech (`mail.bimacreative.tech:587`, STARTTLS) dengan akun khusus PaceTara, bukan akun `no-reply@`/`auth-noreply@` milik layanan lain.
+40. **Image produksi ditarik dari GHCR** (`REGISTRY=ghcr.io/bctech-adm`, `IMAGE_TAG` = 12 karakter SHA commit). Paket GHCR publik, jadi VPS tidak perlu login. Menggantikan keputusan #20 (kirim manual).

@@ -116,6 +116,8 @@ jobs:
             context: admin
           - name: backup
             context: infra/backup
+          - name: web
+            context: web
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

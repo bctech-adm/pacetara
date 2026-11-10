@@ -30,6 +30,7 @@ set_var S3_SECRET_KEY "$(rand_hex)"
 if [ "${1:-}" = "--local" ]; then
   set_var API_DOMAIN api.localhost
   set_var ADMIN_DOMAIN admin.localhost
+  set_var WEB_DOMAIN web.localhost
   set_var HTTP_PORT 8080
   set_var HTTPS_PORT 8443
   set_var CORS_ORIGINS https://admin.localhost:8443
