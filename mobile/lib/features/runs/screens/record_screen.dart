@@ -75,18 +75,30 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     }
   }
 
-  Future<void> _start() async {
+  Future<bool> _askPermission(Future<void> Function() ask) async {
     try {
-      await ensureLocationReady();
+      await ask();
+      return true;
     } on PermissionProblem catch (p) {
-      if (!mounted) return;
+      if (!mounted) return false;
       showInfo(context, p.message);
       if (p.openSettings) {
         await (p.message.contains('GPS') ? Geolocator.openLocationSettings() : Geolocator.openAppSettings());
       }
-      return;
+      return false;
     }
+  }
+
+  Future<void> _start() async {
+    if (!await _askPermission(ensureLocationReady)) return;
     await ref.read(recorderProvider.notifier).start();
+  }
+
+  /// Tombol "lokasi saya" saat belum merekam: minta izin lokasi (atas tindakan pengguna) lalu ambil posisi.
+  Future<void> _locate() async {
+    if (ref.read(recorderProvider).status != RecorderStatus.idle) return;
+    if (!await _askPermission(ensureLocationPermission)) return;
+    ref.invalidate(idlePositionProvider);
   }
 
   Future<void> _finish() async {
@@ -128,25 +140,27 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
           RecorderStatus.paused => 'Dijeda',
           _ => 'Lari',
         }),
-        actions: [
-          IconButton(
-            tooltip: 'Karakter di peta',
-            onPressed: () => showCharacterPicker(context, ref),
-            icon: Text(character.emoji, style: const TextStyle(fontSize: 22)),
-          ),
-        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: RouteMap(
-              segments: segments,
-              follow: s.status == RecorderStatus.recording,
-              showEndpoints: false,
-              runnerAt: runnerAt,
-              runnerHeading: track == null ? null : headingFromTrack(track.segments.last),
-              character: character,
-            ),
+            child: Stack(children: [
+              Positioned.fill(
+                child: RouteMap(
+                  segments: segments,
+                  follow: s.status == RecorderStatus.recording,
+                  showEndpoints: false,
+                  runnerAt: runnerAt,
+                  runnerHeading: track == null ? null : headingFromTrack(track.segments.last),
+                  runnerMoving: s.status == RecorderStatus.recording,
+                  character: character,
+                  onLocate: _locate,
+                ),
+              ),
+              // Pemilih karakter mengambang di atas peta; disembunyikan saat merekam agar tidak tersentuh.
+              if (s.status == RecorderStatus.idle || s.status == RecorderStatus.finished)
+                const Positioned(left: 12, top: 12, right: 12, child: Align(alignment: Alignment.topLeft, child: CharacterPickerCard())),
+            ]),
           ),
           Container(
             color: theme.colorScheme.surface,

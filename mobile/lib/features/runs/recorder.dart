@@ -108,6 +108,13 @@ class PermissionProblem implements Exception {
 
 /// Memastikan GPS aktif dan izin lokasi (saat aplikasi dipakai) serta notifikasi diberikan.
 Future<void> ensureLocationReady() async {
+  await ensureLocationPermission();
+  // Android 13+: tanpa izin ini notifikasi "sedang merekam" tidak terlihat (rekaman tetap jalan).
+  await ph.Permission.notification.request();
+}
+
+/// Hanya GPS aktif + izin lokasi saat aplikasi dipakai (untuk tombol "lokasi saya").
+Future<void> ensureLocationPermission() async {
   if (!await Geolocator.isLocationServiceEnabled()) {
     throw const PermissionProblem('Nyalakan Lokasi/GPS di HP untuk merekam lari', openSettings: true);
   }
@@ -117,8 +124,6 @@ Future<void> ensureLocationReady() async {
   if (perm == LocationPermission.deniedForever) {
     throw const PermissionProblem('Izin lokasi ditolak permanen. Buka Setelan aplikasi untuk mengizinkan', openSettings: true);
   }
-  // Android 13+: tanpa izin ini notifikasi "sedang merekam" tidak terlihat (rekaman tetap jalan).
-  await ph.Permission.notification.request();
 }
 
 class RecorderController extends Notifier<RecorderState> {

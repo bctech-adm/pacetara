@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pacetara/features/runs/recorder.dart';
@@ -177,6 +178,16 @@ void main() {
 
     test('semua karakter punya id unik', () {
       expect(runnerCharacters.map((c) => c.id).toSet(), hasLength(runnerCharacters.length));
+    });
+
+    testWidgets('penanda karakter tergambar, berputar, dan berayun saat bergerak', (tester) async {
+      for (final c in runnerCharacters) {
+        await tester.pumpWidget(Center(child: RunnerMarker(character: c, heading: 90, moving: true)));
+        await tester.pump(const Duration(milliseconds: 700));
+        expect(tester.takeException(), isNull);
+      }
+      expect(find.byType(AnimatedRotation), findsOneWidget);
+      await tester.pumpWidget(const SizedBox()); // timer ayunan dibatalkan saat dibuang
     });
   });
 
