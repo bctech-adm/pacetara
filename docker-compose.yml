@@ -194,6 +194,15 @@ services:
     networks: [internal, edge]
     security_opt: ["no-new-privileges:true"]
 
+  # Hanya lokal: menangkap email OTP. Jalankan dengan --profile dev, buka http://127.0.0.1:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    profiles: ["dev"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks: [internal, edge]
+
 networks:
   # Tanpa akses internet keluar maupun masuk. Database dan Redis hanya di sini.
   internal:

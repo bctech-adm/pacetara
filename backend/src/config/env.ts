@@ -30,6 +30,28 @@ export const envSchema = z.object({
   S3_ACCESS_KEY: z.string().min(3),
   S3_SECRET_KEY: z.string().min(8),
   S3_BUCKET: z.string().min(3),
+
+  /** Kunci HMAC token akses (openssl rand -base64 32). */
+  JWT_SECRET: base64Key('JWT_SECRET'),
+  ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+
+  /** Client ID OAuth Google (Android + Web) yang boleh menjadi `aud` ID token. Kosong = login Google mati. */
+  GOOGLE_CLIENT_IDS: z.string().default(''),
+
+  /** SMTP untuk OTP email. SMTP_HOST kosong = email tidak bisa dikirim (endpoint menjawab 503). */
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default('PaceTara <noreply@bimacreative.tech>'),
+
+  PRIVACY_POLICY_VERSION: z.string().min(1).default('2026-11-10'),
+  PRIVACY_POLICY_URL: z.string().url().default('https://pace.bimacreative.tech/privasi'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -41,8 +63,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Konfigurasi environment tidak valid:\n${issues}`);
   }
-  if (parsed.data.DATA_ENCRYPTION_KEY === parsed.data.BLIND_INDEX_KEY) {
-    throw new Error('DATA_ENCRYPTION_KEY dan BLIND_INDEX_KEY harus berbeda');
+  const keys = [parsed.data.DATA_ENCRYPTION_KEY, parsed.data.BLIND_INDEX_KEY, parsed.data.JWT_SECRET];
+  if (new Set(keys).size !== keys.length) {
+    throw new Error('DATA_ENCRYPTION_KEY, BLIND_INDEX_KEY, dan JWT_SECRET harus berbeda satu sama lain');
   }
   return parsed.data;
 }

@@ -24,6 +24,9 @@ Izin lokasi latar belakang dan foreground service ditambahkan di modul 1.4, bers
 # Ke API produksi
 flutter run --dart-define=API_BASE_URL=https://pace-api.bimacreative.tech
 
+# Dengan login Google (Client ID tipe Web dari Google Cloud, sama dengan salah satu GOOGLE_CLIENT_IDS di server)
+flutter run --dart-define=API_BASE_URL=https://pace-api.bimacreative.tech --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxx.apps.googleusercontent.com
+
 # Ke stack lokal (docker compose, CA internal Caddy)
 flutter run --dart-define=API_BASE_URL=https://api.localhost:8443 --dart-define=ALLOW_DEV_CA=true
 ```

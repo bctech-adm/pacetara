@@ -13,6 +13,7 @@ const valid = () => ({
   S3_ACCESS_KEY: 'pacetara',
   S3_SECRET_KEY: 'supersecret',
   S3_BUCKET: 'pacetara',
+  JWT_SECRET: randomBytes(32).toString('base64'),
 });
 
 describe('loadEnv', () => {

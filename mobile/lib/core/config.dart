@@ -8,6 +8,10 @@ class AppConfig {
     defaultValue: 'https://pace-api.bimacreative.tech',
   );
 
+  /// Client ID OAuth tipe "Web" dari Google Cloud (bukan yang Android). Dipakai agar ID token
+  /// ber-`aud` client ini dan bisa diverifikasi server. Kosong = tombol Google disembunyikan.
+  static const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+
   /// Hanya untuk development dengan Caddy lokal (CA internal). Diabaikan di build rilis.
   static const allowDevCa = bool.fromEnvironment('ALLOW_DEV_CA');
 

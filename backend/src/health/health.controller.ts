@@ -2,11 +2,13 @@ import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/co
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
+import { Public } from '../common/http.js';
 import { PG_POOL, REDIS } from '../core.module.js';
 
 type Check = 'ok' | 'down';
 
 @Controller('health')
+@Public()
 @SkipThrottle()
 export class HealthController {
   constructor(

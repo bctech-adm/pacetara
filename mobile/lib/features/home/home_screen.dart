@@ -1,44 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../core/http/api_client.dart';
+import '../auth/auth_controller.dart';
+import '../profile/profile_screen.dart';
 
-/// Layar sementara modul 1.1: memastikan aplikasi bisa menjangkau API lewat HTTPS ter-pin.
+/// Beranda sementara. Komunitas (1.3), lari (1.4), dan status lari (1.5) mengisi layar ini.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final health = ref.watch(apiHealthProvider);
+    final profile = ref.watch(authControllerProvider).value;
     final theme = Theme.of(context);
+    if (profile == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('PaceTara')),
+      appBar: AppBar(
+        title: const Text('PaceTara'),
+        actions: [
+          IconButton(
+            tooltip: 'Profil',
+            onPressed: () => context.push('/profile'),
+            icon: Avatar(profile: profile, radius: 16),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.directions_run, size: 72, color: theme.colorScheme.primary),
+              Icon(Icons.verified_user_outlined, size: 64, color: theme.colorScheme.primary),
               const SizedBox(height: 16),
-              Text('Komunitas lari Indonesia', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 32),
-              health.when(
-                loading: () => const CircularProgressIndicator(),
-                error: (e, _) => Column(
-                  children: [
-                    const Text('Server tidak bisa dijangkau'),
-                    TextButton(
-                      onPressed: () => ref.invalidate(apiHealthProvider),
-                      child: const Text('Coba lagi'),
-                    ),
-                  ],
-                ),
-                data: (h) => Text(
-                  h.status == 'ok' ? 'Terhubung ke server' : 'Server bermasalah (${h.status})',
-                  key: const Key('health-status'),
-                ),
+              Text('Halo, ${profile.displayName}!', style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(
+                'Akun kamu sudah terverifikasi (Level ${profile.verificationLevel}). '
+                'Komunitas dan pelacakan lari segera hadir.',
+                textAlign: TextAlign.center,
+                key: const Key('home-level'),
               ),
             ],
           ),

@@ -21,9 +21,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # CLI langsung atas seluruh riwayat (gitleaks-action gagal pada push pertama ke repo kosong).
+      - name: gitleaks (seluruh riwayat git)
+        run: |
+          docker run --rm -v "$PWD:/repo" --entrypoint sh ghcr.io/gitleaks/gitleaks:v8.24.3 -c \
+            'git config --global --add safe.directory /repo && gitleaks git /repo --redact -v --exit-code 1'
 
   node:
     name: ${{ matrix.pkg }} — lint, tes, audit
@@ -50,7 +52,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   migrations:
-    name: Migrasi di PostGIS bersih
+    name: Migrasi + tes e2e (PostGIS, Redis)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -62,11 +64,18 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -h 127.0.0.1 -U ci" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
     defaults:
       run:
         working-directory: backend
     env:
       DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      TEST_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      TEST_REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -78,6 +87,8 @@ jobs:
       - run: npm run build
       - name: Migrasi dua kali (harus idempoten)
         run: npm run migrate && npm run migrate
+      - name: Tes e2e
+        run: npm test
 
   compose:
     name: Validasi docker-compose

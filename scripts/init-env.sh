@@ -23,6 +23,7 @@ set_var POSTGRES_PASSWORD "$(rand_hex)"
 set_var REDIS_PASSWORD "$(rand_hex)"
 set_var DATA_ENCRYPTION_KEY "$(rand_b64)"
 set_var BLIND_INDEX_KEY "$(rand_b64)"
+set_var JWT_SECRET "$(rand_b64)"
 set_var WA_OTP_SHARED_SECRET "$(rand_hex)"
 set_var S3_SECRET_KEY "$(rand_hex)"
 
@@ -35,6 +36,8 @@ if [ "${1:-}" = "--local" ]; then
   echo "API_PUBLIC_URL=https://api.localhost:8443" >> .env
   set_var NODE_ENV development
   set_var REGISTRY local
+  set_var SMTP_HOST mailpit
+  set_var SMTP_PORT 1025
   # Kunci age sekali pakai untuk lokal saja.
   if command -v age-keygen >/dev/null 2>&1; then
     set_var BACKUP_AGE_RECIPIENT "$(age-keygen 2>/dev/null | grep -o 'age1[0-9a-z]*')"

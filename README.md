@@ -7,7 +7,8 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | Modul | Status |
 | --- | --- |
 | 1.1 Fondasi | Selesai. Produksi: https://pace-api.bimacreative.tech/health dan https://pace-admin.bimacreative.tech |
-| 1.2 – 1.10 | Belum |
+| 1.2 Akun dan login | Selesai (backend + aplikasi). Produksi butuh SMTP dan Client ID Google |
+| 1.3 – 1.10 | Belum |
 
 ## Menjalankan di mesin sendiri
 
