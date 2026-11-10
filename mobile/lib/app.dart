@@ -8,6 +8,7 @@ import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/auth/screens/verify_screens.dart';
+import 'features/chat/chat_screens.dart';
 import 'features/communities/screens/community_detail_screen.dart';
 import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
@@ -61,6 +62,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/communities/:id', builder: (_, state) => CommunityDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+      GoRoute(path: '/chat/:id', builder: (_, state) => ChatScreen(convId: state.pathParameters['id']!)),
     ],
   );
 });

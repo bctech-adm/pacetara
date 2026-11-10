@@ -5,4 +5,5 @@ export const QUEUES = {
 
 export const MAINTENANCE_JOBS = {
   heartbeat: 'heartbeat',
+  chatImageExpiry: 'chat-image-expiry',
 } as const;

@@ -15,9 +15,12 @@ import '../session/session_manager.dart';
 /// Event yang diterima dari satu kanal. [name] = `reconnected` jika koneksi baru tersambung ulang
 /// (event selama terputus mungkin terlewat, jadi pendengar sebaiknya memuat ulang datanya).
 class RealtimeEvent {
-  const RealtimeEvent(this.channel, this.name);
+  const RealtimeEvent(this.channel, this.name, [this.data]);
   final String channel;
   final String name;
+
+  /// Data kecil tanpa isi pribadi (mis. `seq` atau id pesan).
+  final Map<String, dynamic>? data;
 }
 
 /// Membuka WebSocket. Di aplikasi: `WebSocket.connect` dengan HttpClient ber-pinning.
@@ -141,7 +144,8 @@ class RealtimeClient {
     if (msg is! Map<String, dynamic> || msg['op'] != 'event') return;
     final ch = msg['ch'];
     final ev = msg['ev'];
-    if (ch is String && ev is String) _channels[ch]?.add(RealtimeEvent(ch, ev));
+    final data = msg['data'];
+    if (ch is String && ev is String) _channels[ch]?.add(RealtimeEvent(ch, ev, data is Map<String, dynamic> ? data : null));
   }
 
   void _onDone() {

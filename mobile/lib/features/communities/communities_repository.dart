@@ -94,7 +94,9 @@ class CommunitiesRepository {
         return res.data!.map((e) => Member.fromJson(e as Map<String, dynamic>)).toList();
       });
 
-  Future<void> approve(String id, String userId) => _call(() => _dio.post<void>('/v1/communities/$id/members/$userId/approve'));
+  /// [seeHistory]: anggota baru boleh melihat riwayat chat lama (pilihan admin, PRD 1.6).
+  Future<void> approve(String id, String userId, {bool? seeHistory}) =>
+      _call(() => _dio.post<void>('/v1/communities/$id/members/$userId/approve', data: {'seeHistory': ?seeHistory}));
   Future<void> reject(String id, String userId) => _call(() => _dio.post<void>('/v1/communities/$id/members/$userId/reject'));
   Future<void> removeMember(String id, String userId, {bool ban = false}) =>
       _call(() => _dio.post<void>('/v1/communities/$id/members/$userId/remove', data: {'ban': ban}));

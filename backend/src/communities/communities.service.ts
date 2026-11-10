@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type pg from 'pg';
+import { chatImageKeysOfCommunities } from '../chat/chat-storage.js';
 import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
@@ -265,13 +266,15 @@ export class CommunitiesService {
   }
 
   async remove(userId: string, communityId: string): Promise<void> {
-    const logo = await withTx(this.pool, async (db) => {
+    const keys = await withTx(this.pool, async (db) => {
       const c = await this.lockCommunity(db, communityId);
       if (c.owner_id !== userId) throw new ApiError(403, 'not_owner', 'Hanya pemilik yang bisa menghapus komunitas');
+      // Chat komunitas (pesan + gambar) ikut terhapus.
+      const images = await chatImageKeysOfCommunities(db, [communityId]);
       await db.query('DELETE FROM communities WHERE id = $1', [communityId]);
-      return c.logo_key;
+      return [...(c.logo_key ? [c.logo_key] : []), ...images];
     });
-    if (logo) await this.storage.delete(logo).catch(() => undefined);
+    for (const key of keys) await this.storage.delete(key).catch(() => undefined);
   }
 
   // ---------- Bergabung & keluar ----------
@@ -295,7 +298,7 @@ export class CommunitiesService {
         return { status: 'pending' as const };
       }
       this.assertCommunityHasRoom(c);
-      await this.addActive(db, communityId, userId, null);
+      await this.addActive(db, communityId, userId, null, c.new_members_see_history);
       return { status: 'active' as const };
     });
   }
@@ -383,12 +386,13 @@ export class CommunitiesService {
       this.assertCommunityHasRoom(c);
       if (existing?.status === 'pending') {
         await db.query(
-          `UPDATE community_members SET status = 'active', joined_at = now() WHERE community_id = $1 AND user_id = $2`,
-          [c.id, userId],
+          `UPDATE community_members SET status = 'active', joined_at = now(), history_from = $3
+            WHERE community_id = $1 AND user_id = $2`,
+          [c.id, userId, historyFrom(c.new_members_see_history)],
         );
         await this.adjustCount(db, c.id, 1);
       } else {
-        await this.addActive(db, c.id, userId, null);
+        await this.addActive(db, c.id, userId, null, c.new_members_see_history);
       }
       await db.query('UPDATE community_invites SET uses = uses + 1 WHERE id = $1', [inv.id]);
       return c.id;
@@ -398,7 +402,11 @@ export class CommunitiesService {
 
   // ---------- Kelola anggota (admin) ----------
 
-  async approve(adminId: string, communityId: string, targetId: string): Promise<void> {
+  /**
+   * Setujui permintaan bergabung. [seeHistory]: admin memilih apakah anggota baru melihat riwayat
+   * chat lama (PRD 1.6); bawaan mengikuti pengaturan komunitas.
+   */
+  async approve(adminId: string, communityId: string, targetId: string, seeHistory?: boolean): Promise<void> {
     await withTx(this.pool, async (db) => {
       const target = await this.lockUser(db, targetId);
       const c = await this.lockCommunity(db, communityId);
@@ -415,9 +423,9 @@ export class CommunitiesService {
         throw err;
       }
       await db.query(
-        `UPDATE community_members SET status = 'active', joined_at = now(), decided_by = $3
+        `UPDATE community_members SET status = 'active', joined_at = now(), decided_by = $3, history_from = $4
           WHERE community_id = $1 AND user_id = $2`,
-        [communityId, targetId, adminId],
+        [communityId, targetId, adminId, historyFrom(seeHistory ?? c.new_members_see_history)],
       );
       await this.adjustCount(db, communityId, 1);
     });
@@ -534,6 +542,7 @@ export class CommunitiesService {
         { communities: blocking.map((b) => ({ id: b.id, name: b.name })) },
       );
     }
+    const chatImages = await chatImageKeysOfCommunities(db, rows.map((r) => r.id));
     if (rows.length) await db.query('DELETE FROM communities WHERE owner_id = $1', [userId]);
 
     // Keluar dari semua komunitas lain; jumlah anggota aktif disesuaikan.
@@ -545,7 +554,7 @@ export class CommunitiesService {
     if (activeIds.length) {
       await db.query('UPDATE communities SET member_count = member_count - 1 WHERE id = ANY($1::uuid[])', [activeIds]);
     }
-    return rows.map((r) => r.logo_key).filter((k): k is string => Boolean(k));
+    return [...rows.map((r) => r.logo_key).filter((k): k is string => Boolean(k)), ...chatImages];
   }
 
   /** Apakah dua pengguna sama-sama anggota aktif minimal satu komunitas (dipakai profil & chat). */
@@ -608,11 +617,11 @@ export class CommunitiesService {
     }
   }
 
-  private async addActive(db: Queryable, communityId: string, userId: string, decidedBy: string | null) {
+  private async addActive(db: Queryable, communityId: string, userId: string, decidedBy: string | null, seeHistory: boolean) {
     await db.query(
-      `INSERT INTO community_members (community_id, user_id, role, status, joined_at, decided_by)
-       VALUES ($1, $2, 'member', 'active', now(), $3)`,
-      [communityId, userId, decidedBy],
+      `INSERT INTO community_members (community_id, user_id, role, status, joined_at, decided_by, history_from)
+       VALUES ($1, $2, 'member', 'active', now(), $3, $4)`,
+      [communityId, userId, decidedBy, historyFrom(seeHistory)],
     );
     await this.adjustCount(db, communityId, 1);
   }
@@ -716,4 +725,9 @@ function decodeCursor(cursor: string): { count: number; id: string } | undefined
   const [count, id] = Buffer.from(cursor, 'base64url').toString().split(':');
   if (!count || !id || !/^\d+$/.test(count) || !/^[0-9a-f-]{36}$/.test(id)) return undefined;
   return { count: Number(count), id };
+}
+
+/** NULL = melihat seluruh riwayat chat; selain itu hanya pesan sejak bergabung. */
+function historyFrom(seeHistory: boolean): Date | null {
+  return seeHistory ? null : new Date();
 }

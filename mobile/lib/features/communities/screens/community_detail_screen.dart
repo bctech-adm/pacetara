@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
+import '../../chat/chat_screens.dart';
 import '../../live/live_widgets.dart';
 import '../communities_repository.dart';
 import '../models.dart';
@@ -101,7 +102,12 @@ class _PrimaryAction extends ConsumerWidget {
     final repo = ref.read(communitiesRepositoryProvider);
     switch (c.myStatus) {
       case MyStatus.active:
-        return const SizedBox.shrink();
+        return FilledButton.tonalIcon(
+          key: const Key('community-chat'),
+          onPressed: () => openCommunityChat(context, ref, c.id),
+          icon: const Icon(Icons.chat_bubble_outline),
+          label: const Text('Chat komunitas'),
+        );
       case MyStatus.pending:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Permintaan bergabung sedang menunggu persetujuan admin.'),
@@ -231,7 +237,10 @@ class _AdminPanel extends ConsumerWidget {
                       tooltip: 'Setujui',
                       icon: const Icon(Icons.check),
                       onPressed: () async {
-                        if (await runCommunityAction(context, () => repo.approve(c.id, m.userId), success: '${m.displayName} bergabung')) {
+                        final seeHistory = await _askSeeHistory(context, m.displayName, detail.newMembersSeeHistory ?? false);
+                        if (seeHistory == null || !context.mounted) return;
+                        if (await runCommunityAction(context, () => repo.approve(c.id, m.userId, seeHistory: seeHistory),
+                            success: '${m.displayName} bergabung')) {
                           refreshCommunity(ref, c.id);
                         }
                       },
@@ -290,6 +299,29 @@ class _AdminPanel extends ConsumerWidget {
   }
 
   static String _date(DateTime d) => '${d.day}/${d.month}/${d.year}';
+
+  /// Admin memilih apakah anggota baru melihat riwayat chat lama (PRD 1.6). Null = batal.
+  static Future<bool?> _askSeeHistory(BuildContext context, String name, bool initial) {
+    var see = initial;
+    return showDialog<bool>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, setState) => AlertDialog(
+          title: Text('Setujui $name?'),
+          content: CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: see,
+            onChanged: (v) => setState(() => see = v ?? false),
+            title: const Text('Boleh melihat riwayat chat sebelum bergabung'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Batal')),
+            FilledButton(onPressed: () => Navigator.pop(dialog, see), child: const Text('Setujui')),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MembersSection extends ConsumerWidget {
@@ -316,6 +348,7 @@ class _MembersSection extends ConsumerWidget {
               ListTile(
                 leading: CommunityLogo(name: m.displayName, logoUrl: m.avatarUrl, size: 40),
                 title: Text(m.displayName + (m.userId == me ? ' (kamu)' : '')),
+                onTap: m.userId == me ? null : () => openDirectChat(context, ref, m.userId),
                 subtitle: Text([roleLabel(m.role), if (m.city != null) m.city!].join(' · ')),
                 trailing: c.isStaff && m.userId != me && m.role != Role.owner
                     ? IconButton(

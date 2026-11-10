@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../chat/chat_screens.dart';
+import '../chat/inbox.dart';
 import '../communities/screens/my_communities_screen.dart';
 import '../profile/profile_screen.dart';
 import '../update/update_service.dart';
@@ -16,7 +18,7 @@ class _HomeTab extends Notifier<int> {
   void select(int i) => state = i;
 }
 
-/// Beranda dengan empat tab. Semua tab tetap hidup (IndexedStack) agar rekaman lari tidak terganggu
+/// Beranda dengan lima tab. Semua tab tetap hidup (IndexedStack) agar rekaman lari tidak terganggu
 /// saat berpindah tab.
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
@@ -24,12 +26,13 @@ class HomeShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = ref.watch(homeTabProvider);
+    final unread = ref.watch(unreadTotalProvider);
     final recording = ref.watch(recorderProvider.select((s) => s.status == RecorderStatus.recording || s.status == RecorderStatus.paused));
     return UpdateChecker(
       child: Scaffold(
       body: IndexedStack(
         index: tab,
-        children: const [RecordScreen(), RunsListScreen(), MyCommunitiesScreen(), ProfileScreen(asTab: true)],
+        children: const [RecordScreen(), RunsListScreen(), MyCommunitiesScreen(), ChatListScreen(), ProfileScreen(asTab: true)],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
@@ -42,6 +45,11 @@ class HomeShell extends ConsumerWidget {
           ),
           const NavigationDestination(icon: Icon(Icons.history), label: 'Riwayat'),
           const NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups), label: 'Komunitas'),
+          NavigationDestination(
+            icon: Badge(isLabelVisible: unread > 0, label: Text(unread > 99 ? '99+' : '$unread'), child: const Icon(Icons.chat_bubble_outline)),
+            selectedIcon: const Icon(Icons.chat_bubble),
+            label: 'Chat',
+          ),
           const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
         ],
       ),

@@ -5,6 +5,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { verifyPassword } from '../auth/password.js';
 import { TokenService } from '../auth/token.service.js';
+import { ChatService } from '../chat/chat.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { LiveService } from '../live/live.service.js';
 import { RunsService } from '../runs/runs.service.js';
@@ -34,6 +35,7 @@ export class UsersService {
     private readonly communities: CommunitiesService,
     private readonly runs: RunsService,
     private readonly live: LiveService,
+    private readonly chat: ChatService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -130,6 +132,8 @@ export class UsersService {
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
       // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya.
       const runPhotos = await this.runs.onAccountDeletion(db, userId);
+      // Chat: pesan di chat pribadi dihapus; di chat komunitas nama menjadi "Pengguna dihapus".
+      const chatImages = await this.chat.onAccountDeletion(db, userId);
       await this.tokens.revokeAllForUser(userId, db);
       await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
       await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
@@ -144,7 +148,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return [...communityLogos, ...runPhotos];
+      return [...communityLogos, ...runPhotos, ...chatImages];
     });
     // Status lari langsung (Redis) ikut dihapus.
     await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));

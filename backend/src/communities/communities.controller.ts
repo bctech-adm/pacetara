@@ -28,6 +28,8 @@ const city = z.string().trim().min(2, 'Kota wajib diisi').max(60);
 const description = z.string().trim().max(1000, 'Deskripsi maksimal 1000 karakter');
 const visibility = z.enum(['open', 'private']);
 const uuid = new ParseUUIDPipe();
+/** Pilihan admin: anggota baru melihat riwayat chat lama atau tidak (bawaan: pengaturan komunitas). */
+const ApproveBody = z.object({ seeHistory: z.boolean().optional() }).strict().optional();
 
 const CreateBody = z.object({ name, city, description: description.default(''), visibility });
 const UpdateBody = z
@@ -154,8 +156,13 @@ export class CommunitiesController {
 
   @Post(':id/members/:userId/approve')
   @HttpCode(204)
-  async approve(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @Param('userId', uuid) target: string) {
-    await this.communities.approve(u.id, id, target);
+  async approve(
+    @CurrentUser() u: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('userId', uuid) target: string,
+    @Body(new ZodPipe(ApproveBody)) b: z.infer<typeof ApproveBody>,
+  ) {
+    await this.communities.approve(u.id, id, target, b?.seeHistory);
   }
 
   @Post(':id/members/:userId/reject')
