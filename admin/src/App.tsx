@@ -1,11 +1,13 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { useLoad } from './useLoad';
 import { api, ApiError, hasStoredSession, login, logout, setLogoutHandler } from './api';
+import { Events } from './Events';
 
 /**
  * Panel super admin (modul 1.8): login dengan kata sandi + kode authenticator, antrean laporan,
- * banding, tindakan akun, dan log tindakan. Input event manual menyusul di 1.7, dasbor sponsor di 3.3.
+ * banding, tindakan akun, log tindakan, dan input event manual (modul 1.7). Dasbor sponsor menyusul di 3.3.
  */
-type Tab = 'reports' | 'appeals' | 'users' | 'audit';
+type Tab = 'reports' | 'events' | 'appeals' | 'users' | 'audit';
 
 const REASONS: Record<string, string> = {
   spam: 'Spam',
@@ -17,7 +19,7 @@ const REASONS: Record<string, string> = {
   impersonation: 'Menyamar',
   other: 'Lainnya',
 };
-const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna' };
+const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event' };
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('id-ID') : '–');
 
 export function App() {
@@ -32,9 +34,9 @@ export function App() {
       <header className="topbar">
         <h1>PaceTara Admin</h1>
         <nav>
-          {(['reports', 'appeals', 'users', 'audit'] as Tab[]).map((t) => (
+          {(['reports', 'events', 'appeals', 'users', 'audit'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ reports: 'Laporan', appeals: 'Banding', users: 'Pengguna', audit: 'Log' }[t]}
+              {{ reports: 'Laporan', events: 'Event', appeals: 'Banding', users: 'Pengguna', audit: 'Log' }[t]}
             </button>
           ))}
           <button
@@ -49,25 +51,12 @@ export function App() {
         </nav>
       </header>
       {tab === 'reports' && <Reports />}
+      {tab === 'events' && <Events />}
       {tab === 'appeals' && <Appeals />}
       {tab === 'users' && <Users />}
       {tab === 'audit' && <Audit />}
     </main>
   );
-}
-
-function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const reload = useCallback(() => {
-    setError(null);
-    fn()
-      .then(setData)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Gagal memuat'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  useEffect(reload, [reload]);
-  return { data, error, reload };
 }
 
 function Login({ onDone }: { onDone: () => void }) {
@@ -251,6 +240,24 @@ function ReportDetail({ item, onBack }: { item: QueueItem; onBack: () => void })
           <dd>{String(t.memberCount)}</dd>
           <dt>Pemilik</dt>
           <dd>{(t.owner as { displayName: string }).displayName}</dd>
+          <dt>Status</dt>
+          <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
+        </dl>
+      )}
+      {t && item.targetType === 'event' && (
+        <dl>
+          <dt>Nama</dt>
+          <dd>{String(t.name)}</dd>
+          <dt>Tanggal</dt>
+          <dd>{String(t.date)}</dd>
+          <dt>Kota</dt>
+          <dd>{String(t.city)}</dd>
+          <dt>Lokasi</dt>
+          <dd>{String(t.venue) || '–'}</dd>
+          <dt>Tautan</dt>
+          <dd className="mono">{String(t.registrationUrl)}</dd>
+          <dt>Deskripsi</dt>
+          <dd>{String(t.description) || '–'}</dd>
           <dt>Status</dt>
           <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
         </dl>

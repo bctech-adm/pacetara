@@ -124,6 +124,35 @@ export class ModerationService {
         : null;
     } else if (type === 'user') {
       target = await this.userSummary(id);
+    } else if (type === 'event') {
+      const { rows } = await this.pool.query<{
+        name: string;
+        date: string;
+        city: string;
+        venue: string;
+        description: string;
+        registration_url: string;
+        hidden_at: Date | null;
+        removed_at: Date | null;
+      }>(
+        `SELECT name, to_char(event_date, 'YYYY-MM-DD') AS date, city, venue, description, registration_url, hidden_at, removed_at
+           FROM events WHERE id = $1`,
+        [id],
+      );
+      const e = rows[0];
+      target = e
+        ? {
+            id,
+            name: e.name,
+            date: e.date,
+            city: e.city,
+            venue: e.venue,
+            description: e.description,
+            registrationUrl: e.registration_url,
+            hidden: Boolean(e.hidden_at),
+            removed: Boolean(e.removed_at),
+          }
+        : null;
     }
 
     return {
@@ -180,6 +209,8 @@ export class ModerationService {
           action === 'remove' ? 'UPDATE communities SET removed_at = now() WHERE id = $1' : 'UPDATE communities SET hidden_at = NULL WHERE id = $1',
           [id],
         );
+      } else if (type === 'event') {
+        await db.query(action === 'remove' ? 'UPDATE events SET removed_at = now() WHERE id = $1' : 'UPDATE events SET hidden_at = NULL WHERE id = $1', [id]);
       }
       await audit(db, adminId, `report.${action}`, { type, id }, { reports: rowCount, ...(note ? { note: note.slice(0, 500) } : {}) });
       return { imageKey, conversationId };
@@ -421,6 +452,10 @@ export class ModerationService {
     if (ids('community').length) {
       const { rows } = await this.pool.query<{ id: string; name: string }>('SELECT id, name FROM communities WHERE id = ANY($1::uuid[])', [ids('community')]);
       for (const r of rows) out.set(`community:${r.id}`, r.name);
+    }
+    if (ids('event').length) {
+      const { rows } = await this.pool.query<{ id: string; name: string }>('SELECT id, name FROM events WHERE id = ANY($1::uuid[])', [ids('event')]);
+      for (const r of rows) out.set(`event:${r.id}`, r.name);
     }
     if (ids('message').length) {
       // Daftar antrean tidak menampilkan isi pesan; isi hanya dibuka di detail (tercatat di log).

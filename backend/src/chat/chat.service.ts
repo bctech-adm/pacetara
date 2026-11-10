@@ -6,6 +6,7 @@ import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
+import { EventsService } from '../events/events.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -18,7 +19,7 @@ const bodyAad = (messageId: string) => `chat_messages.body:${messageId}`;
 const PREVIEW_CHARS = 100;
 const RSVP_NAMES = 10;
 
-export type MessageKind = 'text' | 'image' | 'run_invite';
+export type MessageKind = 'text' | 'image' | 'run_invite' | 'event';
 
 export interface RunInvite {
   title: string;
@@ -27,9 +28,16 @@ export interface RunInvite {
   note: string;
 }
 
+/** Isi terenkripsi kartu "bagikan event": id + nama saat dibagikan (untuk pratinjau dan jika event dihapus). */
+interface SharedEvent {
+  eventId: string;
+  name: string;
+}
+
 export type SendInput =
   | { clientMsgId: string; kind: 'text'; text: string }
-  | { clientMsgId: string; kind: 'run_invite'; invite: RunInvite };
+  | { clientMsgId: string; kind: 'run_invite'; invite: RunInvite }
+  | { clientMsgId: string; kind: 'event'; eventId: string };
 
 interface ConvAccess {
   id: string;
@@ -78,6 +86,7 @@ export class ChatService implements OnModuleInit {
     private readonly storage: StorageService,
     private readonly communities: CommunitiesService,
     private readonly realtime: RealtimeService,
+    private readonly events: EventsService,
   ) {}
 
   onModuleInit(): void {
@@ -179,7 +188,10 @@ export class ChatService implements OnModuleInit {
     if (existing) return this.message(userId, existing);
 
     const id = randomUUID();
-    const plaintext = input.kind === 'text' ? input.text : JSON.stringify(input.invite);
+    let plaintext: string;
+    if (input.kind === 'text') plaintext = input.text;
+    else if (input.kind === 'run_invite') plaintext = JSON.stringify(input.invite);
+    else plaintext = JSON.stringify({ eventId: input.eventId, name: await this.events.nameForShare(input.eventId) } satisfies SharedEvent);
     return this.insert(userId, conv, { id, clientMsgId: input.clientMsgId, kind: input.kind, body: this.crypto.encrypt(plaintext, bodyAad(id)) });
   }
 
@@ -405,6 +417,12 @@ export class ChatService implements OnModuleInit {
         rsvps.set(r.message_id, e);
       }
     }
+    // Kartu event: data terkini dari tabel events; jika event dihapus/diturunkan, tampil "tidak tersedia".
+    const shared = new Map<string, SharedEvent>();
+    for (const r of rows) {
+      if (r.kind === 'event' && !r.deleted_at) shared.set(r.id, JSON.parse(this.decrypt(r)) as SharedEvent);
+    }
+    const cards = await this.events.cards([...new Set([...shared.values()].map((e) => e.eventId))]);
     return rows.map((r) => {
       const base = {
         id: r.id,
@@ -430,6 +448,11 @@ export class ChatService implements OnModuleInit {
         case 'run_invite': {
           const e = rsvps.get(r.id) ?? { count: 0, mine: false, names: [] };
           return { ...base, invite: { ...(JSON.parse(this.decrypt(r)) as RunInvite), goingCount: e.count, iAmGoing: e.mine, going: e.names } };
+        }
+        case 'event': {
+          const s = shared.get(r.id)!;
+          const card = cards.get(s.eventId);
+          return { ...base, event: card ? { ...card, available: true } : { id: s.eventId, name: s.name, available: false } };
         }
       }
     });
@@ -499,6 +522,9 @@ export class ChatService implements OnModuleInit {
       if (showBody && r.lm_kind === 'text') preview = this.decrypt({ id: lmId!, body_enc: r.lm_body }).slice(0, PREVIEW_CHARS);
       if (showBody && r.lm_kind === 'run_invite') {
         preview = (JSON.parse(this.decrypt({ id: lmId!, body_enc: r.lm_body })) as RunInvite).title.slice(0, PREVIEW_CHARS);
+      }
+      if (showBody && r.lm_kind === 'event') {
+        preview = (JSON.parse(this.decrypt({ id: lmId!, body_enc: r.lm_body })) as SharedEvent).name.slice(0, PREVIEW_CHARS);
       }
       return {
         id: r.id,

@@ -45,6 +45,7 @@ class LastMessage {
             : switch (kind) {
             'image' => 'Gambar',
             'run_invite' => 'Ajakan lari: ${preview ?? ''}',
+            'event' => 'Event: ${preview ?? ''}',
             _ => preview ?? '',
           };
     if (isMine) return 'Kamu: $body';
@@ -123,6 +124,39 @@ class RunInvite {
   Map<String, Object> toJson() => {'title': title, 'startsAt': startsAt.toUtc().toIso8601String(), 'place': place, 'note': note};
 }
 
+/// Kartu "bagikan event". Data terkini dari server; [available] false jika event sudah dihapus.
+class SharedEvent {
+  const SharedEvent({
+    required this.id,
+    required this.name,
+    required this.available,
+    this.date,
+    this.startTime,
+    this.city,
+    this.categories = const [],
+    this.archived = false,
+  });
+  final String id;
+  final String name;
+  final bool available;
+  final String? date;
+  final String? startTime;
+  final String? city;
+  final List<String> categories;
+  final bool archived;
+
+  factory SharedEvent.fromJson(Map<String, dynamic> j) => SharedEvent(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        available: j['available'] as bool? ?? false,
+        date: j['date'] as String?,
+        startTime: j['startTime'] as String?,
+        city: j['city'] as String?,
+        categories: (j['categories'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
+        archived: j['archived'] as bool? ?? false,
+      );
+}
+
 enum SendState { sent, sending, failed }
 
 class ChatMessage {
@@ -142,6 +176,7 @@ class ChatMessage {
     this.imageUrl,
     this.imageExpired = false,
     this.invite,
+    this.event,
     this.clientMsgId,
     this.sendState = SendState.sent,
     this.localImagePath,
@@ -168,6 +203,7 @@ class ChatMessage {
   final String? imageUrl;
   final bool imageExpired;
   final RunInvite? invite;
+  final SharedEvent? event;
 
   /// Hanya untuk pesan lokal yang sedang/gagal dikirim.
   final String? clientMsgId;
@@ -179,6 +215,7 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> j) {
     final sender = j['sender'] as Map<String, dynamic>;
     final invite = j['invite'] as Map<String, dynamic>?;
+    final event = j['event'] as Map<String, dynamic>?;
     return ChatMessage(
       id: j['id'] as String,
       seq: int.parse(j['seq'] as String),
@@ -195,6 +232,7 @@ class ChatMessage {
       imageUrl: j['imageUrl'] as String?,
       imageExpired: j['imageExpired'] as bool? ?? false,
       invite: invite == null ? null : RunInvite.fromJson(invite),
+      event: event == null ? null : SharedEvent.fromJson(event),
     );
   }
 
@@ -209,6 +247,7 @@ class ChatMessage {
         createdAt: createdAt,
         text: text,
         invite: invite,
+        event: event,
         clientMsgId: clientMsgId,
         sendState: s,
         localImagePath: localImagePath,
@@ -272,6 +311,12 @@ class ChatRepository {
   Future<ChatMessage> sendInvite(String convId, String clientMsgId, RunInvite invite) => _msg(
         () => _dio.post<Map<String, dynamic>>('/v1/chat/conversations/$convId/messages',
             data: {'clientMsgId': clientMsgId, 'kind': 'run_invite', 'invite': invite.toJson()}),
+      );
+
+  /// Bagikan event dari kalender sebagai kartu.
+  Future<ChatMessage> sendEvent(String convId, String clientMsgId, String eventId) => _msg(
+        () => _dio.post<Map<String, dynamic>>('/v1/chat/conversations/$convId/messages',
+            data: {'clientMsgId': clientMsgId, 'kind': 'event', 'eventId': eventId}),
       );
 
   Future<ChatMessage> sendImage(String convId, String clientMsgId, String path) => _msg(() async {

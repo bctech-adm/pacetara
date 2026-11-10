@@ -66,3 +66,14 @@ tr.clickable:hover { background: var(--bg); }
 @media (max-width: 640px) {
   th:nth-child(4), td:nth-child(4) { display: none; }
 }
+
+/* Kalender event (modul 1.7). */
+textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); resize: vertical; }
+label textarea { color: var(--fg); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+fieldset.checks { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+fieldset.checks legend { color: var(--muted); font-size: 0.9rem; padding: 0 4px; }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); }
+@media (max-width: 640px) {
+  .grid2 { grid-template-columns: 1fr; }
+}

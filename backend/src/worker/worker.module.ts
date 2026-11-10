@@ -4,6 +4,7 @@ import type pg from 'pg';
 import { expireChatImages } from '../chat/chat-expiry.js';
 import { ENV, type Env } from '../config/env.js';
 import { CoreModule, PG_POOL } from '../core.module.js';
+import { archivePastEvents } from '../events/event-archive.js';
 import { StorageService } from '../storage/storage.service.js';
 import { MAINTENANCE_JOBS, QUEUES } from './queues.js';
 
@@ -39,6 +40,13 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { name: MAINTENANCE_JOBS.chatImageExpiry, opts: { removeOnComplete: 10, removeOnFail: 50 } },
     );
 
+    // Event diarsipkan sehari setelah tanggalnya (PRD 1.7). Tiap jam.
+    await this.queue.upsertJobScheduler(
+      'event-archive-hourly',
+      { every: 60 * 60_000 },
+      { name: MAINTENANCE_JOBS.eventArchive, opts: { removeOnComplete: 10, removeOnFail: 50 } },
+    );
+
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
   }
@@ -49,6 +57,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
         return Promise.resolve({ at: new Date().toISOString() });
       case MAINTENANCE_JOBS.chatImageExpiry:
         return expireChatImages(this.pool, this.storage).then((expired) => ({ expired }));
+      case MAINTENANCE_JOBS.eventArchive:
+        return archivePastEvents(this.pool).then((archived) => ({ archived }));
       default:
         return Promise.reject(new Error(`Job tidak dikenal: ${job.name}`));
     }

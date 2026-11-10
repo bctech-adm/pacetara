@@ -8,7 +8,7 @@ import { ModerationService } from './moderation.service.js';
 const uuid = new ParseUUIDPipe();
 const LoginBody = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128), code: z.string().regex(/^\d{6}$/) }).strict();
 const StatusQuery = z.object({ status: z.enum(['open', 'closed']).default('open') });
-const TargetType = z.enum(['user', 'community', 'message']);
+const TargetType = z.enum(['user', 'community', 'message', 'event']);
 const ResolveBody = z.object({ action: z.enum(['dismiss', 'remove']), note: z.string().trim().max(500).optional() }).strict();
 const Reason = z.string().trim().min(3, 'Tulis alasan').max(500);
 const SuspendBody = z.object({ days: z.number().int().min(1).max(365).nullable(), reason: Reason }).strict();

@@ -7,6 +7,7 @@ import { verifyPassword } from '../auth/password.js';
 import { TokenService } from '../auth/token.service.js';
 import { ChatService } from '../chat/chat.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { EventsService } from '../events/events.service.js';
 import { LiveService } from '../live/live.service.js';
 import { ReportsService } from '../moderation/reports.service.js';
 import { RunsService } from '../runs/runs.service.js';
@@ -38,6 +39,7 @@ export class UsersService {
     private readonly live: LiveService,
     private readonly chat: ChatService,
     private readonly reports: ReportsService,
+    private readonly events: EventsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -138,6 +140,8 @@ export class UsersService {
       const chatImages = await this.chat.onAccountDeletion(db, userId);
       // Laporan: keterangan yang ditulis pengguna dihapus; banding dihapus.
       await this.reports.onAccountDeletion(db, userId);
+      // Event: tanda "ikut" dihapus.
+      await this.events.onAccountDeletion(db, userId);
       await this.tokens.revokeAllForUser(userId, db);
       await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
       await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);

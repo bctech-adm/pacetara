@@ -69,7 +69,7 @@ async function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
   if (!accessToken && !(await refresh())) {
     onLogout();
     throw new ApiError(401, 'unauthorized', 'Sesi berakhir, silakan masuk lagi');

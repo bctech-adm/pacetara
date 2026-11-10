@@ -13,6 +13,7 @@ import '../../core/http/api_client.dart';
 import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../communities/widgets.dart';
+import '../events/events_repository.dart';
 import '../moderation/moderation.dart';
 import 'chat_repository.dart';
 import 'chat_room.dart';
@@ -370,6 +371,7 @@ class MessageBubble extends StatelessWidget {
                 ? ChatImage(url: m.imageUrl!)
                 : Text('Gambar sudah kedaluwarsa', style: TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7))),
         'run_invite' => RunInviteCard(invite: m.invite!, onRsvp: m.isPending ? null : onRsvp),
+        'event' => m.event == null ? const SizedBox.shrink() : EventChatCard(event: m.event!),
         _ => SelectableText(m.text ?? '', style: TextStyle(color: fg)),
       };
     }
@@ -452,6 +454,46 @@ class RunInviteCard extends StatelessWidget {
           ),
         ],
       ]),
+    );
+  }
+}
+
+/// Kartu event yang dibagikan di chat; ketuk untuk membuka detail.
+class EventChatCard extends StatelessWidget {
+  const EventChatCard({super.key, required this.event});
+  final SharedEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final e = event;
+    return InkWell(
+      onTap: e.available ? () => context.push('/events/${e.id}') : null,
+      child: SizedBox(
+        width: 240,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.emoji_events_outlined, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Expanded(child: Text('Event lari', style: theme.textTheme.labelMedium, overflow: TextOverflow.ellipsis)),
+          ]),
+          const SizedBox(height: 4),
+          Text(e.name, style: theme.textTheme.titleMedium),
+          if (!e.available)
+            Text('Event tidak tersedia lagi', style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic))
+          else ...[
+            const SizedBox(height: 4),
+            if (e.date != null)
+              Row(children: [const Icon(Icons.event, size: 16), const SizedBox(width: 6), Expanded(child: Text(formatEventDate(e.date!, e.startTime)))]),
+            if (e.city != null)
+              Row(children: [const Icon(Icons.place_outlined, size: 16), const SizedBox(width: 6), Expanded(child: Text(e.city!))]),
+            if (e.categories.isNotEmpty) Text(categoryLabels(e.categories), style: theme.textTheme.bodySmall),
+            const SizedBox(height: 4),
+            Text(e.archived ? 'Sudah lewat' : 'Ketuk untuk detail dan siapa ikut',
+                style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary)),
+          ],
+        ]),
+      ),
     );
   }
 }

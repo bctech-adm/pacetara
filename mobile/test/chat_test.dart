@@ -68,6 +68,8 @@ class FakeChatRepository implements ChatRepository {
   @override
   Future<ChatMessage> sendInvite(String convId, String clientMsgId, RunInvite invite) => throw UnimplementedError();
   @override
+  Future<ChatMessage> sendEvent(String convId, String clientMsgId, String eventId) => throw UnimplementedError();
+  @override
   Future<ChatMessage> sendImage(String convId, String clientMsgId, String path) => throw UnimplementedError();
   @override
   Future<void> delete(String messageId) => throw UnimplementedError();

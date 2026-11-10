@@ -13,6 +13,7 @@ import 'features/communities/screens/community_detail_screen.dart';
 import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
 import 'features/communities/screens/join_by_code_screen.dart';
+import 'features/events/events_screens.dart';
 import 'features/home/home_shell.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/runs/screens/run_detail_screen.dart';
@@ -62,6 +63,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/communities/:id', builder: (_, state) => CommunityDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+      GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),
+      GoRoute(path: '/events/:id', builder: (_, state) => EventDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/chat/:id', builder: (_, state) => ChatScreen(convId: state.pathParameters['id']!)),
     ],
   );

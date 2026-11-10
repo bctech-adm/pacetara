@@ -49,6 +49,7 @@ const SendBody = z.discriminatedUnion('kind', [
         .strict(),
     })
     .strict(),
+  z.object({ clientMsgId: z.string().uuid(), kind: z.literal('event'), eventId: z.string().uuid() }).strict(),
 ]);
 
 const DirectBody = z.object({ userId: z.string().uuid() }).strict();

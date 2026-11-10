@@ -6,8 +6,9 @@ import type { Queryable } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
+import { EventsService } from '../events/events.service.js';
 
-export type ReportTarget = 'user' | 'community' | 'message';
+export type ReportTarget = 'user' | 'community' | 'message' | 'event';
 export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'sexual', 'violence', 'scam', 'impersonation', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
@@ -28,6 +29,7 @@ export class ReportsService {
     private readonly crypto: FieldCrypto,
     private readonly chat: ChatService,
     private readonly communities: CommunitiesService,
+    private readonly events: EventsService,
   ) {}
 
   async create(
@@ -69,6 +71,7 @@ export class ReportsService {
     if (Number(rows[0]!.n) < AUTO_HIDE_REPORTERS) return;
     if (type === 'message') await db.query('UPDATE chat_messages SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'community') await db.query('UPDATE communities SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'event') await db.query('UPDATE events SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
   }
 
   private async assertReportable(reporterId: string, type: ReportTarget, targetId: string) {
@@ -90,6 +93,10 @@ export class ReportsService {
         if (c.owner_id === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan komunitas sendiri');
         return;
       }
+      case 'event':
+        // Event dimasukkan super admin dan terlihat oleh semua pengguna Level 1.
+        await this.events.assertExists(targetId);
+        return;
       case 'user': {
         if (targetId === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan diri sendiri');
         const { rows } = await this.pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [targetId]);
