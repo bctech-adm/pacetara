@@ -59,7 +59,13 @@ void main() {
     });
 
     test('menolak format salah atau di luar 2:00–30:00', () {
-      expect(parsePace('6.30'), isNull);
+      // Keyboard angka banyak HP tidak punya ":".
+      expect(parsePace('6.30'), 390);
+      expect(parsePace('6,30'), 390);
+      expect(parsePace('630'), 390);
+      expect(parsePace('1230'), 750);
+      expect(parsePace('6.3'), isNull);
+      expect(parsePace('abc'), isNull);
       expect(parsePace('1:59'), isNull);
       expect(parsePace('30:01'), isNull);
       expect(parsePace('6:60'), isNull);

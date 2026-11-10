@@ -78,9 +78,11 @@ String formatPace(int secPerKm) {
   return '$m:$s';
 }
 
-/// Mengurai "m:ss" menjadi detik/km. Null jika format tidak valid atau di luar 2:00–30:00.
+/// Mengurai pace menjadi detik/km. Null jika format tidak valid atau di luar 2:00–30:00.
+/// Menerima "6:30", "6.30", "6,30" (keyboard angka di banyak HP tidak punya ":"), dan "630".
 int? parsePace(String input) {
-  final match = RegExp(r'^(\d{1,2}):([0-5]\d)$').firstMatch(input.trim());
+  final t = input.trim();
+  final match = RegExp(r'^(\d{1,2})[:.,]([0-5]\d)$').firstMatch(t) ?? RegExp(r'^(\d{1,2})([0-5]\d)$').firstMatch(t);
   if (match == null) return null;
   final total = int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
   return total >= 120 && total <= 1800 ? total : null;
