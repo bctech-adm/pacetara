@@ -87,3 +87,26 @@ int? parsePace(String input) {
   final total = int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
   return total >= 120 && total <= 1800 ? total : null;
 }
+
+/// Pace dari dua kolom terpisah (menit dan detik, angka saja). Keduanya kosong = tanpa pace.
+/// Detik kosong dianggap 0. Mengembalikan pesan galat, atau null jika valid.
+String? paceFieldsError(String minutes, String seconds) {
+  final m = minutes.trim();
+  final s = seconds.trim();
+  if (m.isEmpty && s.isEmpty) return null;
+  if (m.isEmpty) return 'Isi menit';
+  final mm = int.tryParse(m);
+  final ss = s.isEmpty ? 0 : int.tryParse(s);
+  if (mm == null || ss == null) return 'Hanya angka';
+  if (ss > 59) return 'Detik 0–59';
+  final total = mm * 60 + ss;
+  if (total < 120 || total > 1800) return 'Pace antara 2:00 dan 30:00';
+  return null;
+}
+
+/// Detik per km dari dua kolom; null jika kosong atau tidak valid.
+int? paceFromFields(String minutes, String seconds) {
+  if (paceFieldsError(minutes, seconds) != null || minutes.trim().isEmpty) return null;
+  final s = seconds.trim();
+  return int.parse(minutes.trim()) * 60 + (s.isEmpty ? 0 : int.parse(s));
+}

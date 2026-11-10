@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -42,7 +43,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _city;
-  late final TextEditingController _pace;
+  late final TextEditingController _paceMin;
+  late final TextEditingController _paceSec;
 
   @override
   void initState() {
@@ -50,25 +52,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final p = ref.read(authControllerProvider).value;
     _name = TextEditingController(text: p?.displayName ?? '');
     _city = TextEditingController(text: p?.city ?? '');
-    _pace = TextEditingController(text: p?.avgPaceSecPerKm == null ? '' : formatPace(p!.avgPaceSecPerKm!));
+    final pace = p?.avgPaceSecPerKm;
+    _paceMin = TextEditingController(text: pace == null ? '' : '${pace ~/ 60}');
+    _paceSec = TextEditingController(text: pace == null ? '' : (pace % 60).toString().padLeft(2, '0'));
   }
 
   @override
   void dispose() {
     _name.dispose();
     _city.dispose();
-    _pace.dispose();
+    _paceMin.dispose();
+    _paceSec.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    final paceText = _pace.text.trim();
+    final pace = paceFromFields(_paceMin.text, _paceSec.text);
     await ref.read(authControllerProvider.notifier).updateProfile(
           displayName: _name.text.trim(),
           city: _city.text.trim(),
-          avgPaceSecPerKm: paceText.isEmpty ? null : parsePace(paceText),
-          clearPace: paceText.isEmpty,
+          avgPaceSecPerKm: pace,
+          clearPace: pace == null,
         );
     if (mounted) showInfo(context, 'Profil disimpan');
   }
@@ -127,15 +132,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 decoration: const InputDecoration(labelText: 'Kota (opsional)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 8),
-              TextFormField(
-                controller: _pace,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (v) => (v ?? '').trim().isEmpty || parsePace(v!) != null ? null : 'Contoh 6:30 atau 6.30, antara 2:00 dan 30:00',
-                decoration: const InputDecoration(
-                  labelText: 'Pace rata-rata (menit/km, opsional)',
-                  hintText: '6:30',
-                  helperText: 'Boleh dikosongkan',
-                  border: OutlineInputBorder(),
+              // Dua kolom angka terpisah: keyboard angka di banyak HP tidak punya tanda ":".
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Pace rata-rata per km (opsional)', style: Theme.of(context).textTheme.labelLarge),
+                ),
+              ),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: TextFormField(
+                    key: const Key('pace-min'),
+                    controller: _paceMin,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
+                    validator: (_) => paceFieldsError(_paceMin.text, _paceSec.text),
+                    decoration: const InputDecoration(labelText: 'Menit', hintText: '6', border: OutlineInputBorder()),
+                  ),
+                ),
+                const Padding(padding: EdgeInsets.fromLTRB(8, 14, 8, 0), child: Text(':', style: TextStyle(fontSize: 20))),
+                Expanded(
+                  child: TextFormField(
+                    key: const Key('pace-sec'),
+                    controller: _paceSec,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
+                    decoration: const InputDecoration(labelText: 'Detik', hintText: '30', border: OutlineInputBorder()),
+                  ),
+                ),
+              ]),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('Contoh: 6 menit 30 detik per km. Kosongkan jika belum tahu.', style: Theme.of(context).textTheme.bodySmall),
                 ),
               ),
             ],

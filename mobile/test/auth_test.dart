@@ -70,6 +70,19 @@ void main() {
       expect(parsePace('30:01'), isNull);
       expect(parsePace('6:60'), isNull);
     });
+
+    test('dua kolom terpisah: menit dan detik', () {
+      expect(paceFieldsError('', ''), isNull);
+      expect(paceFromFields('', ''), isNull);
+      expect(paceFromFields('6', '30'), 390);
+      expect(paceFromFields('6', ''), 360);
+      expect(paceFromFields('06', '05'), 365);
+      expect(paceFieldsError('', '30'), 'Isi menit');
+      expect(paceFieldsError('6', '75'), 'Detik 0–59');
+      expect(paceFieldsError('1', '59'), 'Pace antara 2:00 dan 30:00');
+      expect(paceFieldsError('31', '0'), 'Pace antara 2:00 dan 30:00');
+      expect(paceFromFields('31', '0'), isNull);
+    });
   });
 
   test('MyProfile.fromJson', () {
