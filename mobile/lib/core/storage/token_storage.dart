@@ -10,6 +10,9 @@ class TokenStorage {
   static const _access = 'access_token';
   static const _refresh = 'refresh_token';
 
+  /// Salinan kontak darurat untuk SMS SOS tanpa internet (modul 1.10). Data akun: ikut dihapus saat keluar.
+  static const emergencyContactsKey = 'emergency_contacts_v1';
+
   Future<String?> readAccess() => _storage.read(key: _access);
   Future<String?> readRefresh() => _storage.read(key: _refresh);
 
@@ -21,6 +24,7 @@ class TokenStorage {
   Future<void> clear() async {
     await _storage.delete(key: _access);
     await _storage.delete(key: _refresh);
+    await _storage.delete(key: emergencyContactsKey);
   }
 }
 

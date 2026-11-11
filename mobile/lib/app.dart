@@ -19,6 +19,7 @@ import 'features/notifications/notifications_screens.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/runs/screens/run_detail_screen.dart';
 import 'features/runs/screens/save_run_screen.dart';
+import 'features/safety/safety_screens.dart';
 
 const _publicRoutes = {'/login', '/register', '/forgot-password'};
 
@@ -66,6 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
+      GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),
       GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),
       GoRoute(path: '/events/:id', builder: (_, state) => EventDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/chat/:id', builder: (_, state) => ChatScreen(convId: state.pathParameters['id']!)),

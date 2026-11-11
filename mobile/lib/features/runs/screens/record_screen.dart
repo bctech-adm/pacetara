@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../auth/auth_controller.dart';
 import '../../live/live_share.dart';
 import '../../live/live_widgets.dart';
+import '../../safety/safety_screens.dart';
 import '../recorder.dart';
 import '../route_map.dart';
 import '../runner_character.dart';
@@ -122,6 +124,29 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     if (mounted) context.push('/runs/save');
   }
 
+  /// Lokasi untuk SOS: titik rekaman terakhir jika masih baru (< 30 detik), selain itu GPS saat ini.
+  Future<SosLocation?> _sosLocation() async {
+    final s = ref.read(recorderProvider);
+    final track = s.track;
+    final last = track?.last;
+    if (track != null && last != null) {
+      final at = track.startedAt.add(Duration(milliseconds: (last.t * 1000).round()));
+      if (DateTime.now().difference(at) < const Duration(seconds: 30)) {
+        return (lat: last.lat, lng: last.lng, accuracyM: s.gpsAccuracy);
+      }
+    }
+    try {
+      final p = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
+      );
+      return (lat: p.latitude, lng: p.longitude, accuracyM: p.accuracy);
+    } catch (_) {
+      final p = await Geolocator.getLastKnownPosition();
+      if (p != null) return (lat: p.latitude, lng: p.longitude, accuracyM: p.accuracy);
+      return last == null ? null : (lat: last.lat, lng: last.lng, accuracyM: null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(recorderProvider);
@@ -143,6 +168,11 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
           RecorderStatus.paused => 'Dijeda',
           _ => 'Lari',
         }),
+        actions: [
+          // Mode aman (PRD 1.10): tersedia selama lari berlangsung.
+          if (s.status == RecorderStatus.recording || s.status == RecorderStatus.paused)
+            SosButton(locate: _sosLocation, userName: ref.watch(authControllerProvider).value?.displayName ?? 'Pengguna PaceTara'),
+        ],
       ),
       body: Column(
         children: [

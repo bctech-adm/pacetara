@@ -12,6 +12,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { LiveService } from '../live/live.service.js';
 import { ReportsService } from '../moderation/reports.service.js';
 import { RunsService } from '../runs/runs.service.js';
+import { SafetyService } from '../safety/safety.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
@@ -42,6 +43,7 @@ export class UsersService {
     private readonly reports: ReportsService,
     private readonly events: EventsService,
     private readonly notifications: NotificationsService,
+    private readonly safety: SafetyService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -146,6 +148,8 @@ export class UsersService {
       await this.events.onAccountDeletion(db, userId);
       // Notifikasi, pengaturan, token push, dan undangan.
       await this.notifications.onAccountDeletion(db, userId);
+      // Mode aman: kontak darurat (data pihak ketiga) dan catatan SOS.
+      await this.safety.onAccountDeletion(db, userId);
       await this.tokens.revokeAllForUser(userId, db);
       await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
       await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);

@@ -36,9 +36,15 @@ export class FakeMailer {
 export class FakeWhatsApp {
   up = true;
   sent: { phone: string; code: string }[] = [];
+  sos: { phone: string; sos: { name: string; lat: number; lng: number; accuracyM?: number; at: Date } }[] = [];
   async send(phone: string, code: string) {
     if (!this.up) return false;
     this.sent.push({ phone, code });
+    return true;
+  }
+  async sendSos(phone: string, sos: { name: string; lat: number; lng: number; accuracyM?: number; at: Date }) {
+    if (!this.up) return false;
+    this.sos.push({ phone, sos });
     return true;
   }
 }

@@ -196,6 +196,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: const Text('Pilih notifikasi push yang kamu terima'),
           onTap: () => context.push('/settings/notifications'),
         ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.sos_outlined),
+          title: const Text('Kontak darurat'),
+          subtitle: const Text('Penerima lokasimu saat menekan SOS ketika lari'),
+          onTap: () => context.push('/settings/emergency-contacts'),
+        ),
         const _VersionTile(),
         ListTile(
           contentPadding: EdgeInsets.zero,

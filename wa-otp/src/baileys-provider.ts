@@ -15,6 +15,8 @@ import {
   type OtpProvider,
   otpMessage,
   ProviderUnavailableError,
+  type SosAlert,
+  sosMessage,
 } from './provider.js';
 
 export interface BaileysOptions {
@@ -142,6 +144,16 @@ export class BaileysProvider implements OtpProvider {
     if (!result?.exists) throw new NotOnWhatsAppError();
     await this.sock.sendMessage(result.jid, { text: otpMessage(code) });
     this.opts.logger.info(`OTP terkirim ke ${maskPhone(phoneE164)}`);
+  }
+
+  async sendSos(phoneE164: string, sos: SosAlert) {
+    if (!this.sock || !this.ready) throw new ProviderUnavailableError();
+    const digits = phoneE164.replace(/^\+/, '');
+    const [result] = (await this.sock.onWhatsApp(digits)) ?? [];
+    if (!result?.exists) throw new NotOnWhatsAppError();
+    await this.sock.sendMessage(result.jid, { text: sosMessage(sos) });
+    // Tanpa lokasi atau nama.
+    this.opts.logger.warn(`SOS terkirim ke ${maskPhone(phoneE164)}`);
   }
 }
 

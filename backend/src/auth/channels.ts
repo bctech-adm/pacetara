@@ -78,6 +78,27 @@ export class WhatsAppOtp {
       return false;
     }
   }
+
+  /**
+   * Pesan SOS mode aman (modul 1.10). Teks disusun layanan wa-otp; di sini hanya data terstruktur.
+   * false = gagal (aplikasi menawarkan SMS dari HP). Lokasi, nama, dan nomor tidak pernah di-log.
+   */
+  async sendSos(phoneE164: string, sos: { name: string; lat: number; lng: number; accuracyM?: number; at: Date }): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.env.WA_OTP_URL}/sos`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-shared-secret': this.env.WA_OTP_SHARED_SECRET },
+        body: JSON.stringify({ phone: phoneE164, name: sos.name.slice(0, 60), lat: sos.lat, lng: sos.lng, accuracyM: sos.accuracyM, at: sos.at.toISOString() }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.status === 204) return true;
+      this.logger.warn(`wa-otp menjawab ${res.status} untuk SOS`);
+      return false;
+    } catch (err) {
+      this.logger.warn(`wa-otp tidak terjangkau untuk SOS (${err instanceof Error ? err.name : 'unknown'})`);
+      return false;
+    }
+  }
 }
 
 export interface GoogleIdentity {

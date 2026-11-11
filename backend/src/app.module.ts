@@ -22,6 +22,8 @@ import { EventsService } from './events/events.service.js';
 import { NotificationsController } from './notifications/notifications.controller.js';
 import { NotificationsService } from './notifications/notifications.service.js';
 import { PushQueue } from './notifications/push.js';
+import { SafetyController } from './safety/safety.controller.js';
+import { SafetyService } from './safety/safety.service.js';
 import { HealthController } from './health/health.controller.js';
 import { UserThrottlerGuard } from './http/user-throttler.guard.js';
 import { LiveController } from './live/live.controller.js';
@@ -43,7 +45,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -65,6 +67,7 @@ import { UsersService } from './users/users.service.js';
     EventsService,
     NotificationsService,
     PushQueue,
+    SafetyService,
     ReportsService,
     ModerationService,
     AdminAuthService,
