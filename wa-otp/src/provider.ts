@@ -47,9 +47,19 @@ export function maskPhone(phone: string): string {
   return phone.length > 8 ? `${phone.slice(0, 5)}****${phone.slice(-4)}` : '****';
 }
 
-/** Karakter format WhatsApp dan baris baru dibuang dari nama agar pesan tidak bisa dibentuk ulang. */
-function plainName(name: string): string {
-  const clean = name.replace(/[*_~`\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+/**
+ * Nama dari pengguna: karakter format WhatsApp dan baris baru dibuang, dan nama tidak boleh menjadi
+ * tautan (awalan http/www dihapus, titik di antara huruf diganti spasi: "bit.ly" → "bit ly"), agar
+ * pesan SOS tidak bisa dipakai menyebarkan tautan lewat nomor PaceTara.
+ */
+export function plainName(name: string): string {
+  const clean = name
+    .replace(/[*_~`\r\n]+/g, ' ')
+    .replace(/(https?:\/\/|www\.)/gi, '')
+    .replace(/(?<=[\p{L}\p{N}])[.:/@](?=[\p{L}\p{N}])/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
   return clean || 'Pengguna PaceTara';
 }
 

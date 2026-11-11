@@ -110,7 +110,7 @@ export class RunsController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('runs/:id/photos')
   @HttpCode(200)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, fieldSize: 1024, parts: 3 } }))
   addPhoto(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @UploadedFile() file?: { buffer?: Buffer }) {
     if (!file?.buffer) throw new ApiError(400, 'file_required', 'Pilih foto terlebih dahulu');
     return this.runs.addPhoto(u.id, id, file.buffer);

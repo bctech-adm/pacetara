@@ -49,7 +49,9 @@ export class Mailer {
     try {
       await this.transport.sendMail({ from: this.env.MAIL_FROM, to, subject: SUBJECT[kind], text });
     } catch (err) {
-      this.logger.error(`Gagal mengirim email (${kind}): ${err instanceof Error ? err.message : 'unknown'}`);
+      // Hanya kode galat: pesan nodemailer bisa memuat alamat penerima.
+      const e = err as { code?: string; responseCode?: number };
+      this.logger.error(`Gagal mengirim email (${kind}): ${e.code ?? 'unknown'} ${e.responseCode ?? ''}`.trim());
       throw new ApiError(503, 'email_unavailable', 'Email gagal dikirim. Coba lagi sebentar lagi');
     }
   }

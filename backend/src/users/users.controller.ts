@@ -49,7 +49,7 @@ export class UsersController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('me/avatar')
   @HttpCode(200)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, fieldSize: 1024, parts: 3 } }))
   avatar(@CurrentUser() u: AuthUser, @UploadedFile() file?: { buffer?: Buffer; size: number }) {
     if (!file?.buffer) throw new ApiError(400, 'file_required', 'Pilih gambar terlebih dahulu');
     return this.users.setAvatar(u.id, file.buffer);

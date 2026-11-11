@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/http/api_client.dart';
+import '../auth/auth_controller.dart';
 
 enum RunVisibility { public, community, private }
 
@@ -160,14 +161,18 @@ final runDetailProvider = FutureProvider.autoDispose.family<RunDetail, String>((
 /// Antrean upload: lari yang sudah selesai disimpan dulu di HP, lalu diunggah. Jika sinyal buruk,
 /// tetap aman dan dicoba lagi nanti (server menolak duplikat lewat clientRunId).
 class PendingUpload {
-  const PendingUpload({required this.clientRunId, required this.body, required this.photoPaths});
+  const PendingUpload({required this.clientRunId, required this.body, required this.photoPaths, this.ownerId});
   final String clientRunId;
   final Map<String, dynamic> body;
   final List<String> photoPaths;
 
-  Map<String, dynamic> toJson() => {'clientRunId': clientRunId, 'body': body, 'photoPaths': photoPaths};
+  /// Akun pemilik lari. Antrean hanya diunggah ke akun ini (HP bisa dipakai bergantian).
+  final String? ownerId;
+
+  Map<String, dynamic> toJson() => {'clientRunId': clientRunId, 'body': body, 'photoPaths': photoPaths, 'ownerId': ?ownerId};
 
   static PendingUpload fromJson(Map<String, dynamic> j) => PendingUpload(
+        ownerId: j['ownerId'] as String?,
         clientRunId: j['clientRunId'] as String,
         body: j['body'] as Map<String, dynamic>,
         photoPaths: (j['photoPaths'] as List<dynamic>).cast<String>(),
@@ -175,8 +180,12 @@ class PendingUpload {
 }
 
 class UploadQueue {
-  UploadQueue(this._repo);
+  UploadQueue(this._repo, [this._ownerId]);
   final RunsRepository _repo;
+
+  /// Akun yang sedang login. Lari milik akun lain di HP yang sama tidak ditampilkan dan tidak diunggah
+  /// (tetap disimpan, terunggah saat pemiliknya login lagi). Entri lama tanpa pemilik tetap diunggah.
+  final String? _ownerId;
 
   Future<Directory> _dir() async {
     final d = Directory('${(await getApplicationSupportDirectory()).path}/pending_runs');
@@ -189,7 +198,8 @@ class UploadQueue {
     final items = <PendingUpload>[];
     for (final f in d.listSync().whereType<File>().where((f) => f.path.endsWith('.json'))) {
       try {
-        items.add(PendingUpload.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>));
+        final item = PendingUpload.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>);
+        if (item.ownerId == null || item.ownerId == _ownerId) items.add(item);
       } catch (_) {
         // berkas rusak dilewati
       }
@@ -207,7 +217,7 @@ class UploadQueue {
       await File(photos[i]).copy(dest);
       copied.add(dest);
     }
-    final item = PendingUpload(clientRunId: id, body: body, photoPaths: copied);
+    final item = PendingUpload(clientRunId: id, body: body, photoPaths: copied, ownerId: _ownerId);
     await File('${d.path}/$id.json').writeAsString(jsonEncode(item.toJson()), flush: true);
     return item;
   }
@@ -244,6 +254,8 @@ class UploadQueue {
   }
 }
 
-final uploadQueueProvider = Provider<UploadQueue>((ref) => UploadQueue(ref.watch(runsRepositoryProvider)));
+final uploadQueueProvider = Provider<UploadQueue>(
+  (ref) => UploadQueue(ref.watch(runsRepositoryProvider), ref.watch(authControllerProvider.select((a) => a.value?.id))),
+);
 
 final pendingUploadsProvider = FutureProvider.autoDispose<List<PendingUpload>>((ref) => ref.watch(uploadQueueProvider).list());

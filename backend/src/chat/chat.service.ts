@@ -249,6 +249,8 @@ export class ChatService implements OnModuleInit {
 
   async imageFile(userId: string, messageId: string) {
     const row = await this.visibleMessage(userId, messageId);
+    // Disembunyikan sambil ditinjau (banyak laporan): hanya pengirim yang masih bisa mengambil gambarnya.
+    if (row.hidden_at && row.sender_id !== userId) return undefined;
     return row.image_key ? this.storage.get(row.image_key) : undefined;
   }
 

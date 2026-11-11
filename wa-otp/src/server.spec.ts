@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { maskPhone, NotOnWhatsAppError, type OtpProvider, ProviderUnavailableError, sosMessage } from './provider.js';
+import { maskPhone, NotOnWhatsAppError, type OtpProvider, plainName, ProviderUnavailableError, sosMessage } from './provider.js';
 import { createOtpServer } from './server.js';
 
 const SECRET = 's'.repeat(40);
@@ -84,6 +84,16 @@ const post = (body: unknown, secret = SECRET) =>
     expect(text).toContain('https://maps.google.com/?q=-6.200000,106.800000');
     expect(text).toContain('akurasi ±12 m, pukul 07:30 WIB');
     expect(text).not.toContain('**');
+  });
+});
+
+describe('plainName (nama di pesan SOS)', () => {
+  it('nama tidak bisa menjadi tautan', () => {
+    expect(plainName('Klik https://bit.ly/x')).toBe('Klik bit ly x');
+    expect(plainName('www.penipu.com hadiah')).toBe('penipu com hadiah');
+    expect(plainName('a@b.co')).toBe('a b co');
+    expect(plainName('A. Budi Santoso')).toBe('A. Budi Santoso');
+    expect(plainName('*~_')).toBe('Pengguna PaceTara');
   });
 });
 

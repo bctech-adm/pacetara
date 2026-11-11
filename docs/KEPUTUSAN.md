@@ -183,3 +183,14 @@ Catat setiap keputusan baru di bawah, dengan tanggal dan modul. Jangan ubah kepu
 125. **Mencegah salah pencet dan penyalahgunaan:** tombol SOS hanya tampil saat merekam/dijeda, dengan hitung mundur 5 detik yang bisa dibatalkan (atau "Kirim sekarang"). Batas server: 3 SOS per 10 menit dan 10 per hari per pengguna; jika terkena, server menjawab `429 sos_rate_limited` beserta daftar kontak agar aplikasi tetap bisa mengirim SMS. Throttler HTTP 10/10 menit hanya penahan kasar.
 126. **Privasi lokasi:** lokasi dikirim di body, **tidak disimpan** di database dan tidak di-log. `sos_alerts` hanya mencatat waktu, jumlah kontak, dan jumlah terkirim (untuk batas laju dan audit). Lokasi diambil dari titik rekaman terakhir jika < 30 detik, selain itu GPS saat ini (batas 10 detik), lalu posisi terakhir yang diketahui. Zona privasi tidak berlaku untuk SOS (tujuannya justru memberi lokasi tepat ke orang yang dipilih pengguna).
 127. **Belum diuji di HP sungguhan:** pengiriman WhatsApp SOS ke nomor nyata, pembukaan aplikasi SMS dengan banyak penerima (perilaku berbeda antar merek HP), dan GPS saat layar mati perlu uji lapangan.
+
+## Uji penetrasi mandiri Fase 1 (11 Nov 2026)
+
+Laporan lengkap: `docs/PENTEST-FASE1.md`. Keputusan yang muncul:
+
+128. **Data lari di HP terikat akun:** entri `pending_runs/` dan `current_run.json` menyimpan `ownerId`. Antrean hanya diunggah ke akun pemiliknya; milik akun lain tetap disimpan (terunggah saat pemiliknya login lagi) dan tidak ditampilkan. Draf rekaman milik akun lain dibuang. Entri lama tanpa `ownerId` tetap diunggah (kompatibilitas).
+129. **Komunitas yang diturunkan benar-benar tertutup** (mempertegas #99): `shareCommunity`, keanggotaan status lari (REST dan kanal WebSocket), daftar anggota, dan semua aksi admin (`requireStaff`) mengabaikan komunitas dengan `removed_at`. Pengecualian: pemilik masih bisa menghapusnya.
+130. **Login:** aplikasi dibatasi 10 gagal per email (blind index, termasuk email tak terdaftar) per 15 menit, di samping batas per IP; berhasil login mengosongkan penghitung. Panel admin menghitung gagal hanya untuk super admin, dan saat terkunci menjawab 401 yang sama dengan gagal biasa (tidak lagi `429 admin_locked`).
+131. **Unggahan multipart:** semua `FileInterceptor` memakai `fields: 2, fieldSize: 1024, parts: 3`. Rute Traefik mendapat middleware `pacetara-body-limit` (15 MB); **perlu dipasang manual di VPS** seperti perubahan rute lain (#58).
+132. **SOS:** maks. 5 penambahan kontak darurat per 24 jam (Redis), dan nama di pesan SOS dinetralkan agar tidak menjadi tautan.
+133. **APK rilis diobfuskasi** (`--obfuscate --split-debug-info=build/symbols`); simbol **tidak** diunggah sebagai artifact karena repo publik (artifact bisa diunduh siapa pun dan akan membatalkan obfuskasi); akibatnya stack trace APK uji tidak bisa dipetakan. Saat rilis Play Store, simbol diunggah ke Play Console atau disimpan terenkripsi. Izin media dari plugin `open_filex` dibuang dari manifest.

@@ -50,12 +50,15 @@ export class AdminAuthService {
     const fail = () => new ApiError(401, 'invalid_credentials', 'Email, kata sandi, atau kode salah');
     const user = await this.users.findByEmail(input.email);
     const pwOk = user?.password_hash ? await verifyPassword(user.password_hash, input.password) : await burnPasswordCheck(input.password);
-    if (!user) throw fail();
+    // Bukan super admin = sama persis dengan email tidak terdaftar (tanpa penghitung, tanpa kunci),
+    // agar endpoint ini tidak membocorkan email mana yang punya akun.
+    if (!user || user.role !== 'super_admin') throw fail();
 
     const failKey = `admin:fail:${user.id}`;
     if (Number((await this.redis.get(failKey)) ?? 0) >= MAX_FAILURES) {
+      // Terkunci: pesan sama dengan gagal biasa (tidak memberi tahu penyerang bahwa akun ini admin).
       await audit(this.pool, user.id, 'admin.login_locked');
-      throw new ApiError(429, 'admin_locked', 'Terlalu banyak percobaan. Coba lagi dalam 15 menit');
+      throw fail();
     }
 
     const { rows } = await this.pool.query<{ totp_secret_enc: Buffer | null }>('SELECT totp_secret_enc FROM users WHERE id = $1', [user.id]);
@@ -69,7 +72,7 @@ export class AdminAuthService {
     if (step === null) {
       const n = await this.redis.incr(failKey);
       if (n === 1) await this.redis.expire(failKey, LOCK_S);
-      if (user.role === 'super_admin') await audit(this.pool, user.id, 'admin.login_failed');
+      await audit(this.pool, user.id, 'admin.login_failed');
       throw fail();
     }
     await this.redis.del(failKey);

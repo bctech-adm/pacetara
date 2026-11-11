@@ -11,7 +11,7 @@ http:
       entryPoints: [websecure]
       rule: "Host(`pace-api.bimacreative.tech`) && Method(`POST`) && PathPrefix(`/v1/auth/`)"
       priority: 100
-      middlewares: [crowdsec, security-headers, pacetara-ratelimit-auth]
+      middlewares: [crowdsec, security-headers, pacetara-ratelimit-auth, pacetara-body-limit]
       service: pacetara-api
       tls:
         certResolver: le-http
@@ -19,7 +19,7 @@ http:
       entryPoints: [websecure]
       rule: "Host(`pace-api.bimacreative.tech`)"
       priority: 1
-      middlewares: [crowdsec, security-headers, ratelimit-default]
+      middlewares: [crowdsec, security-headers, ratelimit-default, pacetara-body-limit]
       service: pacetara-api
       tls:
         certResolver: le-http
@@ -34,6 +34,12 @@ http:
         certResolver: le-http
 
   middlewares:
+    # Batas ukuran body di tepi (sama dengan Caddyfile lokal): unggahan terbesar 8 MB + overhead multipart.
+    # API juga membatasi sendiri (JSON 1 MB, file 8 MB, field multipart); ini lapisan pertama.
+    pacetara-body-limit:
+      buffering:
+        maxRequestBodyBytes: 15000000
+        memRequestBodyBytes: 2000000
     # 10 req/menit per IP, burst 10 (pengguna seluler di balik NAT bisa berbagi IP).
     pacetara-ratelimit-auth:
       rateLimit:

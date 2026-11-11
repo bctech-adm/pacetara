@@ -96,7 +96,7 @@ export class ChatController {
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('conversations/:id/images')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, fieldSize: 1024, parts: 3 } }))
   sendImage(
     @CurrentUser() u: AuthUser,
     @Param('id', uuid) id: string,

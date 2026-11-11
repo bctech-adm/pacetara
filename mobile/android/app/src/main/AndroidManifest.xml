@@ -1,6 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Ditambahkan plugin open_filex tetapi tidak dibutuhkan (foto lewat photo picker, APK dari cache
+         privat). Dibuang demi least privilege dan kebijakan Play tentang READ_MEDIA_*. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
     <!-- Rekam lari: lokasi saat aplikasi dipakai + foreground service bertipe location, sehingga tetap
          merekam saat layar mati TANPA izin lokasi latar belakang (ACCESS_BACKGROUND_LOCATION). -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

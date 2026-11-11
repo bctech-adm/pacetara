@@ -168,12 +168,20 @@ describe.skipIf(!hasTestInfra)('Modul 1.8 Laporan dan panel super admin (e2e)', 
     expect(log.rows.map((r) => r.action)).toEqual(expect.arrayContaining(['admin.login_failed', 'admin.login']));
   });
 
-  it('login panel: dikunci setelah 5 kali gagal', async () => {
+  it('login panel: dikunci setelah 5 kali gagal (pesan sama), akun biasa tidak pernah terkunci', async () => {
     const admin = await superAdmin();
-    for (let i = 0; i < 5; i++) {
-      await request(t.http).post('/v1/admin/auth/login').set('X-Forwarded-For', freshIp()).send({ email: admin.email, password: PASSWORD, code: '000000' }).expect(401);
-    }
-    await request(t.http).post('/v1/admin/auth/login').set('X-Forwarded-For', freshIp()).send({ email: admin.email, password: PASSWORD, code: admin.code() }).expect(429);
+    const login = (email: string, code: string) =>
+      request(t.http).post('/v1/admin/auth/login').set('X-Forwarded-For', freshIp()).send({ email, password: PASSWORD, code });
+    for (let i = 0; i < 5; i++) await login(admin.email, '000000').expect(401);
+    // Kode benar pun ditolak selama terkunci, dengan pesan yang sama seperti gagal biasa.
+    const locked = await login(admin.email, admin.code()).expect(401);
+    expect(locked.body.error).toBe('invalid_credentials');
+    expect((await t.pool.query(`SELECT 1 FROM admin_audit_log WHERE action = 'admin.login_locked'`)).rowCount).toBe(1);
+
+    // Pengguna biasa: tidak ada penghitung, jadi responsnya tidak bisa dipakai menebak email terdaftar.
+    const plain = await user();
+    for (let i = 0; i < 7; i++) await login(plain.email, '123456').expect(401);
+    expect(await t.redis.exists(`admin:fail:${plain.id}`)).toBe(0);
   });
 
   it('antrean, detail (membuka chat tercatat di log), turunkan pesan, abaikan laporan komunitas', async () => {

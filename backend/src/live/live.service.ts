@@ -264,6 +264,7 @@ export class LiveService implements OnModuleInit {
   private async isActiveMember(userId: string, communityId: string): Promise<boolean> {
     const { rowCount } = await this.pool.query(
       `SELECT 1 FROM community_members m JOIN users u ON u.id = m.user_id
+         JOIN communities c ON c.id = m.community_id AND c.removed_at IS NULL
         WHERE m.community_id = $1 AND m.user_id = $2 AND m.status = 'active' AND u.status = 'active'`,
       [communityId, userId],
     );
@@ -274,6 +275,7 @@ export class LiveService implements OnModuleInit {
     if (ids.length === 0) return new Set();
     const { rows } = await this.pool.query<{ community_id: string }>(
       `SELECT m.community_id FROM community_members m JOIN users u ON u.id = m.user_id
+         JOIN communities c ON c.id = m.community_id AND c.removed_at IS NULL
         WHERE m.user_id = $1 AND m.status = 'active' AND u.status = 'active' AND m.community_id = ANY($2::uuid[])`,
       [userId, ids],
     );

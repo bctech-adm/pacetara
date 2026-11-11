@@ -1,15 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import type pg from 'pg';
 import { WhatsAppOtp } from '../auth/channels.js';
 import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
-import { PG_POOL } from '../core.module.js';
+import { PG_POOL, REDIS } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 
 export const MAX_EMERGENCY_CONTACTS = 3;
 /** Batas SOS: cegah penyalahgunaan nomor WhatsApp pengirim, tetapi tetap longgar untuk keadaan darurat sungguhan. */
 export const SOS_PER_10_MIN = 3;
 export const SOS_PER_DAY = 10;
+/** Penambahan kontak per 24 jam: mencegah berganti-ganti nomor untuk mengirim pesan ke banyak orang. */
+export const CONTACT_ADDS_PER_DAY = 5;
 
 const nameAad = (id: string) => `emergency_contacts.name:${id}`;
 const phoneAad = (id: string) => `emergency_contacts.phone:${id}`;
@@ -31,6 +34,7 @@ export class SafetyService {
 
   constructor(
     @Inject(PG_POOL) private readonly pool: pg.Pool,
+    @Inject(REDIS) private readonly redis: Redis,
     private readonly crypto: FieldCrypto,
     private readonly whatsapp: WhatsAppOtp,
   ) {}
@@ -49,6 +53,10 @@ export class SafetyService {
 
   /** [phone] sudah dinormalisasi E.164 (+62…). */
   async addContact(userId: string, name: string, phone: string) {
+    const addsKey = `sos:contact-adds:${userId}`;
+    if (Number((await this.redis.get(addsKey)) ?? 0) >= CONTACT_ADDS_PER_DAY) {
+      throw new ApiError(429, 'contact_adds_limited', `Maksimal ${CONTACT_ADDS_PER_DAY} kali menambah kontak darurat per hari`);
+    }
     const bidx = this.crypto.blindIndex('phone', phone);
     const id = await withTx(this.pool, async (db) => {
       await db.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [userId]);
@@ -70,6 +78,8 @@ export class SafetyService {
       ]);
       return newId;
     });
+    const n = await this.redis.incr(addsKey);
+    if (n === 1) await this.redis.expire(addsKey, 86_400);
     return { id, name, phone };
   }
 

@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
+import '../auth/auth_controller.dart';
 import 'track.dart';
 
 enum RecorderStatus { idle, recording, paused, finished }
@@ -61,12 +62,18 @@ final gpsSourceProvider = Provider<GpsSource>((ref) => deviceGpsSource);
 /// Penyimpanan draf rekaman: berkas di folder data aplikasi, ditulis berkala agar lari tidak
 /// hilang jika aplikasi dimatikan sistem. Dihapus setelah lari disimpan/dibuang.
 class DraftStore {
+  DraftStore([this._ownerId]);
+
+  /// Akun yang sedang login. Draf milik akun lain (HP dipakai bergantian) dibuang, tidak ditawarkan.
+  final String? _ownerId;
+
   Future<File> _file() async => File('${(await getApplicationSupportDirectory()).path}/current_run.json');
 
   Future<void> save(RecorderState s) async {
     final t = s.track;
     if (t == null) return;
     final data = {
+      'ownerId': _ownerId,
       'clientRunId': s.clientRunId,
       'startedAt': t.startedAt.toUtc().toIso8601String(),
       'activeSeconds': s.activeSeconds,
@@ -84,7 +91,13 @@ class DraftStore {
     final f = await _file();
     if (!f.existsSync()) return null;
     try {
-      return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final draft = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final owner = draft['ownerId'] as String?;
+      if (owner != null && owner != _ownerId) {
+        await f.delete();
+        return null;
+      }
+      return draft;
     } catch (_) {
       return null;
     }
@@ -96,7 +109,7 @@ class DraftStore {
   }
 }
 
-final draftStoreProvider = Provider<DraftStore>((ref) => DraftStore());
+final draftStoreProvider = Provider<DraftStore>((ref) => DraftStore(ref.watch(authControllerProvider.select((a) => a.value?.id))));
 
 class PermissionProblem implements Exception {
   const PermissionProblem(this.message, {this.openSettings = false});

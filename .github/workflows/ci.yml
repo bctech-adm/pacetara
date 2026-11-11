@@ -236,8 +236,16 @@ jobs:
           # versionCode harus selalu naik agar bisa dipasang menimpa versi lama.
           CODE=$((100 + GITHUB_RUN_NUMBER))
           echo "CODE=$CODE" >> "$GITHUB_ENV"
+          # Obfuskasi Dart. Simbol (build/symbols) sengaja TIDAK diunggah: artifact di repo publik bisa
+          # diunduh siapa pun dan akan membatalkan obfuskasi.
           flutter build apk --release --build-number=$CODE --build-name=0.1.$CODE \
-            --dart-define=API_BASE_URL=$API_BASE_URL --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID             --dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY --dart-define=FIREBASE_APP_ID=$FIREBASE_APP_ID             --dart-define=FIREBASE_SENDER_ID=$FIREBASE_SENDER_ID --dart-define=FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
+            --obfuscate --split-debug-info=build/symbols \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
+            --dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY \
+            --dart-define=FIREBASE_APP_ID=$FIREBASE_APP_ID \
+            --dart-define=FIREBASE_SENDER_ID=$FIREBASE_SENDER_ID \
+            --dart-define=FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
           cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/pacetara-$CODE.apk"
       - name: Terbitkan rilis
         if: steps.signing.outputs.signed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

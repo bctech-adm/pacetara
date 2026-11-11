@@ -154,6 +154,7 @@ export class CommunitiesService {
   }
 
   async members(userId: string, communityId: string, status: 'active' | 'pending' | 'banned') {
+    await this.lockCommunityRead(communityId);
     const me = await this.membership(this.pool, communityId, userId);
     if (me?.status !== 'active') throw new ApiError(403, 'not_member', 'Hanya anggota yang bisa melihat daftar anggota');
     if (status !== 'active' && me.role === 'member') throw new ApiError(403, 'not_admin', 'Hanya admin');
@@ -722,6 +723,7 @@ export class CommunitiesService {
   async shareCommunity(a: string, b: string): Promise<boolean> {
     const { rowCount } = await this.pool.query(
       `SELECT 1 FROM community_members x JOIN community_members y ON y.community_id = x.community_id
+         JOIN communities c ON c.id = x.community_id AND c.removed_at IS NULL
         WHERE x.user_id = $1 AND y.user_id = $2 AND x.status = 'active' AND y.status = 'active' LIMIT 1`,
       [a, b],
     );
@@ -835,8 +837,16 @@ export class CommunitiesService {
     if (!rowCount) throw notFound();
   }
 
+  /** Admin/pemilik aktif dari komunitas yang tidak diturunkan (yang diturunkan dianggap tidak ada). */
   private async requireStaff(db: Queryable, communityId: string, userId: string) {
-    const m = await this.membership(db, communityId, userId);
+    const { rows } = await db.query<{ role: Role; status: MemberStatus; removed: boolean }>(
+      `SELECT m.role, m.status, c.removed_at IS NOT NULL AS removed
+         FROM community_members m JOIN communities c ON c.id = m.community_id
+        WHERE m.community_id = $1 AND m.user_id = $2`,
+      [communityId, userId],
+    );
+    const m = rows[0];
+    if (m?.removed) throw notFound();
     if (m?.status !== 'active' || m.role === 'member') throw new ApiError(403, 'not_admin', 'Hanya admin komunitas');
     return m;
   }

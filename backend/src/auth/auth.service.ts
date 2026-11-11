@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import type pg from 'pg';
 import { withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
-import { PG_POOL } from '../core.module.js';
+import { PG_POOL, REDIS } from '../core.module.js';
 import { FieldCrypto, normalizeEmail } from '../crypto/field-crypto.js';
 import { phoneAad, type UserRow, UsersRepository } from '../users/users.repository.js';
 import { GoogleVerifier, Mailer, WhatsAppOtp } from './channels.js';
@@ -15,6 +16,10 @@ import { type TokenPair, TokenService } from './token.service.js';
 export interface AuthResult extends TokenPair {
   user: ReturnType<UsersRepository['toMyProfile']>;
 }
+
+/** Login aplikasi: maks. gagal per email dalam jendela kunci (selain batas per IP). */
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCK_S = 15 * 60;
 
 @Injectable()
 export class AuthService {
@@ -28,6 +33,7 @@ export class AuthService {
     private readonly whatsapp: WhatsAppOtp,
     private readonly google: GoogleVerifier,
     private readonly crypto: FieldCrypto,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   // ---------- Daftar & masuk ----------
@@ -64,10 +70,21 @@ export class AuthService {
   }
 
   async login(input: { email: string; password: string; device?: string }): Promise<AuthResult> {
+    // Batas per akun (selain per IP): menahan tebak kata sandi dari banyak IP. Kunci = blind index email,
+    // dihitung juga untuk email tidak terdaftar sehingga tidak membocorkan keberadaan akun.
+    const failKey = `login:fail:${this.crypto.blindIndex('email', input.email).toString('hex')}`;
+    if (Number((await this.redis.get(failKey)) ?? 0) >= LOGIN_MAX_FAILURES) {
+      throw new ApiError(429, 'too_many_attempts', 'Terlalu banyak percobaan masuk. Coba lagi dalam 15 menit atau atur ulang kata sandi');
+    }
     const user = await this.users.findByEmail(input.email);
     const ok = user?.password_hash ? await verifyPassword(user.password_hash, input.password) : await burnPasswordCheck(input.password);
     // Pesan sama untuk email tidak terdaftar dan kata sandi salah (mencegah enumerasi akun).
-    if (!user || !ok) throw new ApiError(401, 'invalid_credentials', 'Email atau kata sandi salah');
+    if (!user || !ok) {
+      const n = await this.redis.incr(failKey);
+      if (n === 1) await this.redis.expire(failKey, LOGIN_LOCK_S);
+      throw new ApiError(401, 'invalid_credentials', 'Email atau kata sandi salah');
+    }
+    await this.redis.del(failKey);
     return this.session(await this.assertActive(user), input.device);
   }
 

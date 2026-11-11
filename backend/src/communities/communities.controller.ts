@@ -114,7 +114,7 @@ export class CommunitiesController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post(':id/logo')
   @HttpCode(200)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, fieldSize: 1024, parts: 3 } }))
   logo(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @UploadedFile() file?: { buffer?: Buffer }) {
     if (!file?.buffer) throw new ApiError(400, 'file_required', 'Pilih gambar terlebih dahulu');
     return this.communities.setLogo(u.id, id, file.buffer);
