@@ -168,6 +168,7 @@ class _SosSheetState extends ConsumerState<SosSheet> {
   List<EmergencyContact> _contacts = const [];
   SosLocation? _loc;
   String? _status;
+  bool _cancelled = false;
 
   @override
   void initState() {
@@ -187,7 +188,7 @@ class _SosSheetState extends ConsumerState<SosSheet> {
     _contacts = contacts;
     unawaited(widget.locate().then((l) => _loc = l, onError: (_) => null));
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return t.cancel();
+      if (!mounted || _cancelled) return t.cancel();
       setState(() => _left--);
       if (_left <= 0) {
         t.cancel();
@@ -203,7 +204,15 @@ class _SosSheetState extends ConsumerState<SosSheet> {
     super.dispose();
   }
 
+  /// Batal: hentikan hitung mundur lebih dulu, baru tutup lembar (SOS tidak boleh terkirim setelahnya).
+  void _cancel() {
+    _cancelled = true;
+    _timer?.cancel();
+    Navigator.pop(context);
+  }
+
   Future<void> _send() async {
+    if (_cancelled) return;
     _timer?.cancel();
     setState(() => _stage = _SosStage.sending);
     _loc ??= await widget.locate().catchError((_) => null);
@@ -261,7 +270,7 @@ class _SosSheetState extends ConsumerState<SosSheet> {
                   child: const Text('Kirim sekarang'),
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton(key: const Key('sos-cancel'), onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                OutlinedButton(key: const Key('sos-cancel'), onPressed: _cancel, child: const Text('Batal')),
               ],
             _SosStage.sending => [
                 const Center(child: CircularProgressIndicator()),
