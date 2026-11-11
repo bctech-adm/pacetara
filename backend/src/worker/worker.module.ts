@@ -5,8 +5,10 @@ import { expireChatImages } from '../chat/chat-expiry.js';
 import { ENV, type Env } from '../config/env.js';
 import { CoreModule, PG_POOL } from '../core.module.js';
 import { archivePastEvents } from '../events/event-archive.js';
+import { FieldCrypto } from '../crypto/field-crypto.js';
+import { FcmSender, type PushJob, sendPushJob } from '../notifications/push.js';
 import { StorageService } from '../storage/storage.service.js';
-import { MAINTENANCE_JOBS, QUEUES } from './queues.js';
+import { MAINTENANCE_JOBS, PUSH_JOB, QUEUES } from './queues.js';
 
 /**
  * Tugas latar. Modul berikutnya menambah prosesor: kedaluwarsa gambar chat (1.6),
@@ -17,11 +19,13 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger('Worker');
   private queue?: Queue;
   private worker?: Worker;
+  private pushWorker?: Worker;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
     @Inject(PG_POOL) private readonly pool: pg.Pool,
     private readonly storage: StorageService,
+    private readonly crypto: FieldCrypto,
   ) {}
 
   async onModuleInit() {
@@ -49,6 +53,16 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
 
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
+
+    // Push FCM (modul 1.9). Tanpa FCM_SERVICE_ACCOUNT_B64 job tetap diambil tetapi tidak mengirim apa pun.
+    const fcm = new FcmSender(this.env.FCM_SERVICE_ACCOUNT_B64);
+    if (!fcm.enabled) this.logger.log('FCM belum dikonfigurasi; push dimatikan');
+    this.pushWorker = new Worker(
+      QUEUES.notifications,
+      (job: Job<PushJob>) => (job.name === PUSH_JOB ? sendPushJob(this.pool, this.crypto, fcm, job.data) : Promise.reject(new Error(`Job tidak dikenal: ${job.name}`))),
+      { connection, concurrency: 4 },
+    );
+    this.pushWorker.on('failed', (job, err) => this.logger.warn(`Push gagal (percobaan ${job?.attemptsMade ?? '?'}): ${err.message}`));
   }
 
   private process(job: Job): Promise<unknown> {
@@ -66,6 +80,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
 
   async onApplicationShutdown() {
     await this.worker?.close();
+    await this.pushWorker?.close();
     await this.queue?.close();
   }
 }

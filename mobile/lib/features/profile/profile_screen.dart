@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/widgets/common.dart';
@@ -188,6 +189,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         const Divider(),
         _PrivacyZoneTile(profile: profile),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.notifications_outlined),
+          title: const Text('Notifikasi'),
+          subtitle: const Text('Pilih notifikasi push yang kamu terima'),
+          onTap: () => context.push('/settings/notifications'),
+        ),
         const _VersionTile(),
         ListTile(
           contentPadding: EdgeInsets.zero,

@@ -21,6 +21,15 @@ class AppConfig {
   static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: 'OpenStreetMap contributors');
   static const mapAttributionUrl = String.fromEnvironment('MAP_ATTRIBUTION_URL', defaultValue: 'https://www.openstreetmap.org/copyright');
 
+  /// Firebase Cloud Messaging untuk push (modul 1.9). Diisi CI dari variabel repo; kosong = push mati,
+  /// notifikasi di dalam aplikasi tetap berjalan. Nilai ini bukan rahasia (ikut di setiap APK).
+  static const firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
+  static const firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
+  static const firebaseSenderId = String.fromEnvironment('FIREBASE_SENDER_ID');
+  static const firebaseProjectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+  static bool get pushConfigured =>
+      firebaseApiKey.isNotEmpty && firebaseAppId.isNotEmpty && firebaseSenderId.isNotEmpty && firebaseProjectId.isNotEmpty;
+
   /// Hanya untuk development dengan Caddy lokal (CA internal). Diabaikan di build rilis.
   static const allowDevCa = bool.fromEnvironment('ALLOW_DEV_CA');
 

@@ -119,6 +119,8 @@ export class TokenService {
     await this.pool.query('UPDATE refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [
       familyId,
     ]);
+    // Perangkat yang keluar tidak menerima push lagi (modul 1.9).
+    await this.pool.query('DELETE FROM push_tokens WHERE session_id = $1', [familyId]);
     await this.redis.set(revokedKey(familyId), '1', 'EX', this.env.ACCESS_TOKEN_TTL_SEC + 60);
   }
 
@@ -128,6 +130,7 @@ export class TokenService {
         WHERE user_id = $1 AND revoked_at IS NULL RETURNING family_id`,
       [userId],
     );
+    await db.query('DELETE FROM push_tokens WHERE user_id = $1', [userId]);
     const families = [...new Set(rows.map((r) => r.family_id))];
     if (families.length === 0) return;
     const multi = this.redis.multi();

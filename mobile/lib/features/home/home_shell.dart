@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../chat/chat_screens.dart';
 import '../chat/inbox.dart';
 import '../communities/screens/my_communities_screen.dart';
+import '../notifications/push_registrar.dart';
 import '../profile/profile_screen.dart';
 import '../update/update_service.dart';
 import '../runs/recorder.dart';
@@ -29,6 +30,7 @@ class HomeShell extends ConsumerWidget {
     final unread = ref.watch(unreadTotalProvider);
     final recording = ref.watch(recorderProvider.select((s) => s.status == RecorderStatus.recording || s.status == RecorderStatus.paused));
     return UpdateChecker(
+      child: PushRegistrar(
       child: Scaffold(
       body: IndexedStack(
         index: tab,
@@ -52,6 +54,7 @@ class HomeShell extends ConsumerWidget {
           ),
           const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
         ],
+      ),
       ),
       ),
     );

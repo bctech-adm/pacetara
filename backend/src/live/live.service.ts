@@ -5,6 +5,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL, REDIS } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { haversine } from '../runs/geo.js';
 import { avatarPath } from '../users/users.repository.js';
 
@@ -62,6 +63,7 @@ export class LiveService implements OnModuleInit {
     @Inject(REDIS) private readonly redis: Redis,
     private readonly crypto: FieldCrypto,
     private readonly realtime: RealtimeService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit(): void {
@@ -121,6 +123,7 @@ export class LiveService implements OnModuleInit {
     for (const id of removed) multi.zrem(communityKey(id), userId);
     await multi.exec();
     await this.notify([...communities.map((c) => c.id), ...removed]);
+    await this.notifyStarted(userId, input.clientRunId, communities.map((c) => c.id));
 
     return {
       sharing: true,
@@ -128,6 +131,38 @@ export class LiveService implements OnModuleInit {
       positionHidden: sharesLocation && !pos,
       ttlS: LIVE_TTL_S,
     };
+  }
+
+  /**
+   * Push "teman mulai lari" ke anggota komunitas yang dipilih pelari (hanya komunitas itu, sama dengan
+   * siapa yang boleh melihat statusnya). Sekali per lari per komunitas, walau status diperbarui tiap 10 detik.
+   */
+  private async notifyStarted(userId: string, runId: string, communityIds: string[]) {
+    const fresh: string[] = [];
+    for (const id of communityIds) {
+      if (await this.redis.set(`live:notified:${userId}:${runId}:${id}`, '1', 'EX', 6 * 3600, 'NX')) fresh.push(id);
+    }
+    if (fresh.length === 0) return;
+    const { rows } = await this.pool.query<{ user_id: string; name: string }>(
+      `SELECT DISTINCT m.user_id, c.name FROM community_members m JOIN communities c ON c.id = m.community_id
+        WHERE m.community_id = ANY($1::uuid[]) AND m.status = 'active' AND m.user_id <> $2`,
+      [fresh, userId],
+    );
+    if (rows.length === 0) return;
+    const l = await this.notifications.labels(userId, fresh[0]);
+    await this.notifications.notify(
+      rows.map((r) => r.user_id),
+      {
+        category: 'friend_running',
+        actorId: userId,
+        push: {
+          title: `${l.actor} mulai lari`,
+          body: fresh.length > 1 ? 'Lihat siapa yang sedang lari di komunitasmu' : `Lihat di ${l.community}`,
+          data: { type: 'friend_running', communityId: fresh[0]! },
+          tag: `live:${userId}`,
+        },
+      },
+    );
   }
 
   /**

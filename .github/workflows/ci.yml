@@ -195,6 +195,12 @@ jobs:
       API_BASE_URL: https://pace-api.bimacreative.tech
       # Client ID OAuth tipe Web (bukan rahasia; juga ada di GOOGLE_CLIENT_IDS server).
       GOOGLE_SERVER_CLIENT_ID: 189767025620-acehdrg0uq4a359iofr1tel7ssdsiimf.apps.googleusercontent.com
+      # Konfigurasi aplikasi Firebase untuk push (bukan rahasia; ikut di setiap APK). Variabel repo
+      # Settings → Variables; kosong = APK tanpa push (notifikasi di dalam aplikasi tetap jalan).
+      FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+      FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+      FIREBASE_SENDER_ID: ${{ vars.FIREBASE_SENDER_ID }}
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -231,7 +237,7 @@ jobs:
           CODE=$((100 + GITHUB_RUN_NUMBER))
           echo "CODE=$CODE" >> "$GITHUB_ENV"
           flutter build apk --release --build-number=$CODE --build-name=0.1.$CODE \
-            --dart-define=API_BASE_URL=$API_BASE_URL --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
+            --dart-define=API_BASE_URL=$API_BASE_URL --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID             --dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY --dart-define=FIREBASE_APP_ID=$FIREBASE_APP_ID             --dart-define=FIREBASE_SENDER_ID=$FIREBASE_SENDER_ID --dart-define=FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
           cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/pacetara-$CODE.apk"
       - name: Terbitkan rilis
         if: steps.signing.outputs.signed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

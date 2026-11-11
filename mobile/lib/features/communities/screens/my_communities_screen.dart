@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../auth/auth_controller.dart';
 import '../../auth/models.dart';
 import '../models.dart';
+import '../../notifications/notifications_screens.dart';
 import '../../profile/profile_screen.dart';
 import '../communities_repository.dart';
 import '../widgets.dart';
@@ -26,6 +27,7 @@ class MyCommunitiesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Komunitasku'),
         actions: [
+          const NotificationBell(),
           IconButton(tooltip: 'Kalender event', icon: const Icon(Icons.event_outlined), onPressed: () => context.push('/events')),
           IconButton(tooltip: 'Jelajahi komunitas', icon: const Icon(Icons.search), onPressed: () => context.push('/communities/explore')),
           if (profile != null)

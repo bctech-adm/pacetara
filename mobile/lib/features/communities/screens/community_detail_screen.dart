@@ -7,6 +7,7 @@ import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
 import '../../chat/chat_screens.dart';
 import '../../moderation/moderation.dart';
+import '../../notifications/notifications_screens.dart';
 import '../../live/live_widgets.dart';
 import '../communities_repository.dart';
 import '../models.dart';
@@ -295,6 +296,20 @@ class _AdminPanel extends ConsumerWidget {
                   ),
                 ]),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: FilledButton.tonalIcon(
+                key: const Key('invite-members'),
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => InviteMembersSheet(communityId: c.id),
+                ),
+                icon: const Icon(Icons.person_add_alt),
+                label: const Text('Undang anggota langsung'),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: AsyncButton(

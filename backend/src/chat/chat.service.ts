@@ -7,6 +7,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { EventsService } from '../events/events.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -87,6 +88,7 @@ export class ChatService implements OnModuleInit {
     private readonly communities: CommunitiesService,
     private readonly realtime: RealtimeService,
     private readonly events: EventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit(): void {
@@ -397,7 +399,53 @@ export class ChatService implements OnModuleInit {
     if (conv.kind === 'direct') {
       await Promise.all([conv.user_a!, conv.user_b!].map((u) => this.realtime.publish(inboxChannel(u), 'inbox.changed')));
     }
+    await this.notifyMessage(userId, conv, m.kind, m.id);
     return this.message(userId, m.id);
+  }
+
+  /**
+   * Push untuk pesan baru. Teks push tidak memuat isi pesan (chat terenkripsi; isi tidak dikirim ke
+   * Google), hanya nama pengirim/komunitas. Ajakan lari juga masuk kotak notifikasi.
+   */
+  private async notifyMessage(senderId: string, conv: ConvAccess, kind: MessageKind, messageId: string) {
+    let recipients: string[];
+    if (conv.kind === 'direct') {
+      recipients = [conv.user_a === senderId ? conv.user_b! : conv.user_a!];
+    } else {
+      const { rows } = await this.pool.query<{ user_id: string }>(
+        `SELECT user_id FROM community_members WHERE community_id = $1 AND status = 'active' AND user_id <> $2`,
+        [conv.community_id, senderId],
+      );
+      recipients = rows.map((r) => r.user_id);
+    }
+    if (recipients.length === 0) return;
+    const l = await this.notifications.labels(senderId, conv.community_id ?? undefined);
+    const data = { conversationId: conv.id };
+    if (kind === 'run_invite') {
+      await this.notifications.notify(recipients, {
+        category: 'run_invite',
+        actorId: senderId,
+        communityId: conv.community_id ?? undefined,
+        inbox: { type: 'run_invite', data: { ...data, messageId } },
+        push: {
+          title: `${l.actor} mengajak lari bareng`,
+          body: conv.kind === 'community' ? `Di ${l.community}. Ketuk untuk ikut` : 'Ketuk untuk melihat ajakan',
+          data: { type: 'run_invite', ...data },
+        },
+      });
+      return;
+    }
+    const what = kind === 'image' ? 'mengirim gambar' : kind === 'event' ? 'membagikan event' : 'mengirim pesan';
+    await this.notifications.notify(recipients, {
+      category: 'chat',
+      actorId: senderId,
+      push: {
+        title: conv.kind === 'community' ? l.community : l.actor,
+        body: conv.kind === 'community' ? `${l.actor} ${what}` : what.charAt(0).toUpperCase() + what.slice(1),
+        data: { type: 'chat', ...data },
+        tag: `conv:${conv.id}`,
+      },
+    });
   }
 
   private async toMessages(viewerId: string, rows: MessageRow[]) {

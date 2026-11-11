@@ -11,6 +11,7 @@ import { ApiError } from '../src/common/http.js';
 import { ENV, type Env, loadEnv } from '../src/config/env.js';
 import { configureApp } from '../src/http/configure-app.js';
 import { StorageService } from '../src/storage/storage.service.js';
+import { type PushJob, PushQueue } from '../src/notifications/push.js';
 
 /**
  * Tes integrasi butuh Postgres+PostGIS dan Redis sungguhan:
@@ -66,6 +67,18 @@ export class MemoryStorage {
   }
 }
 
+/** Antrean push palsu: mencatat job, tidak ada Redis/FCM. */
+export class FakePushQueue {
+  jobs: PushJob[] = [];
+  async enqueue(job: PushJob) {
+    if (job.userIds.length) this.jobs.push(job);
+  }
+  /** Job untuk satu pengguna (urut kirim). */
+  to(userId: string) {
+    return this.jobs.filter((j) => j.userIds.includes(userId));
+  }
+}
+
 export interface TestApp {
   app: NestExpressApplication;
   http: ReturnType<NestExpressApplication['getHttpServer']>;
@@ -76,6 +89,7 @@ export interface TestApp {
   whatsapp: FakeWhatsApp;
   google: FakeGoogle;
   storage: MemoryStorage;
+  push: FakePushQueue;
   close(): Promise<void>;
 }
 
@@ -100,6 +114,7 @@ export async function createTestApp(): Promise<TestApp> {
   const whatsapp = new FakeWhatsApp();
   const google = new FakeGoogle();
   const storage = new MemoryStorage();
+  const push = new FakePushQueue();
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ENV)
@@ -112,6 +127,8 @@ export async function createTestApp(): Promise<TestApp> {
     .useValue(google)
     .overrideProvider(StorageService)
     .useValue(storage)
+    .overrideProvider(PushQueue)
+    .useValue(push)
     .compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
@@ -130,6 +147,7 @@ export async function createTestApp(): Promise<TestApp> {
     whatsapp,
     google,
     storage,
+    push,
     async close() {
       await app.close();
       await pool.end();

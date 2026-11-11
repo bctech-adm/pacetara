@@ -6,6 +6,7 @@ import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
 import { PG_POOL } from '../core.module.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import {
   COMMUNITY_MEMBER_LIMIT,
   type CommunityPlan,
@@ -59,6 +60,7 @@ export class CommunitiesService {
     @Inject(PG_POOL) private readonly pool: pg.Pool,
     @Inject(ENV) private readonly env: Env,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ---------- Baca ----------
@@ -282,7 +284,7 @@ export class CommunitiesService {
 
   /** Komunitas terbuka: langsung jadi anggota. Privat: permintaan menunggu persetujuan admin. */
   async join(userId: string, communityId: string): Promise<{ status: MemberStatus }> {
-    return withTx(this.pool, async (db) => {
+    const result = await withTx(this.pool, async (db) => {
       const user = await this.lockUser(db, userId);
       const c = await this.lockCommunity(db, communityId);
       const existing = await this.membership(db, communityId, userId);
@@ -296,12 +298,25 @@ export class CommunitiesService {
           `INSERT INTO community_members (community_id, user_id, role, status) VALUES ($1, $2, 'member', 'pending')`,
           [communityId, userId],
         );
-        return { status: 'pending' as const };
+        return { status: 'pending' as const, created: true };
       }
       this.assertCommunityHasRoom(c);
       await this.addActive(db, communityId, userId, null, c.new_members_see_history);
-      return { status: 'active' as const };
+      return { status: 'active' as const, created: false };
     });
+    if ('created' in result && result.created) {
+      // Permintaan baru ke komunitas privat: beri tahu pemilik dan admin.
+      const staff = await this.staffIds(communityId);
+      const l = await this.notifications.labels(userId, communityId);
+      await this.notifications.notify(staff, {
+        category: 'community',
+        actorId: userId,
+        communityId,
+        inbox: { type: 'join_request' },
+        push: { title: 'Permintaan bergabung', body: `${l.actor} ingin bergabung ke ${l.community}`, data: { type: 'join_request', communityId } },
+      });
+    }
+    return { status: result.status };
   }
 
   async cancelRequest(userId: string, communityId: string): Promise<void> {
@@ -401,6 +416,143 @@ export class CommunitiesService {
     return this.detail(userId, communityId);
   }
 
+  // ---------- Undangan langsung ke pengguna (modul 1.9) ----------
+
+  /**
+   * Kandidat undangan: pengguna yang sudah dikenal admin (sesama anggota aktif komunitas lain, atau
+   * pernah chat pribadi) dan belum menjadi anggota. Tidak ada pencarian pengguna bebas (KEPUTUSAN #51).
+   */
+  async inviteCandidates(adminId: string, communityId: string) {
+    await this.lockCommunityRead(communityId);
+    await this.requireStaff(this.pool, communityId, adminId);
+    const { rows } = await this.pool.query<{
+      id: string;
+      display_name: string;
+      avatar_key: string | null;
+      avatar_updated_at: Date | null;
+      invited: boolean;
+    }>(
+      `SELECT u.id, u.display_name, u.avatar_key, u.avatar_updated_at,
+              EXISTS (SELECT 1 FROM community_invitations i WHERE i.community_id = $2 AND i.user_id = u.id AND i.status = 'pending'
+                         AND i.created_at > now() - interval '${INVITATION_DAYS} days') AS invited
+         FROM users u
+        WHERE u.status = 'active' AND u.id <> $1 AND ${KNOWN_TO('$1', 'u.id')}
+          AND NOT EXISTS (SELECT 1 FROM community_members m WHERE m.community_id = $2 AND m.user_id = u.id AND m.status IN ('active', 'banned'))
+        ORDER BY u.display_name LIMIT 200`,
+      [adminId, communityId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      displayName: r.display_name,
+      avatarUrl: avatarPath({ id: r.id, avatar_key: r.avatar_key, avatar_updated_at: r.avatar_updated_at }),
+      invited: r.invited,
+    }));
+  }
+
+  async inviteUser(adminId: string, communityId: string, targetId: string): Promise<{ id: string }> {
+    await this.lockCommunityRead(communityId);
+    await this.requireStaff(this.pool, communityId, adminId);
+    const { rowCount } = await this.pool.query(`SELECT 1 FROM users u WHERE u.id = $2 AND u.status = 'active' AND u.id <> $1 AND ${KNOWN_TO('$1', '$2')}`, [
+      adminId,
+      targetId,
+    ]);
+    if (!rowCount) throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
+    const m = await this.membership(this.pool, communityId, targetId);
+    if (m?.status === 'active') throw new ApiError(409, 'already_member', 'Pengguna ini sudah menjadi anggota');
+    if (m?.status === 'banned') throw new ApiError(409, 'user_banned', 'Pengguna ini diblokir dari komunitas. Buka blokirnya dulu');
+
+    // Undangan lama yang sudah kedaluwarsa dibatalkan agar bisa diundang ulang.
+    await this.pool.query(
+      `UPDATE community_invitations SET status = 'cancelled', decided_at = now()
+        WHERE community_id = $1 AND user_id = $2 AND status = 'pending' AND created_at <= now() - interval '${INVITATION_DAYS} days'`,
+      [communityId, targetId],
+    );
+    const { rows } = await this.pool.query<{ id: string }>(
+      `INSERT INTO community_invitations (community_id, user_id, invited_by) VALUES ($1, $2, $3)
+       ON CONFLICT (community_id, user_id) WHERE status = 'pending' DO NOTHING RETURNING id`,
+      [communityId, targetId, adminId],
+    );
+    if (!rows[0]) {
+      const existing = await this.pool.query<{ id: string }>(
+        `SELECT id FROM community_invitations WHERE community_id = $1 AND user_id = $2 AND status = 'pending'`,
+        [communityId, targetId],
+      );
+      return { id: existing.rows[0]!.id };
+    }
+    const l = await this.notifications.labels(adminId, communityId);
+    await this.notifications.notify([targetId], {
+      category: 'community',
+      actorId: adminId,
+      communityId,
+      inbox: { type: 'community_invite', data: { invitationId: rows[0].id } },
+      push: { title: 'Undangan komunitas', body: `${l.actor} mengundangmu ke ${l.community}`, data: { type: 'community_invite', communityId } },
+    });
+    return { id: rows[0].id };
+  }
+
+  /** Undangan yang menunggu jawaban saya (maks. 30 hari). */
+  async myInvitations(userId: string) {
+    const { rows } = await this.pool.query<CommunityRow & { invitation_id: string; invited_at: Date; inviter_id: string | null; inviter_name: string | null }>(
+      `SELECT ${COLS}, i.id AS invitation_id, i.created_at AS invited_at, i.invited_by AS inviter_id, u.display_name AS inviter_name
+         FROM community_invitations i
+         JOIN communities c ON c.id = i.community_id AND c.removed_at IS NULL
+         LEFT JOIN users u ON u.id = i.invited_by
+        WHERE i.user_id = $1 AND i.status = 'pending' AND i.created_at > now() - interval '${INVITATION_DAYS} days'
+          AND NOT EXISTS (SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1 AND m.status IN ('active', 'banned'))
+        ORDER BY i.created_at DESC`,
+      [userId],
+    );
+    return rows.map((r) => ({
+      id: r.invitation_id,
+      createdAt: r.invited_at.toISOString(),
+      invitedBy: r.inviter_id ? { id: r.inviter_id, displayName: r.inviter_name } : null,
+      community: this.summary(r, 'none', null),
+    }));
+  }
+
+  /** Terima/tolak undangan. Menerima = langsung anggota aktif (undangan menggantikan persetujuan admin), batas paket tetap berlaku. */
+  async respondInvitation(userId: string, invitationId: string, accept: boolean) {
+    const communityId = await withTx(this.pool, async (db) => {
+      const user = await this.lockUser(db, userId);
+      const { rows } = await db.query<{ community_id: string; invited_by: string | null }>(
+        `SELECT community_id, invited_by FROM community_invitations
+          WHERE id = $1 AND user_id = $2 AND status = 'pending' AND created_at > now() - interval '${INVITATION_DAYS} days' FOR UPDATE`,
+        [invitationId, userId],
+      );
+      const inv = rows[0];
+      if (!inv) throw new ApiError(404, 'invitation_not_found', 'Undangan tidak ditemukan atau sudah tidak berlaku');
+      const close = (status: string) =>
+        db.query('UPDATE community_invitations SET status = $2, decided_at = now() WHERE id = $1', [invitationId, status]);
+      if (!accept) {
+        await close('declined');
+        return null;
+      }
+      const c = await this.lockCommunity(db, inv.community_id);
+      const existing = await this.membership(db, c.id, userId);
+      if (existing?.status === 'banned') {
+        await close('cancelled');
+        throw new ApiError(404, 'invitation_not_found', 'Undangan tidak ditemukan atau sudah tidak berlaku');
+      }
+      if (existing?.status !== 'active') {
+        await this.assertUserCanJoin(db, userId, user.plan);
+        this.assertCommunityHasRoom(c);
+        if (existing?.status === 'pending') {
+          await db.query(
+            `UPDATE community_members SET status = 'active', joined_at = now(), decided_by = $3, history_from = $4
+              WHERE community_id = $1 AND user_id = $2`,
+            [c.id, userId, inv.invited_by, historyFrom(c.new_members_see_history)],
+          );
+          await this.adjustCount(db, c.id, 1);
+        } else {
+          await this.addActive(db, c.id, userId, inv.invited_by, c.new_members_see_history);
+        }
+      }
+      await close('accepted');
+      return c.id;
+    });
+    return communityId ? this.detail(userId, communityId) : null;
+  }
+
   // ---------- Kelola anggota (admin) ----------
 
   /**
@@ -429,6 +581,14 @@ export class CommunitiesService {
         [communityId, targetId, adminId, historyFrom(seeHistory ?? c.new_members_see_history)],
       );
       await this.adjustCount(db, communityId, 1);
+    });
+    const l = await this.notifications.labels(adminId, communityId);
+    await this.notifications.notify([targetId], {
+      category: 'community',
+      actorId: adminId,
+      communityId,
+      inbox: { type: 'join_approved' },
+      push: { title: 'Permintaan diterima', body: `Kamu sekarang anggota ${l.community}`, data: { type: 'join_approved', communityId } },
     });
   }
 
@@ -661,6 +821,20 @@ export class CommunitiesService {
     return rows[0];
   }
 
+  private async staffIds(communityId: string): Promise<string[]> {
+    const { rows } = await this.pool.query<{ user_id: string }>(
+      `SELECT user_id FROM community_members WHERE community_id = $1 AND status = 'active' AND role IN ('owner', 'admin')`,
+      [communityId],
+    );
+    return rows.map((r) => r.user_id);
+  }
+
+  /** Komunitas ada dan tidak diturunkan (tanpa kunci baris). */
+  private async lockCommunityRead(communityId: string) {
+    const { rowCount } = await this.pool.query('SELECT 1 FROM communities WHERE id = $1 AND removed_at IS NULL', [communityId]);
+    if (!rowCount) throw notFound();
+  }
+
   private async requireStaff(db: Queryable, communityId: string, userId: string) {
     const m = await this.membership(db, communityId, userId);
     if (m?.status !== 'active' || m.role === 'member') throw new ApiError(403, 'not_admin', 'Hanya admin komunitas');
@@ -735,4 +909,21 @@ function decodeCursor(cursor: string): { count: number; id: string } | undefined
 /** NULL = melihat seluruh riwayat chat; selain itu hanya pesan sejak bergabung. */
 function historyFrom(seeHistory: boolean): Date | null {
   return seeHistory ? null : new Date();
+}
+
+/** Undangan langsung berlaku 30 hari. */
+const INVITATION_DAYS = 30;
+
+/**
+ * Pengguna [b] sudah dikenal [a]: sesama anggota aktif satu komunitas (yang tidak diturunkan), atau
+ * pernah chat pribadi. Dipakai untuk undangan langsung agar tidak ada pencarian pengguna bebas.
+ */
+function KNOWN_TO(a: string, b: string) {
+  return `(EXISTS (SELECT 1 FROM community_members x
+                     JOIN community_members y ON y.community_id = x.community_id AND y.user_id = ${b} AND y.status = 'active'
+                     JOIN communities cx ON cx.id = x.community_id AND cx.removed_at IS NULL
+                    WHERE x.user_id = ${a} AND x.status = 'active')
+       OR EXISTS (SELECT 1 FROM conversations cv
+                   WHERE cv.kind = 'direct' AND cv.last_message_at IS NOT NULL
+                     AND ((cv.user_a = ${a} AND cv.user_b = ${b}) OR (cv.user_a = ${b} AND cv.user_b = ${a}))))`;
 }

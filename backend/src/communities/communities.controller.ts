@@ -143,6 +143,19 @@ export class CommunitiesController {
     await this.communities.cancelRequest(u.id, id);
   }
 
+  /** Pengguna yang bisa diundang langsung: dikenal admin (satu komunitas lain / pernah chat pribadi). */
+  @Get(':id/invite-candidates')
+  inviteCandidates(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string) {
+    return this.communities.inviteCandidates(u.id, id);
+  }
+
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post(':id/invitations')
+  @HttpCode(201)
+  invite(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @Body(new ZodPipe(TransferBody)) b: z.infer<typeof TransferBody>) {
+    return this.communities.inviteUser(u.id, id, b.userId);
+  }
+
   @Post(':id/leave')
   @HttpCode(204)
   async leave(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string) {
@@ -219,5 +232,31 @@ export class CommunitiesController {
   @HttpCode(204)
   async revokeInvite(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @Param('inviteId', uuid) inviteId: string) {
     await this.communities.revokeInvite(u.id, id, inviteId);
+  }
+}
+
+/** Undangan komunitas yang saya terima (modul 1.9). */
+@Controller('invitations')
+@UseGuards(LevelGuard)
+@RequireLevel(1)
+export class InvitationsController {
+  constructor(private readonly communities: CommunitiesService) {}
+
+  @Get()
+  mine(@CurrentUser() u: AuthUser) {
+    return this.communities.myInvitations(u.id);
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post(':id/accept')
+  @HttpCode(200)
+  accept(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string) {
+    return this.communities.respondInvitation(u.id, id, true);
+  }
+
+  @Post(':id/decline')
+  @HttpCode(204)
+  async decline(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string) {
+    await this.communities.respondInvitation(u.id, id, false);
   }
 }
