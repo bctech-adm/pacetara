@@ -737,6 +737,12 @@ class FeedProfileScreen extends ConsumerWidget {
                         ? OutlinedButton(key: const Key('unfollow'), onPressed: () => _follow(context, ref, false), child: const Text('Mengikuti'))
                         : FilledButton(key: const Key('follow'), onPressed: () => _follow(context, ref, true), child: const Text('Ikuti')),
                   ],
+                  TextButton.icon(
+                    key: const Key('passport'),
+                    onPressed: () => context.push(p.isMe ? '/passport' : '/passport/users/${p.id}'),
+                    icon: const Icon(Icons.military_tech_outlined),
+                    label: const Text('Paspor lari'),
+                  ),
                 ]),
               ),
             ]),

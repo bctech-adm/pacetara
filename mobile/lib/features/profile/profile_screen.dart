@@ -196,6 +196,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.military_tech_outlined),
+          title: const Text('Paspor lari'),
+          subtitle: const Text('Lencana, rak medali, dan hasil resmi event'),
+          onTap: () => context.push('/passport'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.dynamic_feed_outlined),
           title: const Text('Profil feed saya'),
           subtitle: const Text('Postingan, pengikut, dan blokir'),

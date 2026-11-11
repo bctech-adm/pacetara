@@ -8,6 +8,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { LiveService } from '../live/live.service.js';
+import { BadgesService } from '../passport/badges.service.js';
 import { RUN_HISTORY_DAYS, type UserPlan } from '../plans/plans.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -60,6 +61,7 @@ export class RunsService {
     private readonly storage: StorageService,
     private readonly communities: CommunitiesService,
     private readonly live: LiveService,
+    private readonly badges: BadgesService,
   ) {}
 
   /** Simpan lari. Idempoten per (pengguna, clientRunId): upload ulang mengembalikan lari yang sama. */
@@ -119,6 +121,8 @@ export class RunsService {
       }
       throw err;
     }
+    // Lencana pencapaian dihitung saat lari disimpan (dengan notifikasi). Tidak pernah menggagalkan penyimpanan.
+    await this.badges.evaluate(userId, { notify: true });
     return { created: true, run: await this.detail(userId, id, true) };
   }
 

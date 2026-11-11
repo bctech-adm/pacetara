@@ -65,6 +65,7 @@ class AppNotification {
       'new_follower' => '$who mulai mengikutimu',
       'post_like' => '$who menyukai postinganmu',
       'post_comment' => '$who mengomentari postinganmu',
+      'badge_earned' => 'Kamu mendapat lencana baru',
       _ => 'Notifikasi baru',
     };
   }
@@ -75,6 +76,7 @@ class AppNotification {
         'join_request' || 'join_approved' => communityId == null ? null : '/communities/$communityId',
         'post_like' || 'post_comment' => data['postId'] == null ? null : '/feed/posts/${data['postId']}',
         'new_follower' => data['userId'] == null ? null : '/feed/users/${data['userId']}',
+        'badge_earned' => '/passport',
         _ => null,
       };
 }
@@ -122,6 +124,7 @@ const notificationCategories = <String, (String, String)>{
   'run_invite': ('Ajakan lari bareng', 'Saat ada yang mengajak lari di chat'),
   'friend_running': ('Teman mulai lari', 'Saat anggota komunitasmu menyalakan status lari'),
   'social': ('Feed', 'Pengikut baru, suka, dan komentar di postinganmu'),
+  'achievement': ('Lencana', 'Saat kamu mendapat lencana pencapaian baru'),
 };
 
 class NotificationsRepository {
@@ -225,6 +228,7 @@ String? routeForPush(Map<String, dynamic> data) {
     'join_request' || 'join_approved' || 'friend_running' when community is String => '/communities/$community',
     'post_like' || 'post_comment' when data['postId'] is String => '/feed/posts/${data['postId']}',
     'new_follower' when data['userId'] is String => '/feed/users/${data['userId']}',
+    'badge_earned' => '/passport',
     _ => null,
   };
 }

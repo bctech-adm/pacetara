@@ -11,6 +11,7 @@ import { EventsService } from '../events/events.service.js';
 import { FeedService } from '../feed/feed.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { LiveService } from '../live/live.service.js';
+import { PassportService } from '../passport/passport.service.js';
 import { ReportsService } from '../moderation/reports.service.js';
 import { RunsService } from '../runs/runs.service.js';
 import { SafetyService } from '../safety/safety.service.js';
@@ -46,6 +47,7 @@ export class UsersService {
     private readonly notifications: NotificationsService,
     private readonly safety: SafetyService,
     private readonly feed: FeedService,
+    private readonly passport: PassportService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -146,6 +148,8 @@ export class UsersService {
       // Feed: postingan (beserta foto, komentar, suka), komentar, suka, mengikuti, dan blokir dihapus.
       // Dijalankan sebelum lari dihapus agar tidak ada postingan yang sempat merujuk lari yang hilang.
       const feedPhotos = await this.feed.onAccountDeletion(db, userId);
+      // Paspor lari: medali (beserta foto), hasil resmi, dan lencana dihapus.
+      const medalPhotos = await this.passport.onAccountDeletion(db, userId);
       // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya.
       const runPhotos = await this.runs.onAccountDeletion(db, userId);
       // Chat: pesan di chat pribadi dihapus; di chat komunitas nama menjadi "Pengguna dihapus".
@@ -172,7 +176,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return [...communityLogos, ...feedPhotos, ...runPhotos, ...chatImages];
+      return [...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
     });
     // Status lari langsung (Redis) ikut dihapus.
     await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));

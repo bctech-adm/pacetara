@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../passport/passport_repository.dart';
+import '../../passport/passport_screens.dart';
 import '../runs_repository.dart';
 import '../track.dart';
 
@@ -40,15 +42,22 @@ class _RunsListScreenState extends ConsumerState<RunsListScreen> {
     final pending = ref.watch(pendingUploadsProvider).value ?? const <PendingUpload>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Riwayat lari')),
+      appBar: AppBar(
+        title: const Text('Riwayat lari'),
+        actions: [
+          IconButton(tooltip: 'Paspor lari', icon: const Icon(Icons.military_tech_outlined), onPressed: () => context.push('/passport')),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           await _flushQueue();
           ref.invalidate(myRunsProvider);
+          ref.invalidate(runStatsProvider);
           await ref.read(myRunsProvider.future);
         },
         child: ListView(
           children: [
+            const RunStatsCard(),
             if (pending.isNotEmpty)
               Card(
                 margin: const EdgeInsets.all(16),

@@ -9,13 +9,13 @@ import { hashPushToken, PushQueue, pushTokenAad } from './push.js';
 
 /**
  * Kategori pengaturan push (PRD 1.9: pesan baru, undangan komunitas, ajakan lari, teman mulai lari;
- * modul 2.1: social = pengikut baru, suka, dan komentar di feed).
+ * modul 2.1: social = pengikut baru, suka, dan komentar di feed; modul 2.2: achievement = lencana baru).
  */
-export const NOTIF_CATEGORIES = ['chat', 'community', 'run_invite', 'friend_running', 'social'] as const;
+export const NOTIF_CATEGORIES = ['chat', 'community', 'run_invite', 'friend_running', 'social', 'achievement'] as const;
 export type NotifCategory = (typeof NOTIF_CATEGORIES)[number];
 
 /** Jenis entri di kotak notifikasi aplikasi. Pesan chat biasa dan teman mulai lari hanya push. */
-export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 'run_invite' | 'new_follower' | 'post_like' | 'post_comment';
+export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 'run_invite' | 'new_follower' | 'post_like' | 'post_comment' | 'badge_earned';
 
 export const notifChannel = (userId: string) => `user:${userId}:notif`;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

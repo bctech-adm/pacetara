@@ -50,3 +50,21 @@ export const RUN_HISTORY_DAYS: Record<UserPlan, number | null> = {
   free: 90,
   premium: null,
 };
+
+/**
+ * Rak medali paspor lari. null = tanpa batas. Saat paket turun, medali di atas batas tidak dihapus:
+ * tetap terlihat dan bisa dihapus, tetapi tidak bisa menambah sampai jumlahnya di bawah batas.
+ */
+export const MEDAL_LIMIT: Record<UserPlan, number | null> = {
+  free: 5,
+  premium: null,
+};
+
+/**
+ * Statistik lengkap (Premium): rentang tahunan, rentang mingguan/bulanan lebih panjang dari jendela
+ * riwayat, total sepanjang masa, dan rekor pribadi. Paket gratis: statistik minggu/bulan di dalam
+ * jendela RUN_HISTORY_DAYS saja.
+ */
+export function hasFullStats(plan: UserPlan): boolean {
+  return plan === 'premium';
+}

@@ -24,6 +24,10 @@ import { FeedService } from './feed/feed.service.js';
 import { NotificationsController } from './notifications/notifications.controller.js';
 import { NotificationsService } from './notifications/notifications.service.js';
 import { PushQueue } from './notifications/push.js';
+import { BadgesService } from './passport/badges.service.js';
+import { PassportController } from './passport/passport.controller.js';
+import { PassportService } from './passport/passport.service.js';
+import { StatsService } from './passport/stats.service.js';
 import { SafetyController } from './safety/safety.controller.js';
 import { SafetyService } from './safety/safety.service.js';
 import { HealthController } from './health/health.controller.js';
@@ -47,7 +51,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -71,6 +75,9 @@ import { UsersService } from './users/users.service.js';
     PushQueue,
     SafetyService,
     FeedService,
+    BadgesService,
+    PassportService,
+    StatsService,
     ReportsService,
     ModerationService,
     AdminAuthService,

@@ -91,7 +91,7 @@ describe.skipIf(!hasTestInfra)('Modul 1.9 Notifikasi (e2e)', () => {
 
     // Budi mematikan push chat.
     const s = await request(t.http).put('/v1/me/notification-settings').set(budi.auth).send({ chat: false }).expect(200);
-    expect(s.body).toEqual({ chat: false, community: true, run_invite: true, friend_running: true, social: true });
+    expect(s.body).toEqual({ chat: false, community: true, run_invite: true, friend_running: true, social: true, achievement: true });
     await request(t.http).put('/v1/me/notification-settings').set(budi.auth).send({ spam: true }).expect(400);
     await request(t.http).post(`/v1/chat/conversations/${conv}/messages`).set(ani.auth).send({ clientMsgId: randomUUID(), kind: 'text', text: 'halo' }).expect(201);
     expect(t.push.jobs.at(-1)!.userIds).toEqual([cici.id]);
