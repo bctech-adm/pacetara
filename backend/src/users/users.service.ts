@@ -8,6 +8,7 @@ import { TokenService } from '../auth/token.service.js';
 import { ChatService } from '../chat/chat.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { EventsService } from '../events/events.service.js';
+import { FeedService } from '../feed/feed.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { LiveService } from '../live/live.service.js';
 import { ReportsService } from '../moderation/reports.service.js';
@@ -44,6 +45,7 @@ export class UsersService {
     private readonly events: EventsService,
     private readonly notifications: NotificationsService,
     private readonly safety: SafetyService,
+    private readonly feed: FeedService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -116,8 +118,11 @@ export class UsersService {
     };
   }
 
+  /** Foto profil: sesama anggota komunitas, atau profil feed-nya terlihat (modul 2.1, FeedService.canSeeProfile). */
   async avatarFile(viewerId: string, userId: string) {
-    if (viewerId !== userId && !(await this.communities.shareCommunity(viewerId, userId))) return undefined;
+    if (viewerId !== userId && !(await this.communities.shareCommunity(viewerId, userId)) && !(await this.feed.canSeeProfile(viewerId, userId))) {
+      return undefined;
+    }
     const row = await this.repo.findById(userId);
     if (!row?.avatar_key || row.status !== 'active') return undefined;
     return this.storage.get(row.avatar_key);
@@ -138,6 +143,9 @@ export class UsersService {
     const logos = await withTx(this.pool, async (db) => {
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
+      // Feed: postingan (beserta foto, komentar, suka), komentar, suka, mengikuti, dan blokir dihapus.
+      // Dijalankan sebelum lari dihapus agar tidak ada postingan yang sempat merujuk lari yang hilang.
+      const feedPhotos = await this.feed.onAccountDeletion(db, userId);
       // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya.
       const runPhotos = await this.runs.onAccountDeletion(db, userId);
       // Chat: pesan di chat pribadi dihapus; di chat komunitas nama menjadi "Pengguna dihapus".
@@ -164,7 +172,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return [...communityLogos, ...runPhotos, ...chatImages];
+      return [...communityLogos, ...feedPhotos, ...runPhotos, ...chatImages];
     });
     // Status lari langsung (Redis) ikut dihapus.
     await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));

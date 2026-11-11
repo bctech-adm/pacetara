@@ -7,6 +7,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { LiveService } from '../live/live.service.js';
+import { commentBodyAad, postBodyAad } from '../feed/feed.service.js';
 import { reportDetailsAad, type ReportTarget } from '../moderation/reports.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -122,6 +123,12 @@ export class ModerationService {
             removed: Boolean(c.removed_at),
           }
         : null;
+    } else if (type === 'post') {
+      target = await this.postSummary(id);
+      await audit(this.pool, adminId, 'report.view_post', { type: 'post', id });
+    } else if (type === 'comment') {
+      target = await this.commentSummary(id);
+      await audit(this.pool, adminId, 'report.view_comment', { type: 'comment', id });
     } else if (type === 'user') {
       target = await this.userSummary(id);
     } else if (type === 'event') {
@@ -184,6 +191,7 @@ export class ModerationService {
       if (!rowCount) throw new ApiError(404, 'no_open_reports', 'Tidak ada laporan terbuka untuk konten ini');
 
       let imageKey: string | null = null;
+      let photoKeys: string[] = [];
       let conversationId: string | null = null;
       if (type === 'message') {
         if (action === 'remove') {
@@ -211,10 +219,27 @@ export class ModerationService {
         );
       } else if (type === 'event') {
         await db.query(action === 'remove' ? 'UPDATE events SET removed_at = now() WHERE id = $1' : 'UPDATE events SET hidden_at = NULL WHERE id = $1', [id]);
+      } else if (type === 'post') {
+        if (action === 'remove') {
+          // Diturunkan: isi dan foto dihapus, postingan tidak ada lagi bagi siapa pun (termasuk penulis).
+          await db.query('UPDATE feed_posts SET removed_at = now(), body_enc = NULL, held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
+          const { rows } = await db.query<{ storage_key: string }>('DELETE FROM feed_post_photos WHERE post_id = $1 RETURNING storage_key', [id]);
+          photoKeys = rows.map((r) => r.storage_key);
+        } else {
+          await db.query('UPDATE feed_posts SET held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
+        }
+      } else if (type === 'comment') {
+        await db.query(
+          action === 'remove'
+            ? 'UPDATE feed_comments SET removed_at = now(), body_enc = NULL, held_at = NULL, hidden_at = NULL WHERE id = $1'
+            : 'UPDATE feed_comments SET held_at = NULL, hidden_at = NULL WHERE id = $1',
+          [id],
+        );
       }
       await audit(db, adminId, `report.${action}`, { type, id }, { reports: rowCount, ...(note ? { note: note.slice(0, 500) } : {}) });
-      return { imageKey, conversationId };
+      return { imageKey, conversationId, photoKeys };
     });
+    for (const k of outcome.photoKeys) await this.storage.delete(k).catch(() => this.logger.warn('Gagal menghapus foto postingan yang diturunkan'));
     if (outcome.imageKey) await this.storage.delete(outcome.imageKey).catch(() => this.logger.warn('Gagal menghapus gambar yang diturunkan'));
     if (outcome.conversationId) await this.realtime.publish(convChannel(outcome.conversationId), 'message.updated', { id });
   }
@@ -407,6 +432,88 @@ export class ModerationService {
     };
   }
 
+  /** Foto postingan yang dilaporkan (panel admin). Postingan tanpa laporan tidak bisa dibuka; tercatat di log. */
+  async postPhoto(adminId: string, postId: string, photoId: string) {
+    const { rowCount } = await this.pool.query(`SELECT 1 FROM reports WHERE target_type = 'post' AND target_id = $1 LIMIT 1`, [postId]);
+    if (!rowCount) return undefined;
+    const { rows } = await this.pool.query<{ storage_key: string }>('SELECT storage_key FROM feed_post_photos WHERE id = $1 AND post_id = $2', [
+      photoId,
+      postId,
+    ]);
+    if (!rows[0]) return undefined;
+    await audit(this.pool, adminId, 'report.view_post_photo', { type: 'post', id: postId });
+    return this.storage.get(rows[0].storage_key);
+  }
+
+  private async postSummary(id: string) {
+    const { rows } = await this.pool.query<{
+      user_id: string;
+      display_name: string;
+      kind: string;
+      body_enc: Buffer | null;
+      visibility: string;
+      run_id: string | null;
+      created_at: Date;
+      hidden_at: Date | null;
+      removed_at: Date | null;
+      run_title: string | null;
+      run_distance_m: number | null;
+    }>(
+      `SELECT p.user_id, u.display_name, p.kind, p.body_enc, p.visibility, p.run_id, p.created_at, p.hidden_at, p.removed_at,
+              r.title AS run_title, r.distance_m AS run_distance_m
+         FROM feed_posts p JOIN users u ON u.id = p.user_id LEFT JOIN runs r ON r.id = p.run_id WHERE p.id = $1`,
+      [id],
+    );
+    const p = rows[0];
+    if (!p) return null;
+    const { rows: photos } = await this.pool.query<{ id: string }>('SELECT id FROM feed_post_photos WHERE post_id = $1 ORDER BY position', [id]);
+    return {
+      id,
+      author: { id: p.user_id, displayName: p.display_name },
+      kind: p.kind,
+      text: p.body_enc ? this.crypto.decryptString(p.body_enc, postBodyAad(id)) : null,
+      visibility: p.visibility,
+      run: p.run_id ? { id: p.run_id, title: p.run_title, distanceM: p.run_distance_m } : null,
+      photos: photos.map((ph) => ({ id: ph.id, url: `/v1/admin/feed/posts/${id}/photos/${ph.id}` })),
+      createdAt: p.created_at.toISOString(),
+      hidden: Boolean(p.hidden_at),
+      removed: Boolean(p.removed_at),
+    };
+  }
+
+  private async commentSummary(id: string) {
+    const { rows } = await this.pool.query<{
+      user_id: string;
+      display_name: string;
+      body_enc: Buffer | null;
+      post_id: string;
+      created_at: Date;
+      hidden_at: Date | null;
+      removed_at: Date | null;
+      post_author: string;
+      post_body_enc: Buffer | null;
+    }>(
+      `SELECT c.user_id, u.display_name, c.body_enc, c.post_id, c.created_at, c.hidden_at, c.removed_at,
+              pu.display_name AS post_author, p.body_enc AS post_body_enc
+         FROM feed_comments c JOIN users u ON u.id = c.user_id
+         JOIN feed_posts p ON p.id = c.post_id JOIN users pu ON pu.id = p.user_id
+        WHERE c.id = $1`,
+      [id],
+    );
+    const c = rows[0];
+    if (!c) return null;
+    const postText = c.post_body_enc ? this.crypto.decryptString(c.post_body_enc, postBodyAad(c.post_id)) : null;
+    return {
+      id,
+      author: { id: c.user_id, displayName: c.display_name },
+      text: c.body_enc ? this.crypto.decryptString(c.body_enc, commentBodyAad(id)) : null,
+      post: { id: c.post_id, author: c.post_author, text: postText ? postText.slice(0, 300) : null },
+      createdAt: c.created_at.toISOString(),
+      hidden: Boolean(c.hidden_at),
+      removed: Boolean(c.removed_at),
+    };
+  }
+
   private async userSummary(id: string) {
     const { rows } = await this.pool.query<{
       id: string;
@@ -456,6 +563,20 @@ export class ModerationService {
     if (ids('event').length) {
       const { rows } = await this.pool.query<{ id: string; name: string }>('SELECT id, name FROM events WHERE id = ANY($1::uuid[])', [ids('event')]);
       for (const r of rows) out.set(`event:${r.id}`, r.name);
+    }
+    if (ids('post').length) {
+      const { rows } = await this.pool.query<{ id: string; display_name: string }>(
+        'SELECT p.id, u.display_name FROM feed_posts p JOIN users u ON u.id = p.user_id WHERE p.id = ANY($1::uuid[])',
+        [ids('post')],
+      );
+      for (const r of rows) out.set(`post:${r.id}`, `Postingan dari ${r.display_name}`);
+    }
+    if (ids('comment').length) {
+      const { rows } = await this.pool.query<{ id: string; display_name: string }>(
+        'SELECT c.id, u.display_name FROM feed_comments c JOIN users u ON u.id = c.user_id WHERE c.id = ANY($1::uuid[])',
+        [ids('comment')],
+      );
+      for (const r of rows) out.set(`comment:${r.id}`, `Komentar dari ${r.display_name}`);
     }
     if (ids('message').length) {
       // Daftar antrean tidak menampilkan isi pesan; isi hanya dibuka di detail (tercatat di log).

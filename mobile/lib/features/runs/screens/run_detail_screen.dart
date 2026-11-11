@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
+import '../../feed/feed_screens.dart';
 import '../route_map.dart';
 import '../runs_repository.dart';
 import '../track.dart';
@@ -117,6 +118,13 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
           appBar: AppBar(
             title: Text(s.title, overflow: TextOverflow.ellipsis),
             actions: [
+              if (run.isOwner)
+                IconButton(
+                  key: const Key('share-run'),
+                  tooltip: 'Bagikan',
+                  icon: const Icon(Icons.share_outlined),
+                  onPressed: () => showRunShareSheet(context, ref, run),
+                ),
               if (run.isOwner)
                 PopupMenuButton<String>(
                   onSelected: (v) => v == 'edit' ? _edit(run) : _delete(run),

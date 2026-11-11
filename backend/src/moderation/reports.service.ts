@@ -7,8 +7,9 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { EventsService } from '../events/events.service.js';
+import { FeedService } from '../feed/feed.service.js';
 
-export type ReportTarget = 'user' | 'community' | 'message' | 'event';
+export type ReportTarget = 'user' | 'community' | 'message' | 'event' | 'post' | 'comment';
 export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'sexual', 'violence', 'scam', 'impersonation', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
@@ -30,6 +31,7 @@ export class ReportsService {
     private readonly chat: ChatService,
     private readonly communities: CommunitiesService,
     private readonly events: EventsService,
+    private readonly feed: FeedService,
   ) {}
 
   async create(
@@ -64,6 +66,8 @@ export class ReportsService {
    */
   private async applyHolds(db: Queryable, type: ReportTarget, targetId: string) {
     if (type === 'message') await db.query('UPDATE chat_messages SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'post') await db.query('UPDATE feed_posts SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'comment') await db.query('UPDATE feed_comments SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
     const { rows } = await db.query<{ n: string }>(
       `SELECT count(DISTINCT reporter_id) AS n FROM reports WHERE target_type = $1 AND target_id = $2 AND status = 'open'`,
       [type, targetId],
@@ -72,6 +76,8 @@ export class ReportsService {
     if (type === 'message') await db.query('UPDATE chat_messages SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'community') await db.query('UPDATE communities SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'event') await db.query('UPDATE events SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'post') await db.query('UPDATE feed_posts SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'comment') await db.query('UPDATE feed_comments SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
   }
 
   private async assertReportable(reporterId: string, type: ReportTarget, targetId: string) {
@@ -93,6 +99,16 @@ export class ReportsService {
         if (c.owner_id === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan komunitas sendiri');
         return;
       }
+      case 'post': {
+        const p = await this.feed.reportablePost(reporterId, targetId);
+        if (p.authorId === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan postingan sendiri');
+        return;
+      }
+      case 'comment': {
+        const c = await this.feed.reportableComment(reporterId, targetId);
+        if (c.authorId === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan komentar sendiri');
+        return;
+      }
       case 'event':
         // Event dimasukkan super admin dan terlihat oleh semua pengguna Level 1.
         await this.events.assertExists(targetId);
@@ -102,7 +118,9 @@ export class ReportsService {
         const { rows } = await this.pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [targetId]);
         const known =
           rows[0] && rows[0].status !== 'deleted' &&
-          ((await this.communities.shareCommunity(reporterId, targetId)) || (await this.chat.haveDirectConversation(reporterId, targetId)));
+          ((await this.communities.shareCommunity(reporterId, targetId)) ||
+            (await this.chat.haveDirectConversation(reporterId, targetId)) ||
+            (await this.feed.canSeeProfile(reporterId, targetId)));
         if (!known) throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
         return;
       }

@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../chat/chat_screens.dart';
 import '../chat/inbox.dart';
 import '../communities/screens/my_communities_screen.dart';
+import '../feed/feed_screens.dart';
 import '../notifications/push_registrar.dart';
 import '../profile/profile_screen.dart';
 import '../update/update_service.dart';
 import '../runs/recorder.dart';
 import '../runs/screens/record_screen.dart';
+import '../runs/runs_repository.dart';
 import '../runs/screens/runs_list_screen.dart';
 
 final homeTabProvider = NotifierProvider<_HomeTab, int>(_HomeTab.new);
@@ -19,13 +21,32 @@ class _HomeTab extends Notifier<int> {
   void select(int i) => state = i;
 }
 
-/// Beranda dengan lima tab. Semua tab tetap hidup (IndexedStack) agar rekaman lari tidak terganggu
-/// saat berpindah tab.
-class HomeShell extends ConsumerWidget {
+/// Beranda dengan lima tab: Lari, Feed, Komunitas, Chat, Profil. Semua tab tetap hidup (IndexedStack)
+/// agar rekaman lari tidak terganggu saat berpindah tab. Riwayat lari dibuka dari tab Lari dan Profil
+/// (`/runs`) sejak modul 2.1.
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  @override
+  void initState() {
+    super.initState();
+    // Antrean lari yang belum terunggah dicoba saat aplikasi dibuka (dulu dilakukan tab Riwayat).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final n = await ref.read(uploadQueueProvider).flush().catchError((_) => 0);
+      if (n > 0) {
+        ref.invalidate(pendingUploadsProvider);
+        ref.invalidate(myRunsProvider);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tab = ref.watch(homeTabProvider);
     final unread = ref.watch(unreadTotalProvider);
     final recording = ref.watch(recorderProvider.select((s) => s.status == RecorderStatus.recording || s.status == RecorderStatus.paused));
@@ -34,7 +55,7 @@ class HomeShell extends ConsumerWidget {
       child: Scaffold(
       body: IndexedStack(
         index: tab,
-        children: const [RecordScreen(), RunsListScreen(), MyCommunitiesScreen(), ChatListScreen(), ProfileScreen(asTab: true)],
+        children: const [RecordScreen(), FeedScreen(), MyCommunitiesScreen(), ChatListScreen(), ProfileScreen(asTab: true)],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
@@ -45,7 +66,7 @@ class HomeShell extends ConsumerWidget {
             selectedIcon: const Icon(Icons.directions_run),
             label: 'Lari',
           ),
-          const NavigationDestination(icon: Icon(Icons.history), label: 'Riwayat'),
+          const NavigationDestination(icon: Icon(Icons.dynamic_feed_outlined), selectedIcon: Icon(Icons.dynamic_feed), label: 'Feed'),
           const NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups), label: 'Komunitas'),
           NavigationDestination(
             icon: Badge(isLabelVisible: unread > 0, label: Text(unread > 99 ? '99+' : '$unread'), child: const Icon(Icons.chat_bubble_outline)),

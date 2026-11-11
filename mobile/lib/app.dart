@@ -14,10 +14,12 @@ import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
 import 'features/communities/screens/join_by_code_screen.dart';
 import 'features/events/events_screens.dart';
+import 'features/feed/feed_screens.dart';
 import 'features/home/home_shell.dart';
 import 'features/notifications/notifications_screens.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/runs/screens/run_detail_screen.dart';
+import 'features/runs/screens/runs_list_screen.dart';
 import 'features/runs/screens/save_run_screen.dart';
 import 'features/safety/safety_screens.dart';
 
@@ -55,6 +57,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/verify-email', builder: (_, _) => const VerifyEmailScreen()),
       GoRoute(path: '/verify-phone', builder: (_, _) => const VerifyPhoneScreen()),
       GoRoute(path: '/', builder: (_, _) => const HomeShell()),
+      GoRoute(path: '/runs', builder: (_, _) => const RunsListScreen()),
       GoRoute(path: '/runs/save', builder: (_, _) => const SaveRunScreen()),
       GoRoute(path: '/runs/:id', builder: (_, state) => RunDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/communities/explore', builder: (_, _) => const DirectoryScreen()),
@@ -70,6 +73,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),
       GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),
       GoRoute(path: '/events/:id', builder: (_, state) => EventDetailScreen(id: state.pathParameters['id']!)),
+      GoRoute(path: '/feed/new', builder: (_, state) => ComposePostScreen(runId: state.uri.queryParameters['runId'])),
+      GoRoute(path: '/feed/connections', builder: (_, _) => const FeedConnectionsScreen()),
+      GoRoute(path: '/feed/posts/:id', builder: (_, state) => PostDetailScreen(id: state.pathParameters['id']!)),
+      GoRoute(path: '/feed/users/:id', builder: (_, state) => FeedProfileScreen(userId: state.pathParameters['id']!)),
       GoRoute(path: '/chat/:id', builder: (_, state) => ChatScreen(convId: state.pathParameters['id']!)),
     ],
   );

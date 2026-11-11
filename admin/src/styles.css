@@ -77,3 +77,4 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--f
 @media (max-width: 640px) {
   .grid2 { grid-template-columns: 1fr; }
 }
+.reported-photo { display: block; max-width: 100%; max-height: 360px; margin: 4px 0; border-radius: 8px; }

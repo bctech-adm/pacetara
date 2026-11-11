@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useLoad } from './useLoad';
-import { api, ApiError, hasStoredSession, login, logout, setLogoutHandler } from './api';
+import { api, ApiError, apiImage, hasStoredSession, login, logout, setLogoutHandler } from './api';
 import { Events } from './Events';
 
 /**
@@ -19,7 +19,8 @@ const REASONS: Record<string, string> = {
   impersonation: 'Menyamar',
   other: 'Lainnya',
 };
-const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event' };
+const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event', post: 'Postingan', comment: 'Komentar' };
+const VISIBILITY: Record<string, string> = { public: 'Semua orang', community: 'Anggota komunitas', followers: 'Pengikut' };
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('id-ID') : '–');
 
 export function App() {
@@ -262,6 +263,49 @@ function ReportDetail({ item, onBack }: { item: QueueItem; onBack: () => void })
           <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
         </dl>
       )}
+      {t && item.targetType === 'post' && (
+        <dl>
+          <dt>Penulis</dt>
+          <dd>{(t.author as { displayName: string }).displayName}</dd>
+          <dt>Visibilitas</dt>
+          <dd>{VISIBILITY[String(t.visibility)] ?? String(t.visibility)}</dd>
+          <dt>Teks</dt>
+          <dd className="quote">{t.text ? String(t.text) : '–'}</dd>
+          {t.run ? (
+            <>
+              <dt>Hasil lari</dt>
+              <dd>
+                {String((t.run as { title: string | null }).title ?? '(lari dihapus)')} ·{' '}
+                {(((t.run as { distanceM: number | null }).distanceM ?? 0) / 1000).toFixed(2)} km
+              </dd>
+            </>
+          ) : null}
+          <dt>Foto</dt>
+          <dd>
+            {(t.photos as { id: string; url: string }[]).length === 0
+              ? '–'
+              : (t.photos as { id: string; url: string }[]).map((p) => <ReportedPhoto key={p.id} path={p.url} />)}
+          </dd>
+          <dt>Dibuat</dt>
+          <dd>{fmt(String(t.createdAt))}</dd>
+          <dt>Status</dt>
+          <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
+        </dl>
+      )}
+      {t && item.targetType === 'comment' && (
+        <dl>
+          <dt>Penulis</dt>
+          <dd>{(t.author as { displayName: string }).displayName}</dd>
+          <dt>Komentar</dt>
+          <dd className="quote">{t.text ? String(t.text) : '–'}</dd>
+          <dt>Di postingan</dt>
+          <dd>
+            {(t.post as { author: string }).author}: <span className="quote">{(t.post as { text: string | null }).text ?? '(tanpa teks)'}</span>
+          </dd>
+          <dt>Status</dt>
+          <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
+        </dl>
+      )}
       {t && item.targetType === 'user' && <UserCard user={t as unknown as UserSummary} onChanged={detail.reload} />}
 
       <h3>Laporan ({detail.data?.reports.length ?? 0})</h3>
@@ -292,6 +336,29 @@ function ReportDetail({ item, onBack }: { item: QueueItem; onBack: () => void })
       )}
     </section>
   );
+}
+
+/** Foto postingan yang dilaporkan, diambil dengan token panel (tidak ada URL publik). Pembukaan tercatat di log. */
+function ReportedPhoto({ path }: { path: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let url: string | null = null;
+    let alive = true;
+    apiImage(path)
+      .then((u) => {
+        url = u;
+        if (alive) setSrc(u);
+        else URL.revokeObjectURL(u);
+      })
+      .catch(() => alive && setError(true));
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [path]);
+  if (error) return <span className="bad">Foto tidak bisa dimuat</span>;
+  return src ? <img className="reported-photo" src={src} alt="Foto yang dilaporkan" /> : <span>Memuat…</span>;
 }
 
 function Conversation({ ctx }: { ctx: { conversation: { kind: string; communityName: string | null }; messages: ContextMessage[] } }) {

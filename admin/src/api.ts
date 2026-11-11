@@ -85,6 +85,19 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
   }
 }
 
+/** Ambil gambar ber-token (mis. foto postingan yang dilaporkan) sebagai object URL; pemanggil wajib revoke. */
+export async function apiImage(path: string): Promise<string> {
+  if (!accessToken && !(await refresh())) {
+    onLogout();
+    throw new ApiError(401, 'unauthorized', 'Sesi berakhir, silakan masuk lagi');
+  }
+  const get = () => fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  let res = await get();
+  if (res.status === 401 && (await refresh())) res = await get();
+  if (!res.ok) throw new ApiError(res.status, 'error', `Galat ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
+
 async function raw(method: string, path: string, body: unknown, auth: boolean): Promise<Record<string, unknown>> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';

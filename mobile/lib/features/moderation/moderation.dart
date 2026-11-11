@@ -17,7 +17,7 @@ const reportReasons = <String, String>{
   'other': 'Lainnya',
 };
 
-enum ReportTarget { user, community, message, event }
+enum ReportTarget { user, community, message, event, post, comment }
 
 /// Kirim laporan. [details] opsional, maks. 500 karakter.
 Future<void> sendReport(WidgetRef ref, ReportTarget target, String targetId, String reason, String details) async {

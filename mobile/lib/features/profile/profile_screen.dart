@@ -188,6 +188,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: Text(profile.phoneVerified ? 'Nomor HP terverifikasi' : 'Nomor HP belum terverifikasi'),
         ),
         const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.history),
+          title: const Text('Riwayat lari'),
+          onTap: () => context.push('/runs'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.dynamic_feed_outlined),
+          title: const Text('Profil feed saya'),
+          subtitle: const Text('Postingan, pengikut, dan blokir'),
+          onTap: () => context.push('/feed/users/${profile.id}'),
+        ),
         _PrivacyZoneTile(profile: profile),
         ListTile(
           contentPadding: EdgeInsets.zero,

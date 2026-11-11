@@ -169,6 +169,8 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
           _ => 'Lari',
         }),
         actions: [
+          if (s.status == RecorderStatus.idle || s.status == RecorderStatus.finished)
+            IconButton(key: const Key('open-history'), tooltip: 'Riwayat lari', icon: const Icon(Icons.history), onPressed: () => context.push('/runs')),
           // Mode aman (PRD 1.10): tersedia selama lari berlangsung.
           if (s.status == RecorderStatus.recording || s.status == RecorderStatus.paused)
             SosButton(locate: _sosLocation, userName: ref.watch(authControllerProvider).value?.displayName ?? 'Pengguna PaceTara'),

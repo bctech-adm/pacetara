@@ -269,6 +269,47 @@ export class RunsService {
     return rows[0] ? this.storage.get(rows[0].storage_key) : undefined;
   }
 
+  /**
+   * Kartu lari untuk feed (modul 2.1). Hanya lari yang boleh dilihat penonton dengan aturan yang sama
+   * seperti detail lari; lari privat dan lari impor Strava (PRD 2.3) tidak pernah dikembalikan.
+   * Rute selalu versi publik (setelah zona privasi), juga untuk pemiliknya, diringkas maks. 150 titik.
+   */
+  async feedCards(viewerId: string, runIds: string[]) {
+    const out = new Map<string, Record<string, unknown>>();
+    const ids = [...new Set(runIds)];
+    if (ids.length === 0) return out;
+    const { rows } = await this.pool.query<RunRow & { route_public_enc: Buffer | null; owner_status: string }>(
+      `SELECT ${COLS}, r.route_public_enc, u.status AS owner_status FROM runs r JOIN users u ON u.id = r.user_id
+        WHERE r.id = ANY($1::uuid[]) AND r.source <> 'strava' AND r.visibility <> 'private'`,
+      [ids],
+    );
+    const shared = new Map<string, boolean>();
+    for (const r of rows) {
+      if (r.owner_status !== 'active') continue;
+      if (r.user_id !== viewerId && r.visibility === 'community') {
+        if (!shared.has(r.user_id)) shared.set(r.user_id, await this.communities.shareCommunity(viewerId, r.user_id));
+        if (!shared.get(r.user_id)) continue;
+      }
+      out.set(r.id, { ...this.summary(r), route: simplifyRoute(this.decryptRoute(r.route_public_enc, publicAad(r.id)), 150) });
+    }
+    return out;
+  }
+
+  /** Lari milik [userId] yang boleh dijadikan postingan feed (bukan privat, bukan impor Strava). */
+  async shareableRun(userId: string, runId: string): Promise<{ visibility: RunVisibility }> {
+    const { rows } = await this.pool.query<{ user_id: string; visibility: RunVisibility; source: string }>(
+      'SELECT user_id, visibility, source FROM runs WHERE id = $1',
+      [runId],
+    );
+    const r = rows[0];
+    if (!r || r.user_id !== userId) throw notFound();
+    if (r.source === 'strava') throw new ApiError(409, 'run_not_shareable', 'Lari dari Strava hanya untuk riwayat pribadi dan tidak bisa dibagikan ke feed');
+    if (r.visibility === 'private') {
+      throw new ApiError(409, 'run_not_shareable', 'Lari ini hanya untuk kamu. Ubah visibilitasnya dulu jika ingin membagikannya');
+    }
+    return { visibility: r.visibility };
+  }
+
   async setPrivacyRadius(userId: string, radiusM: number): Promise<void> {
     await this.pool.query('UPDATE users SET privacy_radius_m = $2 WHERE id = $1', [userId, radiusM]);
   }
@@ -350,6 +391,22 @@ export class RunsService {
       elevationGainM: r.elevation_gain_m,
     };
   }
+}
+
+/** Ringkas rute menjadi maks. [max] titik (dibagi rata antar segmen), untuk pratinjau di feed. */
+export function simplifyRoute(segments: Point[][], max: number): Point[][] {
+  const total = segments.reduce((n, s) => n + s.length, 0);
+  if (total <= max) return segments;
+  const step = total / max;
+  return segments
+    .map((s) => {
+      const keep = Math.max(2, Math.round(s.length / step));
+      if (s.length <= keep) return s;
+      const out: Point[] = [];
+      for (let i = 0; i < keep; i++) out.push(s[Math.round((i * (s.length - 1)) / (keep - 1))]!);
+      return out;
+    })
+    .filter((s) => s.length > 0);
 }
 
 function notFound() {

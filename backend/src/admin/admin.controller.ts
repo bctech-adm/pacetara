@@ -1,14 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { z } from 'zod';
-import { type AuthUser, CurrentUser, Public, ZodPipe } from '../common/http.js';
+import { ApiError, type AuthUser, CurrentUser, Public, ZodPipe } from '../common/http.js';
 import { AdminAuthService, AdminGuard } from './admin-auth.service.js';
 import { ModerationService } from './moderation.service.js';
 
 const uuid = new ParseUUIDPipe();
 const LoginBody = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128), code: z.string().regex(/^\d{6}$/) }).strict();
 const StatusQuery = z.object({ status: z.enum(['open', 'closed']).default('open') });
-const TargetType = z.enum(['user', 'community', 'message', 'event']);
+const TargetType = z.enum(['user', 'community', 'message', 'event', 'post', 'comment']);
 const ResolveBody = z.object({ action: z.enum(['dismiss', 'remove']), note: z.string().trim().max(500).optional() }).strict();
 const Reason = z.string().trim().min(3, 'Tulis alasan').max(500);
 const SuspendBody = z.object({ days: z.number().int().min(1).max(365).nullable(), reason: Reason }).strict();
@@ -60,6 +61,15 @@ export class AdminController {
     @Body(new ZodPipe(ResolveBody)) b: z.infer<typeof ResolveBody>,
   ) {
     await this.mod.resolve(u.id, type, id, b.action, b.note);
+  }
+
+  @Get('feed/posts/:id/photos/:photoId')
+  async postPhoto(@CurrentUser() u: AuthUser, @Param('id', uuid) id: string, @Param('photoId', uuid) photoId: string, @Res() res: Response) {
+    const file = await this.mod.postPhoto(u.id, id, photoId);
+    if (!file) throw new ApiError(404, 'not_found', 'Foto tidak ditemukan');
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Cache-Control', 'no-store');
+    file.stream.pipe(res);
   }
 
   @Get('users/:id')

@@ -16,6 +16,7 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | 1.7 Kalender event | Selesai (backend + panel web + aplikasi), teruji e2e; event dimasukkan super admin di tab **Event** panel |
 | 1.9 Notifikasi | Selesai (backend + worker + aplikasi), teruji e2e. Notifikasi di aplikasi aktif; **push butuh proyek Firebase** (KEPUTUSAN #117) |
 | 1.10 Mode aman | Selesai (backend + wa-otp + aplikasi), teruji e2e; **uji lapangan SOS (WhatsApp + SMS) belum** |
+| 2.1 Feed sosial | Selesai (backend + aplikasi + panel), teruji e2e; tab Feed menggantikan tab Riwayat (riwayat lewat tab Lari/Profil). **Uji kartu Instagram Story di HP belum** |
 
 ## Mencoba aplikasi di HP (APK uji)
 
