@@ -99,6 +99,100 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env && docker compose config -q
 
+  # Pemindaian dinamis OWASP ZAP (PRD "Sebelum rilis") terhadap API yang berjalan di CI (bukan produksi), dengan
+  # spesifikasi OpenAPI dari metadata controller dan token pengguna uji. Kelas injeksi di .zap/rules.tsv
+  # menggagalkan job; temuan lain tercatat di laporan (artifact). Tidak menghalangi rilis image.
+  zap:
+    name: Pemindaian dinamis (OWASP ZAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U ci" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: production
+      PORT: "3000"
+      TRUST_PROXY_HOPS: "1"
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      REDIS_URL: redis://localhost:6379
+      # Layanan luar sengaja tidak terjangkau: OTP/S3 menjawab galat, tidak ada data keluar dari runner.
+      WA_OTP_URL: http://127.0.0.1:9
+      WA_OTP_SHARED_SECRET: zap-ci-only-shared-secret-0123456789
+      S3_ENDPOINT: http://127.0.0.1:9
+      S3_ACCESS_KEY: zapci
+      S3_SECRET_KEY: zapci-secret
+      S3_BUCKET: zap-ci
+      ACCESS_TOKEN_TTL_SEC: "3600"
+      KYC_ENGINE: "off"
+      ZAP_SCAN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Kunci acak sekali pakai
+        run: |
+          {
+            echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "BLIND_INDEX_KEY=$(openssl rand -base64 32)"
+            echo "JWT_SECRET=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
+      - run: npm run migrate
+      - name: Jalankan API
+        run: |
+          nohup node dist/src/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/health/live && exit 0; sleep 2; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+      - name: Spesifikasi OpenAPI dan token pengguna uji
+        run: |
+          mkdir -p "$RUNNER_TEMP/zap" && chmod 777 "$RUNNER_TEMP/zap"
+          node dist/scripts/openapi.js "$RUNNER_TEMP/zap/openapi.json" http://localhost:3000
+          cp ../.zap/rules.tsv "$RUNNER_TEMP/zap/rules.tsv"
+          TOKEN=$(node dist/scripts/zap-token.js)
+          echo "::add-mask::$TOKEN"
+          echo "ZAP_AUTH_HEADER_VALUE=Bearer $TOKEN" >> "$GITHUB_ENV"
+      - name: zap-api-scan
+        run: |
+          # X-Forwarded-Proto: https ditambahkan ke setiap permintaan (API produksi menolak HTTP polos; di server
+          # nilai ini dipasang Caddy/Traefik). Pemindaian aktif dibatasi 25 menit (token berlaku 60 menit).
+          docker run --rm --network host -v "$RUNNER_TEMP/zap:/zap/wrk:rw"             -e ZAP_AUTH_HEADER=Authorization -e ZAP_AUTH_HEADER_VALUE -e ZAP_AUTH_HEADER_SITE=localhost             ghcr.io/zaproxy/zaproxy:2.16.1 zap-api-scan.py               -t /zap/wrk/openapi.json -f openapi -c rules.tsv -I               -r report.html -J report.json               -z "-config replacer.full_list(0).description=xfp -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=X-Forwarded-Proto -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement=https -config scanner.maxScanDurationInMins=25"
+      - name: Ringkasan temuan
+        if: always()
+        run: |
+          f="$RUNNER_TEMP/zap/report.json"
+          [ -f "$f" ] || exit 0
+          node -e 'const r=require(process.argv[1]);const a=r.site.flatMap(s=>s.alerts);const by={};for(const x of a){by[x.riskdesc]=(by[x.riskdesc]||0)+1}console.log(by);for(const x of a.filter(x=>Number(x.riskcode)>=2))console.log(`- [${x.riskdesc}] ${x.alert} (${x.count})`)' "$f" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: |
+            ${{ runner.temp }}/zap/report.html
+            ${{ runner.temp }}/zap/report.json
+          if-no-files-found: ignore
+      - name: Log API (jika gagal)
+        if: failure()
+        run: tail -n 100 "$RUNNER_TEMP/api.log"
+
   images:
     name: Build, pindai, dan push image
     needs: [secrets, node, migrations, compose]
