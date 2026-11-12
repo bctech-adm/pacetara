@@ -125,7 +125,7 @@ jobs:
       run:
         working-directory: backend
     env:
-      NODE_ENV: production
+      # NODE_ENV=production hanya di langkah "Jalankan API": di level job, npm ci akan melewatkan devDependencies.
       PORT: "3000"
       TRUST_PROXY_HOPS: "1"
       DATABASE_URL: postgres://ci:ci@localhost:5432/ci
@@ -158,6 +158,8 @@ jobs:
           } >> "$GITHUB_ENV"
       - run: npm run migrate
       - name: Jalankan API
+        env:
+          NODE_ENV: production
         run: |
           nohup node dist/src/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3000/health/live && exit 0; sleep 2; done
@@ -191,7 +193,7 @@ jobs:
           if-no-files-found: ignore
       - name: Log API (jika gagal)
         if: failure()
-        run: tail -n 100 "$RUNNER_TEMP/api.log"
+        run: tail -n 100 "$RUNNER_TEMP/api.log" || true
 
   images:
     name: Build, pindai, dan push image
