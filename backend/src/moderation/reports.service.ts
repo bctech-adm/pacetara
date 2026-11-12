@@ -8,8 +8,10 @@ import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { EventsService } from '../events/events.service.js';
 import { FeedService } from '../feed/feed.service.js';
+import { BuddiesService } from '../buddies/buddies.service.js';
+import { SpotsService } from '../spots/spots.service.js';
 
-export type ReportTarget = 'user' | 'community' | 'message' | 'event' | 'post' | 'comment';
+export type ReportTarget = 'user' | 'community' | 'message' | 'event' | 'post' | 'comment' | 'spot';
 export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'sexual', 'violence', 'scam', 'impersonation', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
@@ -32,6 +34,8 @@ export class ReportsService {
     private readonly communities: CommunitiesService,
     private readonly events: EventsService,
     private readonly feed: FeedService,
+    private readonly buddies: BuddiesService,
+    private readonly spots: SpotsService,
   ) {}
 
   async create(
@@ -78,6 +82,7 @@ export class ReportsService {
     if (type === 'event') await db.query('UPDATE events SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'post') await db.query('UPDATE feed_posts SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'comment') await db.query('UPDATE feed_comments SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'spot') await db.query('UPDATE run_spots SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
   }
 
   private async assertReportable(reporterId: string, type: ReportTarget, targetId: string) {
@@ -109,6 +114,12 @@ export class ReportsService {
         if (c.authorId === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan komentar sendiri');
         return;
       }
+      case 'spot': {
+        // Spot tayang terlihat semua pengguna Level 1 (modul 2.6).
+        const sp = await this.spots.reportable(reporterId, targetId);
+        if (sp.submittedBy === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan spot kirimanmu sendiri');
+        return;
+      }
       case 'event':
         // Event dimasukkan super admin dan terlihat oleh semua pengguna Level 1.
         await this.events.assertExists(targetId);
@@ -120,7 +131,9 @@ export class ReportsService {
           rows[0] && rows[0].status !== 'deleted' &&
           ((await this.communities.shareCommunity(reporterId, targetId)) ||
             (await this.chat.haveDirectConversation(reporterId, targetId)) ||
-            (await this.feed.canSeeProfile(reporterId, targetId)));
+            (await this.feed.canSeeProfile(reporterId, targetId)) ||
+            // Cari teman lari (modul 2.6): pernah saling sapa atau terlihat di pencarian.
+            (await this.buddies.canSee(reporterId, targetId)));
         if (!known) throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
         return;
       }

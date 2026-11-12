@@ -35,6 +35,10 @@ dependencies:
   # Google Play Billing (modul 2.5). Paket resmi; status langganan tetap diputuskan server.
   in_app_purchase: ^3.2.3
   in_app_purchase_android: ^0.4.0
+  # Absensi QR (modul 2.6): tampilan QR murni Dart, dan pemindai kamera (CameraX + ML Kit). Izin CAMERA hanya
+  # diminta saat membuka pemindai.
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.0.0
 
 dev_dependencies:
   flutter_test:

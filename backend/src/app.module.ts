@@ -55,6 +55,16 @@ import { SubscriptionQueue } from './subscriptions/subscription-queue.js';
 import { AdminSubscriptionsController, PlayRtdnController, SubscriptionsController } from './subscriptions/subscriptions.controller.js';
 import { SubscriptionsService } from './subscriptions/subscriptions.service.js';
 import { UsersController } from './users/users.controller.js';
+import { BuddiesController } from './buddies/buddies.controller.js';
+import { BuddiesService } from './buddies/buddies.service.js';
+import { CommunityStatsController, LeagueController } from './league/league.controller.js';
+import { LeagueService } from './league/league.service.js';
+import { CommunitySchedulesController, SessionsController } from './schedules/schedules.controller.js';
+import { SchedulesService } from './schedules/schedules.service.js';
+import { AdminSpotsController, SpotsController } from './spots/spots.controller.js';
+import { SpotsService } from './spots/spots.service.js';
+import { CommunityTreasuryController, JerseyController } from './treasury/treasury.controller.js';
+import { TreasuryService } from './treasury/treasury.service.js';
 import { UsersRepository } from './users/users.repository.js';
 import { UsersService } from './users/users.service.js';
 
@@ -65,7 +75,10 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController,
+    // Modul 2.6 Fitur komunitas lanjutan.
+    CommunitySchedulesController, SessionsController, LeagueController, CommunityStatsController, BuddiesController, CommunityTreasuryController,
+    JerseyController, SpotsController, AdminSpotsController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -103,6 +116,11 @@ import { UsersService } from './users/users.service.js';
     PubSubOidcVerifier,
     SubscriptionQueue,
     SubscriptionsService,
+    SchedulesService,
+    LeagueService,
+    BuddiesService,
+    TreasuryService,
+    SpotsService,
     ReportsService,
     ModerationService,
     AdminAuthService,

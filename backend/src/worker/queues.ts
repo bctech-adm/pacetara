@@ -12,6 +12,8 @@ export const MAINTENANCE_JOBS = {
   eventArchive: 'event-archive',
   eventScrape: 'event-scrape',
   subscriptionReconcile: 'subscription-reconcile',
+  communitySessions: 'community-sessions',
+  leagueSnapshot: 'league-snapshot',
 } as const;
 
 /** Job di antrean notifications: satu kiriman push ke beberapa pengguna. */

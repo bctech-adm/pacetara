@@ -53,7 +53,7 @@ export const envSchema = z.object({
   /** Akun layanan Firebase (JSON di-base64) untuk push FCM. Kosong = push mati, notifikasi di aplikasi tetap jalan. */
   FCM_SERVICE_ACCOUNT_B64: z.string().default(''),
 
-  PRIVACY_POLICY_VERSION: z.string().min(1).default('2026-11-10'),
+  PRIVACY_POLICY_VERSION: z.string().min(1).default('2026-11-12'),
   PRIVACY_POLICY_URL: z.string().url().default('https://pace.bimacreative.tech/privasi'),
   /** Situs publik; dipakai untuk tautan undangan komunitas (`/j/<kode>`). */
   PUBLIC_WEB_URL: z.string().url().default('https://pace.bimacreative.tech'),

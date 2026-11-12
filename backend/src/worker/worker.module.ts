@@ -25,6 +25,8 @@ import { PubSubOidcVerifier } from '../subscriptions/oidc.js';
 import { PlayApi } from '../subscriptions/play-api.js';
 import { type SubscriptionJob, SubscriptionQueue } from '../subscriptions/subscription-queue.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
+import { LeagueService } from '../league/league.service.js';
+import { SchedulesService } from '../schedules/schedules.service.js';
 import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from './queues.js';
 
 /**
@@ -56,6 +58,9 @@ import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from
     PubSubOidcVerifier,
     SubscriptionQueue,
     SubscriptionsService,
+    // Modul 2.6: pembentukan sesi jadwal rutin + pengingat, snapshot liga.
+    SchedulesService,
+    LeagueService,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
@@ -74,6 +79,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     private readonly imports: ImportsService,
     private readonly scraper: EventScraper,
     private readonly subscriptions: SubscriptionsService,
+    private readonly schedules: SchedulesService,
+    private readonly league: LeagueService,
   ) {}
 
   async onModuleInit() {
@@ -119,6 +126,19 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { name: MAINTENANCE_JOBS.subscriptionReconcile, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
     );
 
+    // Modul 2.6: sesi dari jadwal rutin dibentuk 28 hari ke depan dan pengingat 2 jam sebelum sesi. Tiap 15 menit.
+    await this.queue.upsertJobScheduler(
+      'community-sessions',
+      { every: 15 * 60_000 },
+      { name: MAINTENANCE_JOBS.communitySessions, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+    );
+    // Snapshot liga antar komunitas (bulan berjalan + bulan lalu sampai tanggal 3). Tiap jam.
+    await this.queue.upsertJobScheduler(
+      'league-snapshot-hourly',
+      { every: 60 * 60_000 },
+      { name: MAINTENANCE_JOBS.leagueSnapshot, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+    );
+
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
 
@@ -161,6 +181,10 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
         return this.scraper.runAll().then((stats) => ({ stats }));
       case MAINTENANCE_JOBS.subscriptionReconcile:
         return this.subscriptions.reconcile();
+      case MAINTENANCE_JOBS.communitySessions:
+        return this.schedules.runJobs();
+      case MAINTENANCE_JOBS.leagueSnapshot:
+        return this.league.runJob();
       default:
         return Promise.reject(new Error(`Job tidak dikenal: ${job.name}`));
     }

@@ -64,6 +64,7 @@ class MyCommunitiesScreen extends ConsumerWidget {
                   ),
                 ),
                 const EventsEntry(),
+                const CommunityPlusEntry(),
                 for (final c in data.items) CommunityTile(community: c, onTap: () => context.push('/communities/${c.id}')),
               ],
             );
@@ -162,4 +163,39 @@ class EventsEntry extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pintasan modul 2.6: cari teman lari, peta spot lari, dan liga komunitas.
+class CommunityPlusEntry extends StatelessWidget {
+  const CommunityPlusEntry({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(children: [
+        Expanded(child: _Shortcut(key: const Key('buddies-entry'), icon: Icons.diversity_3, label: 'Cari teman', onTap: () => context.push('/buddies'))),
+        Expanded(child: _Shortcut(icon: Icons.map_outlined, label: 'Spot lari', onTap: () => context.push('/spots'))),
+        Expanded(child: _Shortcut(icon: Icons.emoji_events_outlined, label: 'Liga', onTap: () => context.push('/league'))),
+      ]),
+    );
+  }
+}
+
+class _Shortcut extends StatelessWidget {
+  const _Shortcut({super.key, required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(children: [Icon(icon), const SizedBox(height: 4), Text(label, style: Theme.of(context).textTheme.labelMedium)]),
+          ),
+        ),
+      );
 }

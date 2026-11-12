@@ -9,7 +9,7 @@ import { REPORT_REASONS, ReportsService } from './reports.service.js';
 
 const ReportBody = z
   .object({
-    targetType: z.enum(['user', 'community', 'message', 'event', 'post', 'comment']),
+    targetType: z.enum(['user', 'community', 'message', 'event', 'post', 'comment', 'spot']),
     targetId: z.string().uuid(),
     reason: z.enum(REPORT_REASONS),
     details: z.string().trim().max(500).optional(),

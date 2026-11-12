@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 /// Batas paket yang diangkat Premium (per pengguna).
-const premiumLimitKinds = {'user_join', 'run_history', 'medals', 'full_stats'};
+const premiumLimitKinds = {'user_join', 'run_history', 'medals', 'full_stats', 'buddy_filters'};
 
 /// Batas yang diangkat Komunitas Pro (per komunitas).
-const communityLimitKinds = {'community_members', 'multi_admin'};
+const communityLimitKinds = {'community_members', 'multi_admin', 'attendance', 'community_cash', 'jersey', 'community_stats', 'league'};
 
 /// Rute layar langganan untuk ajakan upgrade (iklan internal PRD 2.5) dari `limit.kind` server.
 /// Batas komunitas hanya mengarah ke Komunitas Pro jika pengguna adalah pemilik komunitas itu ([ownedCommunityId]);
@@ -32,12 +32,18 @@ const premiumFeatures = <(String, String, String)>[
   ('Mode aman / SOS', 'Ya', 'Ya'),
   ('Riwayat lari', '3 bulan terakhir', 'Penuh + statistik lengkap'),
   ('Rak medali', '5 medali', 'Tak terbatas'),
+  ('Cari teman lari', 'Dasar (per kota)', 'Filter pace, lokasi, dan jam'),
   ('Lencana', '-', 'Premium di avatar dan profil'),
 ];
 
 const communityFeatures = <(String, String, String, String)>[
   ('Anggota', 'Maksimal 3', 'Maksimal 30', 'Tanpa batas'),
   ('Multi-admin', '-', 'Ya', 'Ya'),
+  ('Jadwal lari + RSVP', 'Ya', 'Ya', 'Ya'),
+  ('Absensi QR / GPS', '-', 'Ya', 'Ya'),
+  ('Kas komunitas dan pre-order jersey', '-', 'Ya', 'Ya'),
+  ('Statistik komunitas', '-', 'Ya', 'Ya'),
+  ('Liga antar komunitas', '-', 'Ya', 'Ya'),
   ('Komunitas yang dibuat', '1 gratis', 'Tidak dihitung', 'Tidak dihitung'),
   ('Lencana', '-', 'Pro', 'Pro'),
 ];

@@ -311,6 +311,10 @@ export class FeedService {
       `SELECT (u.status = 'active' AND ${notBlocked('u.id')} AND (
                 ${sharesCommunity('u.id')}
                 OR EXISTS (SELECT 1 FROM feed_follows f WHERE (f.follower_id = $1 AND f.followee_id = u.id) OR (f.follower_id = u.id AND f.followee_id = $1))
+                -- Cari teman lari (modul 2.6): saling sapa, atau keduanya punya profil pencarian aktif (opt-in).
+                OR EXISTS (SELECT 1 FROM buddy_requests br WHERE (br.from_user = $1 AND br.to_user = u.id) OR (br.from_user = u.id AND br.to_user = $1))
+                OR (EXISTS (SELECT 1 FROM buddy_profiles bp WHERE bp.user_id = u.id AND bp.enabled)
+                    AND EXISTS (SELECT 1 FROM buddy_profiles bq WHERE bq.user_id = $1 AND bq.enabled))
                 OR EXISTS (SELECT 1 FROM feed_posts p WHERE p.user_id = u.id AND p.visibility = 'public' AND p.removed_at IS NULL AND p.hidden_at IS NULL)
                 OR EXISTS (SELECT 1 FROM feed_comments c JOIN feed_posts p ON p.id = c.post_id
                             WHERE c.user_id = u.id AND c.removed_at IS NULL AND c.hidden_at IS NULL
@@ -408,6 +412,8 @@ export class FeedService {
         'DELETE FROM feed_follows WHERE (follower_id = $1 AND followee_id = $2) OR (follower_id = $2 AND followee_id = $1)',
         [userId, targetId],
       );
+      // Blokir juga memutus hubungan Cari teman lari (sapa/teman), sehingga chat lewat jalur itu tertutup.
+      await db.query('DELETE FROM buddy_requests WHERE (from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1)', [userId, targetId]);
     });
   }
 

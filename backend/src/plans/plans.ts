@@ -68,3 +68,21 @@ export const MEDAL_LIMIT: Record<UserPlan, number | null> = {
 export function hasFullStats(plan: UserPlan): boolean {
   return plan === 'premium';
 }
+
+/**
+ * Modul 2.6: fitur Komunitas Pro (PRD tabel Admin komunitas). Jadwal lari + RSVP gratis untuk semua komunitas.
+ * Saat Pro berakhir, data tidak dihapus: catatan lama tetap bisa dibaca (kas, jersey, rekap absensi), tetapi semua
+ * tindakan yang menambah/mengubah, statistik komunitas, dan keikutsertaan liga dikunci (403 limit_reached).
+ */
+export type ProFeature = 'attendance' | 'community_cash' | 'jersey' | 'community_stats' | 'league';
+
+export function hasProFeature(plan: CommunityPlan, _feature: ProFeature): boolean {
+  return plan !== 'free';
+}
+
+/**
+ * Cari teman lari (PRD tabel Pelari): gratis "Dasar" = per kota saja; Premium = filter pace, jarak lokasi, dan jam.
+ */
+export function hasBuddyFilters(plan: UserPlan): boolean {
+  return plan === 'premium';
+}

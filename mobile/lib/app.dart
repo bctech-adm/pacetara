@@ -10,6 +10,11 @@ import 'features/auth/screens/register_screen.dart';
 import 'features/auth/screens/verify_screens.dart';
 import 'features/chat/chat_screens.dart';
 import 'features/communities/screens/community_detail_screen.dart';
+import 'features/community_plus/buddy_screens.dart';
+import 'features/community_plus/league_screens.dart';
+import 'features/community_plus/schedule_screens.dart';
+import 'features/community_plus/spot_screens.dart';
+import 'features/community_plus/treasury_screens.dart';
 import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
 import 'features/communities/screens/join_by_code_screen.dart';
@@ -71,6 +76,31 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => JoinByCodeScreen(initialCode: state.uri.queryParameters['code']),
       ),
       GoRoute(path: '/communities/:id', builder: (_, state) => CommunityDetailScreen(id: state.pathParameters['id']!)),
+      // Modul 2.6 Fitur komunitas lanjutan. staff/owner di query hanya untuk tampilan; hak akses tetap dicek server.
+      GoRoute(
+        path: '/communities/:id/sessions',
+        builder: (_, state) => SessionsScreen(
+          communityId: state.pathParameters['id']!,
+          isStaff: state.uri.queryParameters['staff'] == 'true',
+          isOwner: state.uri.queryParameters['owner'] == 'true',
+        ),
+      ),
+      GoRoute(
+        path: '/communities/:id/cash',
+        builder: (_, state) => CashScreen(communityId: state.pathParameters['id']!, isOwner: state.uri.queryParameters['owner'] == 'true'),
+      ),
+      GoRoute(
+        path: '/communities/:id/jersey',
+        builder: (_, state) => JerseyScreen(communityId: state.pathParameters['id']!, isOwner: state.uri.queryParameters['owner'] == 'true'),
+      ),
+      GoRoute(
+        path: '/communities/:id/stats',
+        builder: (_, state) => CommunityStatsScreen(communityId: state.pathParameters['id']!, isOwner: state.uri.queryParameters['owner'] == 'true'),
+      ),
+      GoRoute(path: '/sessions/:id', builder: (_, state) => SessionDetailScreen(id: state.pathParameters['id']!)),
+      GoRoute(path: '/league', builder: (_, _) => const LeagueScreen()),
+      GoRoute(path: '/buddies', builder: (_, _) => const BuddyScreen()),
+      GoRoute(path: '/spots', builder: (_, _) => const SpotsMapScreen()),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),

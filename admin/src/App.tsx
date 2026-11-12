@@ -3,13 +3,15 @@ import { useLoad } from './useLoad';
 import { api, ApiError, apiImage, hasStoredSession, login, logout, setLogoutHandler } from './api';
 import { EventQueue } from './EventQueue';
 import { Events } from './Events';
+import { Spots } from './Spots';
 import { Subscriptions } from './Subscriptions';
 
 /**
  * Panel super admin (modul 1.8): login dengan kata sandi + kode authenticator, antrean laporan,
- * banding, tindakan akun, log tindakan, input event manual (modul 1.7), dan antrean event (modul 2.4), langganan (modul 2.5). Dasbor sponsor menyusul di 3.3.
+ * banding, tindakan akun, log tindakan, input event manual (modul 1.7), dan antrean event (modul 2.4), langganan (modul 2.5),
+ * antrean spot lari (modul 2.6). Dasbor sponsor menyusul di 3.3.
  */
-type Tab = 'reports' | 'events' | 'queue' | 'appeals' | 'users' | 'subs' | 'audit';
+type Tab = 'reports' | 'events' | 'queue' | 'spots' | 'appeals' | 'users' | 'subs' | 'audit';
 
 const REASONS: Record<string, string> = {
   spam: 'Spam',
@@ -21,7 +23,7 @@ const REASONS: Record<string, string> = {
   impersonation: 'Menyamar',
   other: 'Lainnya',
 };
-const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event', post: 'Postingan', comment: 'Komentar' };
+const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event', post: 'Postingan', comment: 'Komentar', spot: 'Spot lari' };
 const VISIBILITY: Record<string, string> = { public: 'Semua orang', community: 'Anggota komunitas', followers: 'Pengikut' };
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('id-ID') : '–');
 
@@ -37,9 +39,9 @@ export function App() {
       <header className="topbar">
         <h1>PaceTara Admin</h1>
         <nav>
-          {(['reports', 'events', 'queue', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
+          {(['reports', 'events', 'queue', 'spots', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
+              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', spots: 'Antrean spot', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
             </button>
           ))}
           <button
@@ -56,6 +58,7 @@ export function App() {
       {tab === 'reports' && <Reports />}
       {tab === 'events' && <Events />}
       {tab === 'queue' && <EventQueue />}
+      {tab === 'spots' && <Spots />}
       {tab === 'appeals' && <Appeals />}
       {tab === 'users' && <Users />}
       {tab === 'subs' && <Subscriptions />}
@@ -263,6 +266,24 @@ function ReportDetail({ item, onBack }: { item: QueueItem; onBack: () => void })
           <dd className="mono">{String(t.registrationUrl)}</dd>
           <dt>Deskripsi</dt>
           <dd>{String(t.description) || '–'}</dd>
+          <dt>Status</dt>
+          <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
+        </dl>
+      )}
+      {t && item.targetType === 'spot' && (
+        <dl>
+          <dt>Nama</dt>
+          <dd>{String(t.name)}</dd>
+          <dt>Kota</dt>
+          <dd>{String(t.city)}</dd>
+          <dt>Koordinat</dt>
+          <dd className="mono">
+            {(t.point as { lat: number; lng: number }).lat.toFixed(5)}, {(t.point as { lat: number; lng: number }).lng.toFixed(5)}
+          </dd>
+          <dt>Catatan</dt>
+          <dd>{String(t.notes) || '–'}</dd>
+          <dt>Pengirim</dt>
+          <dd>{t.submitter ? String(t.submitter) : '–'}</dd>
           <dt>Status</dt>
           <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
         </dl>

@@ -68,6 +68,12 @@ class AppNotification {
       'badge_earned' => 'Kamu mendapat lencana baru',
       'event_submission_approved' => 'Event kirimanmu sudah tayang di kalender',
       'event_submission_rejected' => 'Kiriman eventmu ditolak. Lihat alasannya di Kiriman saya',
+      'session_new' => '$where punya jadwal lari baru',
+      'session_cancelled' => 'Sesi lari $where dibatalkan',
+      'buddy_request' => '$who menyapamu di Cari teman lari',
+      'buddy_accepted' => '$who menerima sapaanmu. Sekarang kalian bisa mengobrol',
+      'spot_approved' => 'Spot lari kirimanmu sudah tampil di peta',
+      'spot_rejected' => 'Kiriman spot larimu ditolak. Lihat alasannya di Kiriman saya',
       _ => 'Notifikasi baru',
     };
   }
@@ -81,6 +87,10 @@ class AppNotification {
         'badge_earned' => '/passport',
         'event_submission_approved' => data['eventId'] == null ? '/events/submissions' : '/events/${data['eventId']}',
         'event_submission_rejected' => '/events/submissions',
+        'session_new' || 'session_cancelled' when data['sessionId'] != null => '/sessions/${data['sessionId']}',
+        'session_new' => communityId == null ? null : '/communities/$communityId/sessions',
+        'buddy_request' || 'buddy_accepted' => '/buddies',
+        'spot_approved' || 'spot_rejected' => '/spots',
         _ => null,
       };
 }
@@ -129,7 +139,9 @@ const notificationCategories = <String, (String, String)>{
   'friend_running': ('Teman mulai lari', 'Saat anggota komunitasmu menyalakan status lari'),
   'social': ('Feed', 'Pengikut baru, suka, dan komentar di postinganmu'),
   'achievement': ('Lencana', 'Saat kamu mendapat lencana pencapaian baru'),
-  'event': ('Kiriman event', 'Saat event yang kamu kirim disetujui atau ditolak'),
+  'event': ('Kiriman event & spot', 'Saat event atau spot lari yang kamu kirim disetujui atau ditolak'),
+  'schedule': ('Jadwal lari', 'Sesi lari baru, pengingat sesi yang kamu ikuti, dan pembatalan'),
+  'buddy': ('Cari teman lari', 'Sapaan baru dan sapaan yang diterima'),
 };
 
 class NotificationsRepository {
@@ -236,6 +248,10 @@ String? routeForPush(Map<String, dynamic> data) {
     'badge_earned' => '/passport',
     'event_submission_approved' when data['eventId'] is String => '/events/${data['eventId']}',
     'event_submission_approved' || 'event_submission_rejected' => '/events/submissions',
+    'session_new' || 'session_cancelled' || 'session_reminder' when data['sessionId'] is String => '/sessions/${data['sessionId']}',
+    'session_new' when community is String => '/communities/$community/sessions',
+    'buddy_request' || 'buddy_accepted' => '/buddies',
+    'spot_approved' || 'spot_rejected' => '/spots',
     _ => null,
   };
 }

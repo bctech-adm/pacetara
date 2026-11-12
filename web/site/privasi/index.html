@@ -19,7 +19,7 @@
 
   <main class="wrap">
     <h1>Kebijakan Privasi</h1>
-    <p class="meta">Versi 2026-11-10 · Berlaku sejak 10 November 2026</p>
+    <p class="meta">Versi 2026-11-12 · Berlaku sejak 12 November 2026</p>
 
     <p>Kebijakan ini menjelaskan data pribadi apa yang dikumpulkan PaceTara, untuk apa data itu dipakai, siapa yang bisa melihatnya, berapa lama disimpan, dan hak kamu atas data tersebut sesuai Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP).</p>
 
@@ -29,6 +29,7 @@
         <li>Email dan nomor HP kamu tidak pernah ditampilkan ke pengguna lain.</li>
         <li>Status "sedang lari" mati secara bawaan. Jika kamu nyalakan, statusmu hanya terlihat oleh komunitas yang kamu pilih, dan titik lokasi langsung dihapus begitu lari selesai.</li>
         <li>Titik awal dan akhir rute lari disamarkan agar lokasi rumahmu tidak terlihat.</li>
+        <li>Cari teman lari mati secara bawaan. Jika kamu nyalakan, pengguna lain hanya melihat area kasar (±2 km) yang kamu pilih sendiri, bukan lokasi dari rute larimu.</li>
         <li>Foto KTP dan selfie untuk verifikasi tidak pernah disimpan.</li>
         <li>Kami tidak menjual data pribadimu.</li>
         <li>Kamu bisa menghapus akun dan data pribadimu kapan saja dari menu Profil.</li>
@@ -73,6 +74,10 @@
         <tr><td>Kiriman event</td><td>Data event yang kamu kirim sebagai penyelenggara (nama event, tanggal, lokasi, tautan, nama penyelenggara) dan, bila kamu isi, email/nomor HP penyelenggara yang disimpan terenkripsi dan hanya bisa dibuka tim PaceTara</td><td>Saat kamu memakai fitur "Kirim event"</td></tr>
         <tr><td>Paspor lari</td><td>Foto medali (tanpa lokasi dan data kamera), hasil resmi event yang kamu isi, dan lencana pencapaian yang dihitung dari larimu</td><td>Saat kamu memakai paspor lari</td></tr>
         <tr><td>Feed</td><td>Postingan (teks, foto, hasil lari), komentar, suka, siapa yang kamu ikuti, dan pengguna yang kamu blokir</td><td>Saat kamu memakai feed</td></tr>
+        <tr><td>Jadwal dan absensi komunitas</td><td>RSVP ikut/tidak ikut sesi lari komunitas dan catatan kehadiran (hadir, cara check-in QR/GPS/admin, waktu). Untuk check-in GPS, posisimu dikirim sekali untuk dibandingkan dengan titik kumpul lalu dibuang: posisi itu tidak disimpan</td><td>Saat kamu memakai jadwal lari komunitas</td></tr>
+        <tr><td>Cari teman lari</td><td>Pace rata-rata, kota, jam lari favorit, dan area lari yang kamu pilih sendiri di peta (dibulatkan ke kotak ±2 km sebelum disimpan), serta sapaan yang kamu kirim/terima</td><td>Hanya jika kamu menyalakan Cari teman lari dan menyetujuinya</td></tr>
+        <tr><td>Kas dan pre-order jersey</td><td>Catatan kas komunitas yang ditulis admin (nominal, kategori, tanggal, keterangan) dan pesanan jersey yang kamu catat (ukuran, jumlah, catatan, status lunas yang ditandai admin). Tidak ada pembayaran lewat aplikasi</td><td>Saat kamu memakai fitur kas atau pre-order jersey komunitas</td></tr>
+        <tr><td>Spot lari</td><td>Nama tempat, kota, titik di peta, dan info penerangan/toilet/parkir yang kamu kirim</td><td>Saat kamu mengirim spot lari</td></tr>
         <tr><td>Kontak darurat</td><td>Nama dan nomor kontak darurat, lokasi saat tombol SOS ditekan</td><td>Jika kamu memakai mode aman</td></tr>
         <tr><td>Laporan</td><td>Isi laporan dan konten yang dilaporkan</td><td>Saat kamu melaporkan konten atau akun</td></tr>
         <tr><td>Verifikasi Level 2</td><td>Status verifikasi dan NIK dalam bentuk kode HMAC satu arah. Foto KTP dan selfie diproses di memori lalu dibuang, tidak pernah ditulis ke penyimpanan atau log.</td><td>Hanya untuk penjual, pemilik komunitas, dan sponsor yang meminta lencana Terverifikasi</td></tr>
@@ -89,7 +94,8 @@
       <tbody>
         <tr><td>Membuat dan mengamankan akun, verifikasi email dan nomor HP, mencegah akun palsu</td><td>Pemenuhan perjanjian dan kepentingan yang sah</td></tr>
         <tr><td>Menjalankan fitur: komunitas, rekam lari, status lari, chat, event, notifikasi</td><td>Pemenuhan perjanjian</td></tr>
-        <tr><td>Membagikan status lari, menghubungkan Health Connect/Garmin/Strava, mode aman</td><td>Persetujuan kamu (bisa ditarik kapan saja)</td></tr>
+        <tr><td>Membagikan status lari, menghubungkan Health Connect/Garmin/Strava, mode aman, Cari teman lari, check-in GPS</td><td>Persetujuan kamu (bisa ditarik kapan saja)</td></tr>
+        <tr><td>Menghitung liga antar komunitas dan statistik komunitas dari jumlah jarak anggota</td><td>Kepentingan yang sah (hanya angka agregat, tanpa detail lari)</td></tr>
         <tr><td>Memproses langganan dan transaksi</td><td>Pemenuhan perjanjian dan kewajiban hukum</td></tr>
         <tr><td>Meninjau laporan dan menegakkan aturan komunitas</td><td>Kepentingan yang sah</td></tr>
         <tr><td>Menampilkan iklan kepada pengguna paket gratis</td><td>Persetujuan kamu</td></tr>
@@ -106,6 +112,11 @@
       <li><strong>Paspor lari</strong> (medali, hasil resmi, lencana) bawaannya terlihat oleh anggota komunitasmu, dan bisa kamu ubah menjadi hanya untukmu. Lencana yang hanya tercapai berkat lari impor Strava tidak pernah ditampilkan ke orang lain.</li>
       <li><strong>Postingan feed</strong> terlihat sesuai pilihanmu untuk tiap postingan: semua orang, anggota komunitasmu, atau pengikutmu. Postingan hasil lari tidak bisa lebih luas dari visibilitas larinya, dan rutenya selalu tanpa area zona privasi. Komentar dan suka terlihat oleh siapa pun yang bisa melihat postingannya. Daftar pengikut dan yang kamu ikuti hanya terlihat olehmu; orang lain hanya melihat jumlahnya.</li>
       <li><strong>Event yang kamu tandai "ikut"</strong> terlihat oleh sesama anggota komunitasmu. Pengguna lain hanya melihat jumlah peserta, tanpa nama.</li>
+      <li><strong>Jadwal lari komunitas:</strong> anggota komunitas melihat siapa yang RSVP ikut; admin komunitas melihat rekap kehadiran.</li>
+      <li><strong>Liga dan statistik komunitas</strong> hanya memakai angka agregat (total jarak, jumlah lari, jumlah pelari aktif) dari lari yang direkam di aplikasi atau diimpor dengan rute, bukan lari Strava dan bukan lari "hanya saya". Nama dan detail larimu tidak ditampilkan.</li>
+      <li><strong>Cari teman lari:</strong> pengguna lain yang juga menyalakan fitur ini melihat nama, foto profil, pace, kota, jam lari favorit, dan perkiraan jarak (dibulatkan ke km) dari area yang kamu pilih. Chat pribadi baru terbuka setelah kamu menerima sapaan. Pengguna yang kamu blokir tidak melihatmu.</li>
+      <li><strong>Kas komunitas</strong> terlihat oleh anggota komunitas itu. <strong>Pesanan jersey</strong> beserta namamu terlihat oleh admin komunitas; anggota lain hanya melihat jumlah per ukuran.</li>
+      <li><strong>Spot lari</strong> yang sudah ditinjau terlihat oleh semua pengguna, tanpa nama pengirim.</li>
       <li><strong>Peserta percakapan</strong> melihat pesan di percakapan itu. Chat tidak dienkripsi ujung-ke-ujung; pesan dienkripsi saat dikirim dan saat disimpan di server kami.</li>
       <li><strong>Tim moderasi PaceTara</strong> hanya bisa membuka chat yang dilaporkan, dan setiap tindakan moderasi tercatat.</li>
     </ul>
@@ -144,6 +155,8 @@
       <tbody>
         <tr><td>Akun, profil, lari, komunitas</td><td>Selama akunmu aktif</td></tr>
         <tr><td>Titik lokasi status lari langsung</td><td>Dihapus begitu lari selesai</td></tr>
+        <tr><td>Posisi saat check-in GPS</td><td>Tidak disimpan (hanya hasil hadir/tidak)</td></tr>
+        <tr><td>Profil Cari teman lari</td><td>Sampai kamu mematikannya atau menghapus akun</td></tr>
         <tr><td>Gambar di chat</td><td>6 bulan, lalu dihapus (teks pesan tetap ada)</td></tr>
         <tr><td>Kode verifikasi</td><td>Berlaku 5–10 menit dan hanya bisa dipakai sekali</td></tr>
         <tr><td>Cadangan terenkripsi</td><td>Hingga 30 hari</td></tr>
@@ -169,6 +182,9 @@
       <li>email, nomor HP, kata sandi, tautan akun Google, foto profil, kota, dan pace dihapus seketika, dan kamu keluar dari semua perangkat;</li>
       <li>pesan di chat pribadi ikut dihapus;</li>
       <li>tanda "ikut" di kalender event dihapus;</li>
+      <li>RSVP dan catatan kehadiran sesi komunitas, profil Cari teman lari, dan sapaan dihapus;</li>
+      <li>pesanan jersey yang belum lunas dihapus; pesanan yang sudah ditandai lunas tetap tercatat untuk admin komunitas tanpa namamu; catatan kas yang kamu tulis sebagai admin tetap menjadi milik komunitas tanpa namamu;</li>
+      <li>spot lari yang belum ditinjau dihapus; spot yang sudah tayang tetap ada di peta sebagai informasi tempat umum, tanpa tautan ke akunmu;</li>
       <li>kiriman event yang belum ditinjau dihapus; kiriman yang sudah ditinjau dilepas dari akunmu dan kontak penyelenggaranya dihapus, sedangkan event yang sudah tayang tetap ada di kalender;</li>
       <li>medali beserta fotonya, hasil resmi, dan lencana di paspor lari dihapus;</li>
       <li>postingan feed beserta fotonya, komentar, suka, daftar mengikuti/pengikut, dan blokir dihapus;</li>

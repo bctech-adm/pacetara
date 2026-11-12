@@ -19,6 +19,10 @@ import { SafetyService } from '../safety/safety.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
+import { BuddiesService } from '../buddies/buddies.service.js';
+import { SchedulesService } from '../schedules/schedules.service.js';
+import { SpotsService } from '../spots/spots.service.js';
+import { TreasuryService } from '../treasury/treasury.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
 
 export const DELETED_USER_NAME = 'Pengguna dihapus';
@@ -52,6 +56,10 @@ export class UsersService {
     private readonly passport: PassportService,
     private readonly imports: ImportsService,
     private readonly subscriptions: SubscriptionsService,
+    private readonly schedules: SchedulesService,
+    private readonly buddies: BuddiesService,
+    private readonly treasury: TreasuryService,
+    private readonly spots: SpotsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -151,6 +159,13 @@ export class UsersService {
     const logos = await withTx(this.pool, async (db) => {
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
+      // Modul 2.6: RSVP dan absensi dihapus; profil cari teman dan sapaan dihapus; pesanan jersey belum lunas dihapus,
+      // yang lunas dianonimkan; catatan kas yang ia tulis tetap (milik komunitas) tanpa nama; spot belum tayang dihapus,
+      // spot tayang dilepas dari akun.
+      await this.schedules.onAccountDeletion(db, userId);
+      await this.buddies.onAccountDeletion(db, userId);
+      await this.treasury.onAccountDeletion(db, userId);
+      await this.spots.onAccountDeletion(db, userId);
       // Feed: postingan (beserta foto, komentar, suka), komentar, suka, mengikuti, dan blokir dihapus.
       // Dijalankan sebelum lari dihapus agar tidak ada postingan yang sempat merujuk lari yang hilang.
       const feedPhotos = await this.feed.onAccountDeletion(db, userId);

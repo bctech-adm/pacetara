@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type pg from 'pg';
+import { BuddiesService } from '../buddies/buddies.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
@@ -89,6 +90,7 @@ export class ChatService implements OnModuleInit {
     private readonly realtime: RealtimeService,
     private readonly events: EventsService,
     private readonly notifications: NotificationsService,
+    private readonly buddies: BuddiesService,
   ) {}
 
   onModuleInit(): void {
@@ -343,8 +345,9 @@ export class ChatService implements OnModuleInit {
   private async assertCanDirect(userId: string, otherId: string) {
     const { rows } = await this.pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [otherId]);
     if (rows[0]?.status !== 'active') throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
-    if (!(await this.communities.shareCommunity(userId, otherId))) {
-      throw new ApiError(403, 'no_shared_community', 'Chat pribadi hanya bisa dengan sesama anggota komunitasmu');
+    // Modul 2.6: sapa Cari teman lari yang sudah DITERIMA juga membuka chat pribadi (tanpa blokir feed).
+    if (!(await this.communities.shareCommunity(userId, otherId)) && !(await this.buddies.areConnected(userId, otherId))) {
+      throw new ApiError(403, 'no_shared_community', 'Chat pribadi hanya bisa dengan sesama anggota komunitasmu atau teman lari yang menerima sapaanmu');
     }
   }
 

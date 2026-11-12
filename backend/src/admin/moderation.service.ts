@@ -131,6 +131,8 @@ export class ModerationService {
       await audit(this.pool, adminId, 'report.view_comment', { type: 'comment', id });
     } else if (type === 'user') {
       target = await this.userSummary(id);
+    } else if (type === 'spot') {
+      target = await this.spotSummary(id);
     } else if (type === 'event') {
       const { rows } = await this.pool.query<{
         name: string;
@@ -228,6 +230,9 @@ export class ModerationService {
         } else {
           await db.query('UPDATE feed_posts SET held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
         }
+      } else if (type === 'spot') {
+        // Diturunkan: hilang dari peta bagi semua orang. Abaikan: penyembunyian otomatis dicabut.
+        await db.query(action === 'remove' ? 'UPDATE run_spots SET removed_at = now() WHERE id = $1' : 'UPDATE run_spots SET hidden_at = NULL WHERE id = $1', [id]);
       } else if (type === 'comment') {
         await db.query(
           action === 'remove'
@@ -549,6 +554,46 @@ export class ModerationService {
     };
   }
 
+  /** Spot lari yang dilaporkan (modul 2.6): informasi tempat umum, tanpa data pengirim selain nama. */
+  private async spotSummary(id: string) {
+    const { rows } = await this.pool.query<{
+      name: string;
+      city: string;
+      lat: number;
+      lng: number;
+      lighting: number | null;
+      toilet: boolean | null;
+      parking: boolean | null;
+      notes: string;
+      status: string;
+      submitter: string | null;
+      hidden_at: Date | null;
+      removed_at: Date | null;
+    }>(
+      `SELECT s.name, s.city, ST_Y(s.location::geometry) AS lat, ST_X(s.location::geometry) AS lng, s.lighting, s.toilet, s.parking, s.notes,
+              s.status, u.display_name AS submitter, s.hidden_at, s.removed_at
+         FROM run_spots s LEFT JOIN users u ON u.id = s.submitted_by WHERE s.id = $1`,
+      [id],
+    );
+    const r = rows[0];
+    return r
+      ? {
+          id,
+          name: r.name,
+          city: r.city,
+          point: { lat: Number(r.lat), lng: Number(r.lng) },
+          lighting: r.lighting,
+          toilet: r.toilet,
+          parking: r.parking,
+          notes: r.notes,
+          status: r.status,
+          submitter: r.submitter,
+          hidden: Boolean(r.hidden_at),
+          removed: Boolean(r.removed_at),
+        }
+      : null;
+  }
+
   private async labels(targets: { type: ReportTarget; id: string }[]) {
     const out = new Map<string, string>();
     const ids = (t: ReportTarget) => targets.filter((x) => x.type === t).map((x) => x.id);
@@ -577,6 +622,10 @@ export class ModerationService {
         [ids('comment')],
       );
       for (const r of rows) out.set(`comment:${r.id}`, `Komentar dari ${r.display_name}`);
+    }
+    if (ids('spot').length) {
+      const { rows } = await this.pool.query<{ id: string; name: string; city: string }>('SELECT id, name, city FROM run_spots WHERE id = ANY($1::uuid[])', [ids('spot')]);
+      for (const r of rows) out.set(`spot:${r.id}`, `Spot ${r.name} (${r.city})`);
     }
     if (ids('message').length) {
       // Daftar antrean tidak menampilkan isi pesan; isi hanya dibuka di detail (tercatat di log).
