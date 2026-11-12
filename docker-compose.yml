@@ -104,6 +104,8 @@ services:
     environment:
       # app-ads.txt AdMob (modul 2.7); kosong = /app-ads.txt 404.
       ADMOB_PUBLISHER_ID: ${ADMOB_PUBLISHER_ID:-}
+      # App Links Android (tautan undangan /j/KODE langsung membuka aplikasi); kosong = assetlinks.json 404.
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
     tmpfs: [/tmp]
     networks: [internal]
     security_opt: ["no-new-privileges:true"]

@@ -37,6 +37,16 @@ val admobAppId: String = (dartDefines["ADMOB_APP_ID"]?.trim()?.takeIf { it.isNot
     }
 }
 
+// Host App Links untuk tautan undangan https://<host>/j/KODE (--dart-define=APP_LINKS_HOST, lalu env). Kosong =
+// host `.invalid` (RFC 2606) yang tidak pernah cocok, sehingga build tanpa domain tidak mengklaim tautan apa pun.
+val appLinksHost: String = (dartDefines["APP_LINKS_HOST"]?.trim()?.takeIf { it.isNotEmpty() }
+    ?: System.getenv("APP_LINKS_HOST")?.trim()?.takeIf { it.isNotEmpty() }
+    ?: "applinks.invalid").also {
+    if (!Regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$").matches(it)) {
+        throw GradleException("APP_LINKS_HOST tidak valid (nama host saja, tanpa skema/path)")
+    }
+}
+
 android {
     namespace = "tech.bimacreative.pacetara"
     compileSdk = flutter.compileSdkVersion
@@ -55,6 +65,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["admobAppId"] = admobAppId
+        manifestPlaceholders["appLinksHost"] = appLinksHost
     }
 
     signingConfigs {

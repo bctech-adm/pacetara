@@ -125,6 +125,14 @@ Selama variabel di bawah kosong, APK rilis tidak menampilkan iklan sama sekali (
 6. **Negara distribusi**: batasi ke Indonesia selama formulir persetujuan UMP belum ada; membuka EEA/UK/Swiss mewajibkan UMP lebih dulu (KEPUTUSAN #240).
 7. Saat menguji di HP sendiri, daftarkan HP sebagai **perangkat uji** di AdMob (Pengaturan → Perangkat uji) dan jangan mengeklik iklan sungguhan.
 
+## Tautan undangan langsung membuka aplikasi (App Links)
+
+Tanpa konfigurasi, tautan `https://<situs>/j/KODE` membuka halaman petunjuk berisi kode undangan.
+
+1. **Variabel repo GitHub** (Variables, bukan Secrets): `APP_LINKS_HOST` = host situs publik saja, misalnya `pace.bimacreative.tech`. Jalankan ulang CI agar APK baru mengklaim tautan itu.
+2. **Sidik jari sertifikat**: `keytool -list -v -keystore upload.jks -alias pacetara` → baris *SHA256*. Setelah rilis di Play dengan Play App Signing, tambahkan juga sidik jari *App signing key certificate* dari Play Console → *Integritas aplikasi*. Isi di `.env` VPS: `ANDROID_CERT_SHA256=AA:BB:...,CC:DD:...`, lalu `docker compose up -d web`.
+3. Cek `https://<situs>/.well-known/assetlinks.json`, lalu di HP: *Setelan → Aplikasi → PaceTara → Buka secara default* harus menampilkan host itu sebagai tautan terverifikasi (KEPUTUSAN #299).
+
 ## Mengaktifkan marketplace (modul 3.2)
 
 Tanpa konfigurasi, listing afiliasi tetap berjalan; listing berbayar (dasbor web) dan bayar di aplikasi menjawab "belum tersedia".

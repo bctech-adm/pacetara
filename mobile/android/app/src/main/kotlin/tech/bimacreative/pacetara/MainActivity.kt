@@ -36,6 +36,12 @@ class MainActivity : FlutterFragmentActivity() {
     private fun sanitizeDeepLink(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         val data = intent.data ?: return
+        if (data.scheme == "https") {
+            // App Links undangan: hanya /j/<kode 8 karakter>; selain itu dibuka sebagai beranda.
+            val m = INVITE_PATH.matchEntire(data.path ?: "")
+            intent.data = Uri.Builder().scheme("https").authority(data.authority).path(if (m != null) "/j/${m.groupValues[1]}" else "/").build()
+            return
+        }
         if (data.scheme != "pacetara") return
         val safe = Uri.Builder().scheme("pacetara").authority("app").path("/imports")
         if (data.host == "app" && data.path == "/imports") {
@@ -50,5 +56,6 @@ class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
         val COMPLETE_CODE = Regex("^[A-Za-z0-9_-]{20,100}$")
+        val INVITE_PATH = Regex("^/j/([A-Za-z2-9]{8})$")
     }
 }

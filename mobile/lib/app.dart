@@ -73,6 +73,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/runs/:id', builder: (_, state) => RunDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/communities/explore', builder: (_, _) => const DirectoryScreen()),
       GoRoute(path: '/communities/new', builder: (_, _) => const CommunityFormScreen()),
+      // App Links undangan https://<host>/j/KODE (disaring di MainActivity): ke layar gabung dengan kode terisi.
+      GoRoute(
+        path: '/j/:code',
+        redirect: (_, state) {
+          final code = state.pathParameters['code'] ?? '';
+          return RegExp(r'^[A-Za-z2-9]{8}$').hasMatch(code) ? '/communities/join?code=${code.toUpperCase()}' : '/';
+        },
+      ),
       GoRoute(
         path: '/communities/join',
         builder: (_, state) => JoinByCodeScreen(initialCode: state.uri.queryParameters['code']),

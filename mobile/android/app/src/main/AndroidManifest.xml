@@ -61,6 +61,14 @@
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
+            <!-- App Links: tautan undangan https://<APP_LINKS_HOST>/j/KODE langsung membuka aplikasi (diverifikasi lewat
+                 /.well-known/assetlinks.json). Disaring di MainActivity: hanya /j/ + kode 8 karakter yang diteruskan. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${appLinksHost}" android:pathPrefix="/j/" />
+            </intent-filter>
             <!-- Kembali dari halaman callback OAuth Garmin/Strava: hanya kode sekali pakai (disaring di MainActivity). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
