@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pacetara/features/imports/health_connect_mapping.dart';
 import 'package:pacetara/features/imports/imports_repository.dart';
 import 'package:pacetara/features/imports/imports_screens.dart';
+import 'package:pacetara/features/imports/strava_brand.dart';
+import 'package:pacetara/features/runs/runs_repository.dart';
 
 void main() {
   final start = DateTime.utc(2026, 11, 10, 6, 0, 0);
@@ -66,5 +69,27 @@ void main() {
   test('ringkasan hasil impor', () {
     expect(importSummary({'imported': 2, 'duplicate': 1}), '2 lari diimpor, 1 sudah ada (dilewati)');
     expect(importSummary({}), 'Tidak ada lari yang diimpor');
+  });
+
+  test('detail lari Strava membawa tautan aktivitas asli', () {
+    final d = RunDetail.fromJson({
+      'id': 'r1', 'title': 'Morning Run', 'visibility': 'private', 'startedAt': '2026-11-10T06:00:00Z',
+      'distanceM': 5000, 'movingTimeS': 1800, 'source': 'strava', 'stravaUrl': 'https://www.strava.com/activities/1001',
+    });
+    expect(d.source, 'strava');
+    expect(d.stravaUrl, 'https://www.strava.com/activities/1001');
+    expect(RunDetail.fromJson({'id': 'r2', 'title': 'x', 'visibility': 'public', 'startedAt': '2026-11-10T06:00:00Z', 'distanceM': 1, 'movingTimeS': 1}).source, 'app');
+  });
+
+  testWidgets('merek Strava: View on Strava hanya untuk strava.com; tombol dan logo resmi tampil', (tester) async {
+    Widget wrap(Widget w) => MaterialApp(home: Scaffold(body: Column(children: [w])));
+    await tester.pumpWidget(wrap(const ViewOnStravaLink(url: 'https://www.strava.com/activities/1001')));
+    expect(find.text('View on Strava'), findsOneWidget);
+    await tester.pumpWidget(wrap(const ViewOnStravaLink(url: 'https://evil.example/activities/1')));
+    expect(find.text('View on Strava'), findsNothing);
+    await tester.pumpWidget(wrap(StravaConnectButton(onPressed: () async {})));
+    expect(find.bySemanticsLabel('Connect with Strava'), findsOneWidget);
+    await tester.pumpWidget(wrap(const PoweredByStrava()));
+    expect(find.bySemanticsLabel('Powered by Strava'), findsOneWidget);
   });
 }

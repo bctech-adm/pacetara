@@ -206,8 +206,19 @@ export class RunsService {
       'SELECT id, position FROM run_photos WHERE run_id = $1 ORDER BY position',
       [runId],
     );
+    // Pedoman Strava: data dari Strava ditautkan balik ke aktivitas aslinya ("View on Strava"). Lari Strava hanya
+    // terlihat oleh pemiliknya; impor lewat Health Connect (id `hc:`) tidak punya id aktivitas Strava.
+    let stravaUrl: string | undefined;
+    if (isOwner && r.source === 'strava') {
+      const { rows: ext } = await this.pool.query<{ external_id: string }>(
+        `SELECT external_id FROM import_records WHERE user_id = $1 AND source = 'strava' AND run_id = $2 AND external_id ~ '^[0-9]{1,20}$' LIMIT 1`,
+        [r.user_id, r.id],
+      );
+      if (ext[0]) stravaUrl = `https://www.strava.com/activities/${ext[0].external_id}`;
+    }
     return {
       ...this.summary(r),
+      ...(stravaUrl ? { stravaUrl } : {}),
       notes: r.notes,
       isOwner,
       // Pemilik: rute utuh + rute publik (agar bisa melihat apa yang terlihat orang lain).

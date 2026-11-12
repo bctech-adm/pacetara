@@ -72,6 +72,8 @@ class RunDetail {
     required this.photoUrls,
     required this.photoIds,
     required this.elevationGainM,
+    this.source = 'app',
+    this.stravaUrl,
   });
   final RunSummary summary;
   final String notes;
@@ -84,6 +86,12 @@ class RunDetail {
   final List<String> photoIds;
   final int? elevationGainM;
 
+  /// app | garmin | health_connect | strava.
+  final String source;
+
+  /// Hanya untuk pemilik lari impor Strava: tautan ke aktivitas asli ("View on Strava").
+  final String? stravaUrl;
+
   factory RunDetail.fromJson(Map<String, dynamic> j) {
     final photos = (j['photos'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
     return RunDetail(
@@ -95,6 +103,8 @@ class RunDetail {
       photoUrls: photos.map((p) => p['url'] as String).toList(),
       photoIds: photos.map((p) => p['id'] as String).toList(),
       elevationGainM: (j['elevationGainM'] as num?)?.toInt(),
+      source: j['source'] as String? ?? 'app',
+      stravaUrl: j['stravaUrl'] as String?,
     );
   }
 }

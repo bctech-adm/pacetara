@@ -12,6 +12,7 @@ import '../runs/screens/runs_list_screen.dart';
 import 'health_connect_mapping.dart';
 import 'health_connect_source.dart';
 import 'imports_repository.dart';
+import 'strava_brand.dart';
 
 String _fmtDate(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
@@ -200,6 +201,8 @@ class _ImportsScreenState extends ConsumerState<ImportsScreen> with WidgetsBindi
                       description: 'Lari dari Strava hanya menjadi riwayat pribadimu: tidak tampil di feed, komunitas, '
                           'papan peringkat, atau lencana yang dilihat orang lain.',
                       onConnect: () => _connect('strava'),
+                      connectButton: StravaConnectButton(onPressed: () => _connect('strava')),
+                      footer: const PoweredByStrava(),
                       onDisconnect: () => _disconnect('strava', 'Strava'),
                       onSync: () async {
                         await ref.read(importsRepositoryProvider).syncStrava();
@@ -226,6 +229,8 @@ class _ProviderCard extends StatelessWidget {
     required this.onConnect,
     required this.onDisconnect,
     this.onSync,
+    this.connectButton,
+    this.footer,
   });
   final IconData icon;
   final String label;
@@ -234,6 +239,12 @@ class _ProviderCard extends StatelessWidget {
   final Future<void> Function() onConnect;
   final Future<void> Function() onDisconnect;
   final Future<void> Function()? onSync;
+
+  /// Tombol hubungkan khusus penyedia (mis. tombol resmi "Connect with Strava"); bawaan tombol teks.
+  final Widget? connectButton;
+
+  /// Atribusi penyedia di bawah kartu (mis. "Powered by Strava").
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -265,10 +276,14 @@ class _ProviderCard extends StatelessWidget {
             AsyncButton(label: 'Putuskan sambungan', outlined: true, onPressed: onDisconnect),
           ] else ...[
             const SizedBox(height: 12),
-            AsyncButton(label: 'Hubungkan $label', onPressed: onConnect),
+            connectButton ?? AsyncButton(label: 'Hubungkan $label', onPressed: onConnect),
             const SizedBox(height: 4),
-            Text('Halaman masuk $label terbuka di browser. Setelah selesai, kembali ke aplikasi ini.', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Halaman masuk $label terbuka di browser. Setelah memberi izin, tekan "Selesaikan di PaceTara" untuk kembali ke aplikasi ini.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
+          if (footer != null) ...[const SizedBox(height: 12), footer!],
         ]),
       ),
     );

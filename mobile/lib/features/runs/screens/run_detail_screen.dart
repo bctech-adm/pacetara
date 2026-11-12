@@ -9,6 +9,7 @@ import '../../../core/api/api_error.dart';
 import '../../../core/widgets/common.dart';
 import '../../auth/auth_controller.dart';
 import '../../feed/feed_screens.dart';
+import '../../imports/strava_brand.dart';
 import '../route_map.dart';
 import '../runs_repository.dart';
 import '../track.dart';
@@ -169,6 +170,13 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
                   Text('Total naik ${run.elevationGainM} m'),
                 ],
                 if (run.notes.isNotEmpty) ...[const SizedBox(height: 16), Text(run.notes)],
+                // Data dari Strava: tautan balik ke aktivitas asli + atribusi (pedoman merek Strava).
+                if (run.source == 'strava') ...[
+                  const SizedBox(height: 16),
+                  if (run.stravaUrl != null) ViewOnStravaLink(url: run.stravaUrl!),
+                  const SizedBox(height: 4),
+                  const PoweredByStrava(),
+                ],
               ]),
             ),
             if (run.photoUrls.isNotEmpty)

@@ -278,6 +278,8 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
 
     expect((await api(ani).patch(`/v1/runs/${runId}`, { visibility: 'public' }).expect(409)).body.error).toBe('strava_private');
     await api(ani).patch(`/v1/runs/${runId}`, { title: 'Ganti judul boleh' }).expect(200);
+    // Pedoman Strava: pemilik mendapat tautan "View on Strava" ke aktivitas asli.
+    expect((await api(ani).get(`/v1/runs/${runId}`).expect(200)).body.stravaUrl).toBe('https://www.strava.com/activities/1001');
     expect((await api(ani).post('/v1/feed/posts', { runId, visibility: 'community' }).expect(409)).body.error).toBe('run_not_shareable');
     await api(budi).get(`/v1/runs/${runId}`).expect(404);
     expect((await api(budi).get(`/v1/users/${ani.id}/runs`).expect(200)).body.items).toHaveLength(0);
@@ -293,6 +295,7 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     const viaHc = (await api(ani).post('/v1/imports/health-connect', hcSession(new Date(Date.now() - 60 * HOUR), 3, { originPackage: 'com.strava', visibility: 'public' })).expect(200)).body;
     const hcRun = (await api(ani).get(`/v1/runs/${viaHc.runId}`).expect(200)).body;
     expect(hcRun).toMatchObject({ source: 'strava', visibility: 'private' });
+    expect(hcRun.stravaUrl).toBeUndefined(); // id Health Connect, bukan id aktivitas Strava
   });
 
   it('OAuth: state acak terikat pengguna, sekali pakai, token terenkripsi; data pribadi tidak di URL', async () => {
