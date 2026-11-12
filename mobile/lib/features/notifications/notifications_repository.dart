@@ -86,6 +86,10 @@ class AppNotification {
       'market_listing_paid' => 'Pembayaran listing diterima',
       'banner_approved' => 'Banner sponsormu disetujui dan akan tayang sesuai jadwal',
       'banner_rejected' => 'Banner sponsormu tidak disetujui. Lihat alasannya di dasbor web',
+      'plan_activated' => 'Premium aktif. Semua fitur Premium sudah bisa dipakai',
+      'plan_ended' => 'Premium berakhir. Data dan riwayatmu tetap tersimpan',
+      'community_plan_activated' => '$where sekarang ${data['plan'] == 'pro_unlimited' ? 'Pro Unlimited' : 'Pro'}',
+      'community_plan_ended' => 'Paket Pro $where berakhir. Anggota dan data tetap ada',
       _ => 'Notifikasi baru',
     };
   }
@@ -108,6 +112,8 @@ class AppNotification {
           data['orderId'] == null ? '/market/orders' : '/market/orders/${data['orderId']}',
         'market_seller_live' => '/market/seller',
         'market_listing_paid' => data['listingId'] == null ? '/market/mine' : '/market/listings/${data['listingId']}',
+        'plan_activated' || 'plan_ended' => '/subscription',
+        'community_plan_activated' || 'community_plan_ended' => communityId == null ? '/subscription' : '/subscription/community/$communityId',
         _ => null,
       };
 }
@@ -276,6 +282,8 @@ String? routeForPush(Map<String, dynamic> data) {
       '/market/orders/${data['orderId']}',
     'market_seller_live' => '/market/seller',
     'market_listing_paid' when data['listingId'] is String => '/market/listings/${data['listingId']}',
+    'plan_activated' || 'plan_ended' => '/subscription',
+    'community_plan_activated' || 'community_plan_ended' when community is String => '/subscription/community/$community',
     _ => null,
   };
 }

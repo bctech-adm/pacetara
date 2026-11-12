@@ -60,6 +60,14 @@ void main() {
     expect(routeForPush({'type': 'friend_running', 'communityId': 'c1'}), '/communities/c1');
     expect(routeForPush({'type': 'chat'}), isNull);
     expect(routeForPush({'type': 'lain'}), isNull);
+    expect(routeForPush({'type': 'plan_ended'}), '/subscription');
+    expect(routeForPush({'type': 'community_plan_activated', 'communityId': 'c1'}), '/subscription/community/c1');
+    final plan = AppNotification.fromJson({
+      'id': 'p', 'type': 'community_plan_activated', 'createdAt': '2026-11-11T01:00:00Z',
+      'community': {'id': 'c1', 'name': 'Lari Pagi'}, 'data': {'plan': 'pro_unlimited'},
+    });
+    expect(plan.text, 'Lari Pagi sekarang Pro Unlimited');
+    expect(plan.route, '/subscription/community/c1');
   });
 
   test('teks dan tujuan notifikasi', () {

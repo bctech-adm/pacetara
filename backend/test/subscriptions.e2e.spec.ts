@@ -504,6 +504,14 @@ describe.skipIf(!hasTestInfra)('Modul 2.5 Langganan (e2e)', () => {
     await subs.reconcile();
     expect(await cplan(c)).toBe('free');
 
+    // Perubahan paket diberitahukan: pengguna (Premium) dan pemilik komunitas (Pro), aktif lalu berakhir.
+    expect(t.push.to(u.id).map((j) => j.data.type)).toEqual(['plan_activated', 'plan_ended']);
+    expect(t.push.to(o.id).map((j) => j.data.type)).toEqual(['community_plan_activated', 'community_plan_ended']);
+    const inbox = (await api(u).get('/v1/notifications').expect(200)).body.items.map((n: { type: string }) => n.type);
+    expect(inbox).toEqual(expect.arrayContaining(['plan_activated', 'plan_ended']));
+    // Pemberian yang ditolak (paket salah) tidak memicu notifikasi apa pun.
+    expect(t.push.to(u.id)).toHaveLength(2);
+
     const log = (await t.pool.query(`SELECT action FROM admin_audit_log WHERE actor_id = $1 ORDER BY id`, [a.id])).rows.map((r) => r.action);
     expect(log).toEqual(expect.arrayContaining(['plan.grant', 'subscription.view', 'plan.revoke_grant']));
   });

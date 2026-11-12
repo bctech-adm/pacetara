@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Redis } from 'ioredis';
@@ -9,6 +10,7 @@ import { ApiError } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
 import { PG_POOL, REDIS } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { COMMUNITY_MEMBER_LIMIT, type CommunityPlan, limitInfo, type UserPlan } from '../plans/plans.js';
 import {
   isEntitled,
@@ -71,6 +73,8 @@ const Notification = z.object({
   testNotification: z.unknown().optional(),
 });
 
+type PlanChange = { kind: 'user' | 'community'; id: string; from: string; to: string };
+
 export type RtdnOutcome = 'queued' | 'duplicate' | 'ignored';
 
 /**
@@ -93,7 +97,22 @@ export class SubscriptionsService {
     private readonly play: PlayApi,
     private readonly oidc: PubSubOidcVerifier,
     private readonly queue: SubscriptionQueue,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /** Pengumpul perubahan paket dari recompute() di dalam planTx(). */
+  private readonly planChanges = new AsyncLocalStorage<PlanChange[]>();
+
+  /**
+   * Transaksi yang bisa mengubah paket: perubahan dicatat oleh recompute() lalu diberitahukan SETELAH commit
+   * (transaksi yang batal tidak memicu notifikasi).
+   */
+  private async planTx<T>(fn: (db: Queryable) => Promise<T>): Promise<T> {
+    const changes: PlanChange[] = [];
+    const result = await this.planChanges.run(changes, () => withTx(this.pool, fn));
+    await this.notifyPlanChanges(changes);
+    return result;
+  }
 
   get enabled(): boolean {
     return playEnabled(this.env);
@@ -203,7 +222,7 @@ export class SubscriptionsService {
       if (!communityId || ref !== this.accountRef(kind, userId, communityId)) throw purchaseMismatch();
     }
 
-    const id = await withTx(this.pool, async (db) => {
+    const id = await this.planTx(async (db) => {
       // Urutan kunci: pengguna → komunitas → langganan (#43).
       await db.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [userId]);
       if (communityId) await this.requireOwner(db, userId, communityId, true);
@@ -315,7 +334,7 @@ export class SubscriptionsService {
       if (!old?.user_id || !kind || (kind === 'premium') !== (old.kind === 'premium')) return 'unknown';
       if (purchase.externalAccountIdentifiers?.obfuscatedExternalAccountId !== this.accountRef(kind, old.user_id, old.community_id)) return 'mismatch';
       const subId = randomUUID();
-      const linked = await withTx(this.pool, async (db) => {
+      const linked = await this.planTx(async (db) => {
         await db.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [old.user_id]);
         if (old.community_id) await db.query('SELECT 1 FROM communities WHERE id = $1 FOR UPDATE', [old.community_id]);
         const { rowCount } = await db.query(
@@ -332,7 +351,7 @@ export class SubscriptionsService {
       return 'linked';
     }
 
-    await withTx(this.pool, async (db) => {
+    await this.planTx(async (db) => {
       if (known.user_id) await db.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [known.user_id]);
       if (known.community_id) await db.query('SELECT 1 FROM communities WHERE id = $1 FOR UPDATE', [known.community_id]);
       await db.query('SELECT 1 FROM play_subscriptions WHERE id = $1 FOR UPDATE', [known.id]);
@@ -393,18 +412,28 @@ export class SubscriptionsService {
 
   /** Paket yang tidak sesuai hak terkini (hanya entitas yang punya catatan langganan/pemberian; paket lama di luar 2.5 tidak disentuh). */
   async sweep() {
-    const users = await this.pool.query(
+    const users = await this.pool.query<{ id: string; old: string; plan: string }>(
       `UPDATE users u SET plan = compute_user_plan(u.id)
-        WHERE u.id IN (SELECT user_id FROM play_subscriptions WHERE user_id IS NOT NULL
+         FROM (SELECT id, plan AS old FROM users) o
+        WHERE u.id = o.id
+          AND u.id IN (SELECT user_id FROM play_subscriptions WHERE user_id IS NOT NULL
                        UNION SELECT user_id FROM plan_grants WHERE user_id IS NOT NULL)
-          AND u.status <> 'deleted' AND u.plan <> compute_user_plan(u.id)`,
+          AND u.status <> 'deleted' AND u.plan <> compute_user_plan(u.id)
+        RETURNING u.id, o.old, u.plan`,
     );
-    const communities = await this.pool.query(
+    const communities = await this.pool.query<{ id: string; old: string; plan: string }>(
       `UPDATE communities c SET plan = compute_community_plan(c.id)
-        WHERE c.id IN (SELECT community_id FROM play_subscriptions WHERE community_id IS NOT NULL
+         FROM (SELECT id, plan AS old FROM communities) o
+        WHERE c.id = o.id
+          AND c.id IN (SELECT community_id FROM play_subscriptions WHERE community_id IS NOT NULL
                        UNION SELECT community_id FROM plan_grants WHERE community_id IS NOT NULL)
-          AND c.plan <> compute_community_plan(c.id)`,
+          AND c.plan <> compute_community_plan(c.id)
+        RETURNING c.id, o.old, c.plan`,
     );
+    await this.notifyPlanChanges([
+      ...users.rows.map((r) => ({ kind: 'user' as const, id: r.id, from: r.old, to: r.plan })),
+      ...communities.rows.map((r) => ({ kind: 'community' as const, id: r.id, from: r.old, to: r.plan })),
+    ]);
     return { users: users.rowCount ?? 0, communities: communities.rowCount ?? 0 };
   }
 
@@ -421,7 +450,7 @@ export class SubscriptionsService {
       const { rows } = await this.pool.query<SubRow>(`SELECT ${SUB_COLS} FROM play_subscriptions WHERE token_hash = $1 AND revoked_at IS NULL`, [sha(v.purchaseToken)]);
       const row = rows[0];
       if (!row) continue;
-      await withTx(this.pool, async (db) => {
+      await this.planTx(async (db) => {
         if (row.user_id) await db.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [row.user_id]);
         if (row.community_id) await db.query('SELECT 1 FROM communities WHERE id = $1 FOR UPDATE', [row.community_id]);
         await db.query('UPDATE play_subscriptions SET revoked_at = now(), updated_at = now() WHERE id = $1 AND revoked_at IS NULL', [row.id]);
@@ -512,7 +541,7 @@ export class SubscriptionsService {
       throw new ApiError(400, 'invalid_input', 'Premium untuk pengguna; Pro/Pro Unlimited untuk komunitas');
     }
     const expiresAt = new Date(Date.now() + input.days * 86_400_000);
-    const id = await withTx(this.pool, async (db) => {
+    const id = await this.planTx(async (db) => {
       if (input.userId) {
         const { rows } = await db.query<{ status: string }>('SELECT status FROM users WHERE id = $1 FOR UPDATE', [input.userId]);
         if (!rows[0] || rows[0].status === 'deleted') throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
@@ -537,7 +566,7 @@ export class SubscriptionsService {
   }
 
   async revokeGrant(adminId: string, grantId: string, reason: string) {
-    await withTx(this.pool, async (db) => {
+    await this.planTx(async (db) => {
       const { rows } = await db.query<{ user_id: string | null; community_id: string | null; plan: string; revoked_at: Date | null }>(
         'SELECT user_id, community_id, plan, revoked_at FROM plan_grants WHERE id = $1',
         [grantId],
@@ -629,16 +658,66 @@ export class SubscriptionsService {
 
   /** Hitung ulang users.plan / communities.plan dari hak terkini (urutan: pengguna → komunitas). */
   async recompute(db: Queryable, a: { userIds: string[]; communityIds: string[] }) {
+    const changes = this.planChanges.getStore();
     if (a.userIds.length) {
-      await db.query(
-        `UPDATE users SET plan = compute_user_plan(id) WHERE id = ANY($1::uuid[]) AND status <> 'deleted' AND plan <> compute_user_plan(id)`,
+      const { rows } = await db.query<{ id: string; old: string; plan: string }>(
+        `UPDATE users u SET plan = compute_user_plan(u.id)
+           FROM (SELECT id, plan AS old FROM users WHERE id = ANY($1::uuid[])) o
+          WHERE u.id = o.id AND u.status <> 'deleted' AND u.plan <> compute_user_plan(u.id)
+          RETURNING u.id, o.old, u.plan`,
         [[...new Set(a.userIds)]],
       );
+      for (const r of rows) changes?.push({ kind: 'user', id: r.id, from: r.old, to: r.plan });
     }
     if (a.communityIds.length) {
-      await db.query(`UPDATE communities SET plan = compute_community_plan(id) WHERE id = ANY($1::uuid[]) AND plan <> compute_community_plan(id)`, [
-        [...new Set(a.communityIds)],
-      ]);
+      const { rows } = await db.query<{ id: string; old: string; plan: string }>(
+        `UPDATE communities c SET plan = compute_community_plan(c.id)
+           FROM (SELECT id, plan AS old FROM communities WHERE id = ANY($1::uuid[])) o
+          WHERE c.id = o.id AND c.plan <> compute_community_plan(c.id)
+          RETURNING c.id, o.old, c.plan`,
+        [[...new Set(a.communityIds)]],
+      );
+      for (const r of rows) changes?.push({ kind: 'community', id: r.id, from: r.old, to: r.plan });
+    }
+  }
+
+  /**
+   * Beri tahu perubahan paket: pengguna untuk Premium, pemilik komunitas untuk Pro. Saat berakhir, ditegaskan bahwa
+   * tidak ada data yang dihapus (#201). Tidak pernah melempar galat.
+   */
+  private async notifyPlanChanges(changes: PlanChange[]) {
+    for (const c of changes) {
+      try {
+        if (c.kind === 'user') {
+          const up = c.to !== 'free';
+          await this.notifications.notify([c.id], {
+            category: 'account',
+            inbox: { type: up ? 'plan_activated' : 'plan_ended', data: { plan: c.to, from: c.from } },
+            push: {
+              title: up ? 'Premium aktif' : 'Premium berakhir',
+              body: up ? 'Semua fitur Premium sudah bisa dipakai' : 'Akunmu kembali ke paket gratis. Data dan riwayatmu tetap tersimpan',
+              data: { type: up ? 'plan_activated' : 'plan_ended' },
+            },
+          });
+        } else {
+          const { rows } = await this.pool.query<{ owner_id: string; name: string }>('SELECT owner_id, name FROM communities WHERE id = $1', [c.id]);
+          if (!rows[0]) continue;
+          const up = c.to !== 'free';
+          const label = c.to === 'pro_unlimited' ? 'Pro Unlimited' : 'Pro';
+          await this.notifications.notify([rows[0].owner_id], {
+            category: 'account',
+            communityId: c.id,
+            inbox: { type: up ? 'community_plan_activated' : 'community_plan_ended', data: { communityId: c.id, plan: c.to, from: c.from } },
+            push: {
+              title: up ? `${rows[0].name} sekarang ${label}` : `Paket ${rows[0].name} berakhir`,
+              body: up ? 'Fitur komunitas Pro sudah bisa dipakai' : 'Komunitas kembali ke paket gratis. Anggota dan data tetap ada',
+              data: { type: up ? 'community_plan_activated' : 'community_plan_ended', communityId: c.id },
+            },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`Gagal memberi tahu perubahan paket: ${err instanceof Error ? err.message : 'galat'}`);
+      }
     }
   }
 

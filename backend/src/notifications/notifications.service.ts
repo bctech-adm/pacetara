@@ -42,7 +42,12 @@ export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 
   | 'market_listing_paid'
   // Modul 3.3: hasil tinjauan banner sponsor.
   | 'banner_approved'
-  | 'banner_rejected';
+  | 'banner_rejected'
+  // Perubahan paket langganan (Premium untuk pengguna, Pro untuk pemilik komunitas).
+  | 'plan_activated'
+  | 'plan_ended'
+  | 'community_plan_activated'
+  | 'community_plan_ended';
 
 export const notifChannel = (userId: string) => `user:${userId}:notif`;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
