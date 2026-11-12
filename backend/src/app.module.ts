@@ -18,6 +18,7 @@ import { CommunitiesService } from './communities/communities.service.js';
 import { TokenService } from './auth/token.service.js';
 import { CoreModule } from './core.module.js';
 import { EventScraper } from './event-engine/event-scraper.js';
+import { ScrapeTrigger } from './event-engine/scrape-trigger.js';
 import { AdminEventQueueController, EventSubmissionsController } from './event-engine/event-submissions.controller.js';
 import { EventSubmissionsService } from './event-engine/event-submissions.service.js';
 import { ScrapeHttp } from './event-engine/scrape-http.js';
@@ -119,6 +120,7 @@ import { UsersService } from './users/users.service.js';
     EventSubmissionsService,
     ScrapeHttp,
     EventScraper,
+    ScrapeTrigger,
     NotificationsService,
     PushQueue,
     SafetyService,

@@ -8,6 +8,7 @@ import { todayWib } from '../events/event-archive.js';
 import { EventBody, httpsUrl, isoDate } from '../events/events.controller.js';
 import { EVENT_CATEGORIES } from '../events/events.service.js';
 import { EventScraper } from './event-scraper.js';
+import { ScrapeTrigger } from './scrape-trigger.js';
 import { EventSubmissionsService } from './event-submissions.service.js';
 
 const uuid = new ParseUUIDPipe();
@@ -87,6 +88,7 @@ export class AdminEventQueueController {
   constructor(
     private readonly subs: EventSubmissionsService,
     private readonly scraper: EventScraper,
+    private readonly trigger: ScrapeTrigger,
   ) {}
 
   @Get('event-submissions')
@@ -123,6 +125,13 @@ export class AdminEventQueueController {
   @Get('event-sources')
   sources() {
     return this.scraper.status();
+  }
+
+  /** Jalankan satu putaran scraping sekarang (diproses worker). Maks. sekali per 15 menit, tercatat di log. */
+  @Post('event-sources/run')
+  @HttpCode(202)
+  run(@CurrentUser() u: AuthUser) {
+    return this.trigger.run(u.id);
   }
 }
 

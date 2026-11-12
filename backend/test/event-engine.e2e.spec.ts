@@ -5,6 +5,7 @@ import { hashPassword } from '../src/auth/password.js';
 import { TokenService } from '../src/auth/token.service.js';
 import { FieldCrypto } from '../src/crypto/field-crypto.js';
 import { EventScraper } from '../src/event-engine/event-scraper.js';
+import { ScrapeTrigger } from '../src/event-engine/scrape-trigger.js';
 import { type RawResponse, ScrapeHttp } from '../src/event-engine/scrape-http.js';
 import { archivePastEvents, expireStaleSubmissions, todayWib } from '../src/events/event-archive.js';
 import { createTestApp, hasTestInfra, resetData, type TestApp } from './helpers.js';
@@ -312,6 +313,21 @@ describe.skipIf(!hasTestInfra)('Modul 2.4 Engine event (e2e)', () => {
     const src = await request(t.http).get('/v1/admin/event-sources').set(a.auth).expect(200);
     expect(src.body.userAgent).toBe('PaceTaraBot/1.0 (+https://pace.uji.id/bot)');
     expect(src.body.sources).toEqual([expect.objectContaining({ id: 'kalender-uji', name: 'Kalender Uji', lastRun: expect.objectContaining({ pages: 1, updated: 1 }) })]);
+
+    // Panel: "Jalankan sekarang" menaruh satu putaran di antrean, maks. sekali per 15 menit, tercatat di log.
+    const trigger = t.app.get(ScrapeTrigger);
+    let queued = 0;
+    trigger.enqueue = async () => {
+      queued++;
+    };
+    await t.redis.del('event-scrape:manual');
+    await request(t.http).post('/v1/admin/event-sources/run').set(u.auth).expect(403);
+    expect((await request(t.http).post('/v1/admin/event-sources/run').set(a.auth).expect(202)).body).toMatchObject({ queued: true });
+    const again = await request(t.http).post('/v1/admin/event-sources/run').set(a.auth).expect(429);
+    expect(again.body.error).toBe('scrape_cooldown');
+    expect(queued).toBe(1);
+    const log = await t.pool.query(`SELECT action FROM admin_audit_log WHERE actor_id = $1 AND action = 'event_scrape.run'`, [a.id]);
+    expect(log.rowCount).toBe(1);
   });
 
   it('arsip: event hasil engine diarsipkan seperti event manual; kiriman menunggu yang lewat ditutup', async () => {

@@ -119,10 +119,36 @@ export function EventQueue() {
 
 function SourcesCard() {
   const src = useLoad(() => api<Sources>('GET', '/v1/admin/event-sources'), []);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function runNow() {
+    setBusy(true);
+    setNote(null);
+    try {
+      await api('POST', '/v1/admin/event-sources/run');
+      setNote('Putaran dijalankan di latar belakang. Muat ulang beberapa menit lagi untuk melihat hasilnya.');
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Gagal menjalankan');
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section className="card">
       <h2>Sumber scraping</h2>
       {src.error && <p className="bad">{src.error}</p>}
+      {src.data && src.data.sources.length > 0 && (
+        <p>
+          <button disabled={busy} onClick={runNow}>
+            Jalankan sekarang
+          </button>{' '}
+          <button className="link" onClick={src.reload}>
+            Muat ulang
+          </button>{' '}
+          <span className="muted">Maks. sekali per 15 menit agar situs sumber tidak terbebani.</span>
+        </p>
+      )}
+      {note && <p className="muted">{note}</p>}
       {src.data && src.data.sources.length === 0 && (
         <p className="muted">
           Belum ada sumber aktif. Sumber ditambahkan pemilik lewat <code>EVENT_SCRAPE_SOURCES</code> di <code>.env</code> setelah memeriksa ketentuan layanan dan robots.txt
