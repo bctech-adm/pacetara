@@ -1,4 +1,5 @@
 import java.io.FileInputStream
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -22,7 +23,7 @@ val releaseStore = signing("storeFile", "PACETARA_KEYSTORE_PATH")
 val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?)
     ?.split(",")
     ?.mapNotNull { entry ->
-        runCatching { String(java.util.Base64.getDecoder().decode(entry), Charsets.UTF_8) }.getOrNull()
+        runCatching { String(Base64.getDecoder().decode(entry), Charsets.UTF_8) }.getOrNull()
     }
     ?.filter { it.contains("=") }
     ?.associate { it.substringBefore("=") to it.substringAfter("=") }
