@@ -25,6 +25,7 @@ import { SpotsService } from '../spots/spots.service.js';
 import { KycService } from '../kyc/kyc.service.js';
 import { MarketService } from '../market/market.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
+import { BannersService } from '../banners/banners.service.js';
 import { TreasuryService } from '../treasury/treasury.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
 
@@ -66,6 +67,7 @@ export class UsersService {
     private readonly kyc: KycService,
     private readonly market: MarketService,
     private readonly payments: PaymentsService,
+    private readonly banners: BannersService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -167,6 +169,8 @@ export class UsersService {
       // akun penjual, dan pembayaran tetap untuk akuntansi/sengketa tanpa tautan ke akun (REVIEW-PRD C4).
       const listingPhotos = await this.market.onAccountDeletion(db, userId);
       await this.payments.onAccountDeletion(db, userId);
+      // Banner sponsor (modul 3.3): yang belum dibayar dihapus beserta gambar; yang sudah dibayar tetap tanpa tautan akun.
+      const bannerImages = await this.banners.onAccountDeletion(db, userId);
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
       // Modul 2.6: RSVP dan absensi dihapus; profil cari teman dan sapaan dihapus; pesanan jersey belum lunas dihapus,
@@ -214,7 +218,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return [...listingPhotos, ...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
+      return [...listingPhotos, ...bannerImages, ...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
     });
     // Cabut izin di Garmin/Strava (best effort; token sudah terhapus dari database).
     await this.imports.revokeAll(importTokens).catch(() => this.logger.warn('Gagal mencabut izin impor akun terhapus'));

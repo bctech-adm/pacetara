@@ -10,6 +10,8 @@ import '../chat/chat_repository.dart';
 import '../chat/chat_room.dart';
 import '../communities/widgets.dart';
 import '../moderation/moderation.dart';
+import '../auth/auth_controller.dart';
+import '../banners/sponsor_banner.dart';
 import 'events_repository.dart';
 
 /// 12 bulan ke depan mulai bulan ini, format YYYY-MM.
@@ -152,6 +154,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             ],
           ),
         ),
+        // Banner sponsor slot daftar event (modul 3.3): kota filter, selain itu kota profil.
+        SponsorBanner(slot: 'events', city: _city ?? ref.watch(authControllerProvider).value?.city, padding: const EdgeInsets.fromLTRB(16, 0, 16, 8)),
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (n) {
@@ -353,6 +357,8 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
       _InfoRow(icon: Icons.place_outlined, text: e.venue.isEmpty ? e.city : '${e.venue}, ${e.city}'),
       const SizedBox(height: 8),
       Wrap(spacing: 6, runSpacing: 6, children: [for (final c in e.categories) Chip(label: Text(eventCategories[c] ?? c), visualDensity: VisualDensity.compact)]),
+      // Banner sponsor slot detail event (modul 3.3): hanya banner yang tertaut ke event ini.
+      SponsorBanner(slot: 'event_detail', city: e.city, eventId: e.id, padding: const EdgeInsets.only(top: 12)),
       if (d.description.isNotEmpty) ...[const SizedBox(height: 12), SelectableText(d.description)],
       const SizedBox(height: 16),
       OutlinedButton.icon(

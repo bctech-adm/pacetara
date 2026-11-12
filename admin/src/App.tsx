@@ -5,15 +5,17 @@ import { EventQueue } from './EventQueue';
 import { Events } from './Events';
 import { Kyc } from './Kyc';
 import { Market } from './Market';
+import { Banners } from './Banners';
 import { Spots } from './Spots';
 import { Subscriptions } from './Subscriptions';
 
 /**
  * Panel super admin (modul 1.8): login dengan kata sandi + kode authenticator, antrean laporan,
  * banding, tindakan akun, log tindakan, input event manual (modul 1.7), dan antrean event (modul 2.4), langganan (modul 2.5),
- * antrean spot lari (modul 2.6), tinjauan verifikasi KTP (modul 3.1). Dasbor sponsor menyusul di 3.3.
+ * antrean spot lari (modul 2.6), tinjauan verifikasi KTP (modul 3.1), marketplace (modul 3.2), antrean banner sponsor
+ * (modul 3.3). Dasbor penjual & sponsor ada di /dasbor (admin/src/dash).
  */
-type Tab = 'reports' | 'events' | 'queue' | 'spots' | 'kyc' | 'market' | 'appeals' | 'users' | 'subs' | 'audit';
+type Tab = 'reports' | 'events' | 'queue' | 'spots' | 'kyc' | 'market' | 'banners' | 'appeals' | 'users' | 'subs' | 'audit';
 
 const REASONS: Record<string, string> = {
   spam: 'Spam',
@@ -41,9 +43,9 @@ export function App() {
       <header className="topbar">
         <h1>PaceTara Admin</h1>
         <nav>
-          {(['reports', 'events', 'queue', 'spots', 'kyc', 'market', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
+          {(['reports', 'events', 'queue', 'spots', 'kyc', 'market', 'banners', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', spots: 'Antrean spot', kyc: 'Verifikasi KTP', market: 'Marketplace', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
+              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', spots: 'Antrean spot', kyc: 'Verifikasi KTP', market: 'Marketplace', banners: 'Banner sponsor', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
             </button>
           ))}
           <button
@@ -63,6 +65,7 @@ export function App() {
       {tab === 'spots' && <Spots />}
       {tab === 'kyc' && <Kyc />}
       {tab === 'market' && <Market />}
+      {tab === 'banners' && <Banners />}
       {tab === 'appeals' && <Appeals />}
       {tab === 'users' && <Users />}
       {tab === 'subs' && <Subscriptions />}

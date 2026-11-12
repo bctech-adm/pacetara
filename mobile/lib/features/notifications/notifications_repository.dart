@@ -84,6 +84,8 @@ class AppNotification {
       'market_order_resolved' => 'Keputusan sengketa pesanan sudah keluar',
       'market_seller_live' => 'Pembayaran di aplikasi untuk tokomu sudah aktif',
       'market_listing_paid' => 'Pembayaran listing diterima',
+      'banner_approved' => 'Banner sponsormu disetujui dan akan tayang sesuai jadwal',
+      'banner_rejected' => 'Banner sponsormu tidak disetujui. Lihat alasannya di dasbor web',
       _ => 'Notifikasi baru',
     };
   }
@@ -158,7 +160,7 @@ const notificationCategories = <String, (String, String)>{
   'schedule': ('Jadwal lari', 'Sesi lari baru, pengingat sesi yang kamu ikuti, dan pembatalan'),
   'buddy': ('Cari teman lari', 'Sapaan baru dan sapaan yang diterima'),
   'account': ('Akun', 'Hasil verifikasi KTP'),
-  'market': ('Marketplace', 'Pesanan, sengketa, pembayaran listing, dan akun penjual'),
+  'market': ('Marketplace & sponsor', 'Pesanan, sengketa, pembayaran listing, akun penjual, dan banner sponsor'),
 };
 
 class NotificationsRepository {

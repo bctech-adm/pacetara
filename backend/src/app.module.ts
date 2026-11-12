@@ -76,6 +76,8 @@ import { XenditApi } from './market/xendit.js';
 import { MidtransApi } from './payments/midtrans.js';
 import { AdminPaymentsController, PaymentsController } from './payments/payments.controller.js';
 import { PaymentsService } from './payments/payments.service.js';
+import { AdminBannersController, BannersController, SponsorController } from './banners/banners.controller.js';
+import { BannersService } from './banners/banners.service.js';
 import { UsersService } from './users/users.service.js';
 
 @Module({
@@ -92,7 +94,9 @@ import { UsersService } from './users/users.service.js';
     // Modul 3.1 Verifikasi Level 2.
     KycController, AdminKycController,
     // Modul 3.2 Marketplace (+ pembayaran Midtrans bersama 3.3).
-    MarketController, XenditWebhookController, AdminMarketController, PaymentsController, AdminPaymentsController],
+    MarketController, XenditWebhookController, AdminMarketController, PaymentsController, AdminPaymentsController,
+    // Modul 3.3 Banner sponsor dan dasbor swalayan.
+    SponsorController, BannersController, AdminBannersController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -142,6 +146,7 @@ import { UsersService } from './users/users.service.js';
     XenditApi,
     MarketOrderSync,
     MarketService,
+    BannersService,
     ReportsService,
     ModerationService,
     AdminAuthService,

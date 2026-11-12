@@ -9,6 +9,7 @@ import '../../notifications/notifications_screens.dart';
 import '../../profile/profile_screen.dart';
 import '../communities_repository.dart';
 import '../widgets.dart';
+import '../../banners/sponsor_banner.dart';
 
 /// Beranda: komunitas yang diikuti, plus jalan pintas ke direktori, buat, dan gabung dengan kode.
 class MyCommunitiesScreen extends ConsumerWidget {
@@ -63,6 +64,8 @@ class MyCommunitiesScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
+                // Banner sponsor slot beranda (modul 3.3); kosong untuk Premium atau bila tidak ada banner.
+                SponsorBanner(slot: 'home', city: profile?.city),
                 const EventsEntry(),
                 const CommunityPlusEntry(),
                 for (final c in data.items) CommunityTile(community: c, onTap: () => context.push('/communities/${c.id}')),

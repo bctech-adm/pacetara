@@ -161,6 +161,15 @@ export const envSchema = z.object({
    */
   AFFILIATE_TEMPLATES: z.string().default(''),
 
+  /**
+   * Banner sponsor (modul 3.3): tarif rupiah per hari per kota sasaran untuk tiap slot; banner nasional (tanpa kota)
+   * = tarif harian × BANNER_NATIONAL_FACTOR. Dibayar di dasbor web lewat Midtrans.
+   */
+  BANNER_PRICE_HOME: z.coerce.number().int().min(1000).max(100_000_000).default(50_000),
+  BANNER_PRICE_EVENTS: z.coerce.number().int().min(1000).max(100_000_000).default(40_000),
+  BANNER_PRICE_EVENT_DETAIL: z.coerce.number().int().min(1000).max(100_000_000).default(30_000),
+  BANNER_NATIONAL_FACTOR: z.coerce.number().int().min(1).max(100).default(5),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()

@@ -1,12 +1,13 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useLoad } from '../useLoad';
 import { dash, DashError, dashLogin, dashLogout, hasDashSession, setDashLogoutHandler } from './dashApi';
+import { SponsorBanners } from './SponsorBanners';
 
 /**
  * Dasbor swalayan penjual & sponsor (modul 3.2/3.3) di /dasbor. Layanan digital PaceTara (biaya pasang listing,
  * boost, banner sponsor) dibayar di sini lewat Midtrans, bukan di aplikasi Android (REVIEW-PRD C1).
  */
-type Tab = 'listings' | 'payments';
+type Tab = 'listings' | 'banners' | 'payments';
 
 export const rupiah = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
 export const fmtDate = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('id-ID') : '–');
@@ -24,9 +25,9 @@ export function Dashboard() {
       <header className="topbar">
         <h1>Dasbor PaceTara</h1>
         <nav>
-          {(['listings', 'payments'] as Tab[]).map((t) => (
+          {(['listings', 'banners', 'payments'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ listings: 'Listing marketplace', payments: 'Pembayaran' }[t]}
+              {{ listings: 'Listing marketplace', banners: 'Banner sponsor', payments: 'Pembayaran' }[t]}
             </button>
           ))}
           <button
@@ -42,6 +43,7 @@ export function Dashboard() {
       </header>
       {paid && <p className="card good">Pembayaran sedang dikonfirmasi. Status diperbarui otomatis setelah Midtrans memberi tahu kami (biasanya beberapa detik).</p>}
       {tab === 'listings' && <Listings />}
+      {tab === 'banners' && <SponsorBanners />}
       {tab === 'payments' && <Payments />}
     </main>
   );

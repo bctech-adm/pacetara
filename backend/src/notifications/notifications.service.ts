@@ -12,7 +12,7 @@ import { hashPushToken, PushQueue, pushTokenAad } from './push.js';
  * modul 2.1: social = pengikut baru, suka, dan komentar di feed; modul 2.2: achievement = lencana baru;
  * modul 2.4: event = kiriman event disetujui/ditolak (juga kiriman spot, modul 2.6); modul 2.6: schedule = sesi lari
  * baru/pengingat/dibatalkan, buddy = sapa cari teman lari; modul 3.1: account = hasil verifikasi KTP; modul 3.2:
- * market = pesanan, pembayaran listing, dan akun penjual).
+ * market = pesanan, pembayaran listing, akun penjual, dan banner sponsor modul 3.3).
  */
 export const NOTIF_CATEGORIES = ['chat', 'community', 'run_invite', 'friend_running', 'social', 'achievement', 'event', 'schedule', 'buddy', 'account', 'market'] as const;
 export type NotifCategory = (typeof NOTIF_CATEGORIES)[number];
@@ -39,7 +39,10 @@ export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 
   | 'market_order_disputed'
   | 'market_order_resolved'
   | 'market_seller_live'
-  | 'market_listing_paid';
+  | 'market_listing_paid'
+  // Modul 3.3: hasil tinjauan banner sponsor.
+  | 'banner_approved'
+  | 'banner_rejected';
 
 export const notifChannel = (userId: string) => `user:${userId}:notif`;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

@@ -31,6 +31,7 @@ import { MarketOrderSync } from '../market/market-orders.js';
 import { XenditApi } from '../market/xendit.js';
 import { MidtransApi } from '../payments/midtrans.js';
 import { PaymentsService } from '../payments/payments.service.js';
+import { BannersService } from '../banners/banners.service.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
 import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from './queues.js';
 
@@ -71,6 +72,7 @@ import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from
     MarketOrderSync,
     MidtransApi,
     PaymentsService,
+    BannersService,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
@@ -93,6 +95,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     private readonly league: LeagueService,
     private readonly marketOrders: MarketOrderSync,
     private readonly payments: PaymentsService,
+    private readonly banners: BannersService,
   ) {}
 
   async onModuleInit() {
@@ -212,7 +215,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       case MAINTENANCE_JOBS.leagueSnapshot:
         return this.league.runJob();
       case MAINTENANCE_JOBS.marketMaintenance:
-        return Promise.all([this.marketOrders.maintenance(), this.payments.reconcile()]).then(([market, payments]) => ({ market, payments }));
+        return Promise.all([this.marketOrders.maintenance(), this.payments.reconcile(), this.banners.cleanup()]).then(([market, payments, banners]) => ({ market, payments, banners }));
       case MAINTENANCE_JOBS.kycReviewExpiry:
         return expireKycReviews(this.pool).then((expired) => ({ expired }));
       default:
