@@ -216,6 +216,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Dikunci: Flutter 3.50 menandai package:flutter/material.dart usang (pindah ke material_ui), sehingga analyze gagal.
+          flutter-version: 3.47.9
           cache: true
       - name: Siapkan kunci tanda tangan
         id: signing
@@ -289,6 +291,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Dikunci: Flutter 3.50 menandai package:flutter/material.dart usang (pindah ke material_ui), sehingga analyze gagal.
+          flutter-version: 3.47.9
           cache: true
       - run: flutter pub get
       - run: flutter analyze
