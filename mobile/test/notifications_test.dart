@@ -68,6 +68,9 @@ void main() {
     });
     expect(plan.text, 'Lari Pagi sekarang Pro Unlimited');
     expect(plan.route, '/subscription/community/c1');
+    expect(routeForPush({'type': 'content_removed', 'removalId': 'r1'}), '/moderation/removals');
+    final restored = AppNotification.fromJson({'id': 'q', 'type': 'content_appeal_accepted', 'createdAt': '2026-11-11T01:00:00Z', 'data': {'restored': true}});
+    expect(restored.text, 'Banding diterima, kontenmu dipulihkan');
   });
 
   test('teks dan tujuan notifikasi', () {

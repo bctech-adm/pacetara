@@ -47,7 +47,11 @@ export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 
   | 'plan_activated'
   | 'plan_ended'
   | 'community_plan_activated'
-  | 'community_plan_ended';
+  | 'community_plan_ended'
+  // Banding atas penurunan konten.
+  | 'content_removed'
+  | 'content_appeal_accepted'
+  | 'content_appeal_rejected';
 
 export const notifChannel = (userId: string) => `user:${userId}:notif`;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

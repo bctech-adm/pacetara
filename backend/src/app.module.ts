@@ -45,7 +45,7 @@ import { UserThrottlerGuard } from './http/user-throttler.guard.js';
 import { LiveController } from './live/live.controller.js';
 import { LiveService } from './live/live.service.js';
 import { RealtimeService } from './realtime/realtime.service.js';
-import { AppealController, ReportsController } from './moderation/reports.controller.js';
+import { AppealController, RemovalsController, ReportsController } from './moderation/reports.controller.js';
 import { ReportsService } from './moderation/reports.service.js';
 import { RunsController } from './runs/runs.controller.js';
 import { RunsService } from './runs/runs.service.js';
@@ -88,7 +88,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController,
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, RemovalsController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController,
     // Modul 2.6 Fitur komunitas lanjutan.
     CommunitySchedulesController, SessionsController, LeagueController, CommunityStatsController, BuddiesController, CommunityTreasuryController,
     JerseyController, SpotsController, AdminSpotsController,

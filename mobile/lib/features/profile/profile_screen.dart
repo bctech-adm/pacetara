@@ -257,6 +257,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: const Text('Penerima lokasimu saat menekan SOS ketika lari'),
           onTap: () => context.push('/settings/emergency-contacts'),
         ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.gavel_outlined),
+          title: const Text('Konten yang diturunkan'),
+          subtitle: const Text('Keputusan moderasi dan banding'),
+          onTap: () => context.push('/moderation/removals'),
+        ),
         const _VersionTile(),
         ListTile(
           contentPadding: EdgeInsets.zero,

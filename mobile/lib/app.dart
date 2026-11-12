@@ -25,6 +25,7 @@ import 'features/home/home_shell.dart';
 import 'features/imports/imports_screens.dart';
 import 'features/kyc/kyc_screens.dart';
 import 'features/market/market_screens.dart';
+import 'features/moderation/removals.dart';
 import 'features/notifications/notifications_screens.dart';
 import 'features/passport/passport_screens.dart';
 import 'features/profile/profile_screen.dart';
@@ -121,6 +122,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/market/orders/:id', builder: (_, state) => OrderDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/market/listings/:id', builder: (_, state) => ListingDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
+      GoRoute(path: '/moderation/removals', builder: (_, _) => const RemovalsScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
       GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),
       GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),

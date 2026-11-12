@@ -574,6 +574,18 @@ type Appeal = {
   createdAt: string;
   decidedAt: string | null;
   decisionNote: string | null;
+  /** null = banding akun; terisi = banding atas penurunan konten. */
+  content: { removalId: string; type: string; id: string; label: string | null; restorable: boolean; removedAt: string | null } | null;
+};
+
+const CONTENT_TYPE: Record<string, string> = {
+  message: 'pesan',
+  community: 'komunitas',
+  event: 'event',
+  post: 'postingan',
+  listing: 'listing',
+  spot: 'spot',
+  comment: 'komentar',
 };
 
 function Appeals() {
@@ -585,7 +597,14 @@ function Appeals() {
   async function decide(a: Appeal, accept: boolean) {
     const note = (notes[a.id] ?? '').trim();
     if (note.length < 3) return setMsg('Tulis catatan keputusan (minimal 3 karakter)');
-    if (!window.confirm(accept ? `Terima banding dan pulihkan ${a.user.displayName}?` : 'Tolak banding?')) return;
+    const question = !accept
+      ? 'Tolak banding?'
+      : a.content
+        ? a.content.restorable
+          ? `Terima banding dan pulihkan ${CONTENT_TYPE[a.content.type] ?? 'konten'} ini?`
+          : 'Terima banding? Isinya sudah terhapus permanen; pemilik diberi tahu bahwa penurunan dibatalkan.'
+        : `Terima banding dan pulihkan akun ${a.user.displayName}?`;
+    if (!window.confirm(question)) return;
     try {
       await api('POST', `/v1/admin/appeals/${a.id}/decide`, { accept, note });
       setMsg(null);
@@ -598,7 +617,7 @@ function Appeals() {
   return (
     <section className="card">
       <div className="row">
-        <h2>Banding akun</h2>
+        <h2>Banding akun dan konten</h2>
         <select value={status} onChange={(e) => setStatus(e.target.value as 'open' | 'closed')}>
           <option value="open">Menunggu</option>
           <option value="closed">Sudah diputuskan</option>
@@ -614,6 +633,15 @@ function Appeals() {
               <strong>{a.user.displayName}</strong> · {a.user.status}
               {a.user.suspendedUntil ? ` sampai ${fmt(a.user.suspendedUntil)}` : ''} · diajukan {fmt(a.createdAt)}
             </div>
+            {a.content ? (
+              <div className="muted">
+                Banding penurunan {CONTENT_TYPE[a.content.type] ?? a.content.type}
+                {a.content.label ? ` "${a.content.label}"` : ''} (diturunkan {fmt(a.content.removedAt)}) ·{' '}
+                {a.content.restorable ? 'bisa dipulihkan' : 'isi sudah terhapus, tidak bisa dipulihkan'} · <span className="mono">{a.content.id}</span>
+              </div>
+            ) : (
+              <div className="muted">Banding akun</div>
+            )}
             <p className="quote">{a.message}</p>
             {a.status === 'open' ? (
               <div className="row">

@@ -156,5 +156,8 @@ export class ReportsService {
   async onAccountDeletion(db: Queryable, userId: string): Promise<void> {
     await db.query('UPDATE reports SET details_enc = NULL WHERE reporter_id = $1', [userId]);
     await db.query('DELETE FROM appeals WHERE user_id = $1', [userId]);
+    // Catatan penurunan konten miliknya (banding ikut terhapus lewat FK); yang ia turunkan sebagai admin tetap tanpa nama.
+    await db.query('DELETE FROM content_removals WHERE owner_id = $1', [userId]);
+    await db.query('UPDATE content_removals SET removed_by = NULL WHERE removed_by = $1', [userId]);
   }
 }

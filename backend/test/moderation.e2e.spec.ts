@@ -6,6 +6,7 @@ import { totpAad } from '../src/admin/admin-auth.service.js';
 import { generateTotpSecret, totpCode } from '../src/admin/totp.js';
 import { hashPassword } from '../src/auth/password.js';
 import { TokenService } from '../src/auth/token.service.js';
+import { UsersService } from '../src/users/users.service.js';
 import { FieldCrypto } from '../src/crypto/field-crypto.js';
 import { createTestApp, freshIp, hasTestInfra, resetData, type TestApp } from './helpers.js';
 
@@ -244,6 +245,52 @@ describe.skipIf(!hasTestInfra)('Modul 1.8 Laporan dan panel super admin (e2e)', 
     await request(t.http).get(`/v1/communities/${c}`).set(member.auth).expect(404);
     await request(t.http).get(`/v1/chat/conversations/${conv}/messages`).set(member.auth).expect(404);
     await request(t.http).post(`/v1/communities/${c}/join`).set((await user()).auth).expect(404);
+  });
+
+  it('banding penurunan konten: pemilik diberi tahu, banding sekali dalam 14 hari, diterima = komunitas dipulihkan', async () => {
+    const admin = await superAdmin();
+    const panel = await admin.login();
+    const owner = await user('Pemilik');
+    const member = await user();
+    const other = await user();
+    const { id: c, conv } = await community(owner, [member]);
+    await report(member, 'community', c, 'scam').expect(201);
+    await request(t.http).post(`/v1/admin/reports/community/${c}/resolve`).set(panel).send({ action: 'remove' }).expect(204);
+    expect(t.push.to(owner.id).at(-1)).toMatchObject({ title: 'Kontenmu diturunkan', data: { type: 'content_removed' } });
+
+    const mine = (await request(t.http).get('/v1/moderation/removals').set(owner.auth).expect(200)).body.items;
+    expect(mine).toEqual([expect.objectContaining({ targetType: 'community', label: 'Lari Pagi', restorable: true, canAppeal: true, appeal: null })]);
+    const removalId = mine[0].id as string;
+    // Orang lain tidak bisa melihat atau membanding penurunan milik orang lain.
+    expect((await request(t.http).get('/v1/moderation/removals').set(other.auth).expect(200)).body.items).toEqual([]);
+    await request(t.http).post(`/v1/moderation/removals/${removalId}/appeal`).set(other.auth).send({ message: 'Ini bukan punyaku tapi coba' }).expect(404);
+    await request(t.http).post(`/v1/moderation/removals/${removalId}/appeal`).set(owner.auth).send({ message: 'Komunitas kami bukan penipuan, ini salah paham' }).expect(202);
+    await request(t.http).post(`/v1/moderation/removals/${removalId}/appeal`).set(owner.auth).send({ message: 'Coba lagi sekali lagi ya' }).expect(409);
+    // Banding konten tidak menghalangi banding akun (indeks terpisah).
+    expect((await request(t.http).get('/v1/moderation/removals').set(owner.auth).expect(200)).body.items[0]).toMatchObject({ canAppeal: false, appeal: { status: 'open' } });
+
+    const appeals = await request(t.http).get('/v1/admin/appeals').set(panel).expect(200);
+    const a = appeals.body.find((x: { content: { removalId: string } | null }) => x.content?.removalId === removalId);
+    expect(a).toMatchObject({ message: 'Komunitas kami bukan penipuan, ini salah paham', content: { type: 'community', id: c, restorable: true } });
+    await request(t.http).post(`/v1/admin/appeals/${a.id}/decide`).set(panel).send({ accept: true, note: 'Laporan keliru' }).expect(204);
+    await request(t.http).get(`/v1/communities/${c}`).set(member.auth).expect(200);
+    await request(t.http).get(`/v1/chat/conversations/${conv}/messages`).set(member.auth).expect(200);
+    expect(t.push.to(owner.id).at(-1)).toMatchObject({ title: 'Banding diterima', data: { type: 'content_appeal_accepted' } });
+    expect((await request(t.http).get('/v1/moderation/removals').set(owner.auth).expect(200)).body.items[0]).toMatchObject({
+      restored: true,
+      appeal: { status: 'accepted', note: 'Laporan keliru' },
+    });
+
+    // Lewat 14 hari: banding ditutup.
+    await report(member, 'community', c, 'scam').expect(201);
+    await request(t.http).post(`/v1/admin/reports/community/${c}/resolve`).set(panel).send({ action: 'remove' }).expect(204);
+    await t.pool.query(`UPDATE content_removals SET appeal_until = now() - interval '1 minute' WHERE target_id = $1`, [c]);
+    await t.pool.query('DELETE FROM appeals WHERE removal_id = $1', [removalId]);
+    expect((await request(t.http).post(`/v1/moderation/removals/${removalId}/appeal`).set(owner.auth).send({ message: 'Sudah terlambat tapi coba' }).expect(409)).body.error).toBe('appeal_closed');
+
+    // Hapus akun: catatan penurunan miliknya ikut terhapus.
+    await t.app.get(UsersService).deleteAccount(owner.id, { password: PASSWORD });
+    expect((await t.pool.query('SELECT 1 FROM content_removals WHERE owner_id = $1', [owner.id])).rowCount).toBe(0);
   });
 
   it('tangguhkan akun: sesi dicabut, login ditolak, banding, banding diterima memulihkan akun', async () => {

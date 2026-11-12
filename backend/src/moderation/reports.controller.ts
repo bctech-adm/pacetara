@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { ModerationService } from '../admin/moderation.service.js';
@@ -28,6 +28,27 @@ export class ReportsController {
   async create(@CurrentUser() u: AuthUser, @Body(new ZodPipe(ReportBody)) b: z.infer<typeof ReportBody>) {
     const { id } = await this.reports.create(u.id, { ...b, details: b.details || undefined });
     return { id };
+  }
+}
+
+const RemovalAppealBody = z.object({ message: z.string().trim().min(10, 'Jelaskan minimal 10 karakter').max(2000) }).strict();
+
+/** Konten milik saya yang diturunkan moderator, dan banding atasnya (14 hari, sekali per penurunan). */
+@Controller('moderation/removals')
+export class RemovalsController {
+  constructor(private readonly moderation: ModerationService) {}
+
+  @Get()
+  mine(@CurrentUser() u: AuthUser) {
+    return this.moderation.myRemovals(u.id);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
+  @Post(':id/appeal')
+  @HttpCode(202)
+  async appeal(@CurrentUser() u: AuthUser, @Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodPipe(RemovalAppealBody)) b: z.infer<typeof RemovalAppealBody>) {
+    await this.moderation.appealRemoval(u.id, id, b.message);
+    return { status: 'received' };
   }
 }
 

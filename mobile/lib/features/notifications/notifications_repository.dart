@@ -90,6 +90,11 @@ class AppNotification {
       'plan_ended' => 'Premium berakhir. Data dan riwayatmu tetap tersimpan',
       'community_plan_activated' => '$where sekarang ${data['plan'] == 'pro_unlimited' ? 'Pro Unlimited' : 'Pro'}',
       'community_plan_ended' => 'Paket Pro $where berakhir. Anggota dan data tetap ada',
+      'content_removed' => 'Kontenmu diturunkan karena melanggar aturan komunitas. Kamu bisa mengajukan banding dalam 14 hari',
+      'content_appeal_accepted' => data['restored'] == 'true'
+          ? 'Banding diterima, kontenmu dipulihkan'
+          : 'Banding diterima. Isinya sudah terhapus permanen; kamu boleh mengunggahnya lagi',
+      'content_appeal_rejected' => 'Banding atas penurunan kontenmu ditolak',
       _ => 'Notifikasi baru',
     };
   }
@@ -114,6 +119,7 @@ class AppNotification {
         'market_listing_paid' => data['listingId'] == null ? '/market/mine' : '/market/listings/${data['listingId']}',
         'plan_activated' || 'plan_ended' => '/subscription',
         'community_plan_activated' || 'community_plan_ended' => communityId == null ? '/subscription' : '/subscription/community/$communityId',
+        'content_removed' || 'content_appeal_accepted' || 'content_appeal_rejected' => '/moderation/removals',
         _ => null,
       };
 }
@@ -284,6 +290,7 @@ String? routeForPush(Map<String, dynamic> data) {
     'market_listing_paid' when data['listingId'] is String => '/market/listings/${data['listingId']}',
     'plan_activated' || 'plan_ended' => '/subscription',
     'community_plan_activated' || 'community_plan_ended' when community is String => '/subscription/community/$community',
+    'content_removed' || 'content_appeal_accepted' || 'content_appeal_rejected' => '/moderation/removals',
     _ => null,
   };
 }

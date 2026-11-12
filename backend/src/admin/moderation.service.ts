@@ -2,19 +2,44 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type pg from 'pg';
 import { TokenService } from '../auth/token.service.js';
 import { convChannel } from '../chat/chat.service.js';
-import { withTx } from '../common/db.js';
+import { type Queryable, withTx } from '../common/db.js';
 import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { LiveService } from '../live/live.service.js';
 import { commentBodyAad, postBodyAad } from '../feed/feed.service.js';
 import { reportDetailsAad, type ReportTarget } from '../moderation/reports.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { audit } from './admin-auth.service.js';
 
 export const appealAad = (id: string) => `appeals.message:${id}`;
+
+/** Batas waktu banding atas penurunan konten. */
+export const APPEAL_DAYS = 14;
+const RESTORABLE = new Set<ReportTarget>(['community', 'event', 'listing', 'spot']);
+const RESTORE_TABLE = { community: 'communities', event: 'events', listing: 'market_listings', spot: 'run_spots' } as const;
+/** Pemilik + judul non-pribadi setiap jenis konten (pesan/postingan/komentar tanpa judul). */
+const OWNER_SQL = {
+  message: 'SELECT sender_id AS owner, NULL::text AS label FROM chat_messages WHERE id = $1',
+  community: 'SELECT owner_id AS owner, name AS label FROM communities WHERE id = $1',
+  event: 'SELECT created_by AS owner, name AS label FROM events WHERE id = $1',
+  post: 'SELECT user_id AS owner, NULL::text AS label FROM feed_posts WHERE id = $1',
+  listing: 'SELECT seller_id AS owner, title AS label FROM market_listings WHERE id = $1',
+  spot: 'SELECT submitted_by AS owner, name AS label FROM run_spots WHERE id = $1',
+  comment: 'SELECT user_id AS owner, NULL::text AS label FROM feed_comments WHERE id = $1',
+} as const;
+const TARGET_LABEL: Record<string, string> = {
+  message: 'Pesanmu',
+  community: 'Komunitasmu',
+  event: 'Event yang kamu buat',
+  post: 'Postinganmu',
+  listing: 'Listingmu',
+  spot: 'Spot kirimanmu',
+  comment: 'Komentarmu',
+};
 const bodyAad = (messageId: string) => `chat_messages.body:${messageId}`;
 const CONTEXT_MESSAGES = 10;
 
@@ -35,6 +60,7 @@ export class ModerationService {
     private readonly storage: StorageService,
     private readonly realtime: RealtimeService,
     private readonly users: UsersRepository,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ---------- Antrean laporan ----------
@@ -253,8 +279,20 @@ export class ModerationService {
         );
       }
       await audit(db, adminId, `report.${action}`, { type, id }, { reports: rowCount, ...(note ? { note: note.slice(0, 500) } : {}) });
-      return { imageKey, conversationId, photoKeys };
+      const removal = action === 'remove' ? await this.recordRemoval(db, adminId, type, id) : null;
+      return { imageKey, conversationId, photoKeys, removal };
     });
+    if (outcome.removal) {
+      await this.notifications.notify([outcome.removal.ownerId], {
+        category: 'account',
+        inbox: { type: 'content_removed', data: { removalId: outcome.removal.id, targetType: type } },
+        push: {
+          title: 'Kontenmu diturunkan',
+          body: `${TARGET_LABEL[type]} melanggar aturan komunitas dan diturunkan. Kamu bisa mengajukan banding dalam ${APPEAL_DAYS} hari`,
+          data: { type: 'content_removed', removalId: outcome.removal.id },
+        },
+      });
+    }
     for (const k of outcome.photoKeys) await this.storage.delete(k).catch(() => this.logger.warn('Gagal menghapus foto postingan yang diturunkan'));
     if (outcome.imageKey) await this.storage.delete(outcome.imageKey).catch(() => this.logger.warn('Gagal menghapus gambar yang diturunkan'));
     if (outcome.conversationId) await this.realtime.publish(convChannel(outcome.conversationId), 'message.updated', { id });
@@ -312,12 +350,86 @@ export class ModerationService {
   /** Dipanggil dari endpoint publik setelah kredensial akun diverifikasi. Satu banding terbuka per akun. */
   async createAppeal(userId: string, message: string): Promise<void> {
     const { rows } = await this.pool.query<{ id: string }>(
-      `INSERT INTO appeals (user_id, message_enc) VALUES ($1, '\\x00') ON CONFLICT (user_id) WHERE status = 'open' DO NOTHING RETURNING id`,
+      `INSERT INTO appeals (user_id, message_enc) VALUES ($1, '\\x00') ON CONFLICT (user_id) WHERE status = 'open' AND removal_id IS NULL DO NOTHING RETURNING id`,
       [userId],
     );
     const id = rows[0]?.id;
     if (!id) throw new ApiError(409, 'appeal_pending', 'Banding sebelumnya masih ditinjau');
     await this.pool.query('UPDATE appeals SET message_enc = $2 WHERE id = $1', [id, this.crypto.encrypt(message, appealAad(id))]);
+  }
+
+  /**
+   * Catat penurunan konten yang punya pemilik (bukan admin yang menurunkan). Tanpa isi konten: hanya jenis, id,
+   * dan judul non-pribadi untuk listing/komunitas/event/spot.
+   */
+  private async recordRemoval(db: Queryable, adminId: string, type: ReportTarget, id: string): Promise<{ id: string; ownerId: string } | null> {
+    const src = OWNER_SQL[type as keyof typeof OWNER_SQL];
+    if (!src) return null;
+    const { rows } = await db.query<{ owner: string | null; label: string | null }>(src, [id]);
+    const owner = rows[0]?.owner;
+    if (!owner || owner === adminId) return null;
+    const { rows: ins } = await db.query<{ id: string }>(
+      `INSERT INTO content_removals (owner_id, target_type, target_id, label, restorable, removed_by, appeal_until)
+       VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(days => $7))
+       ON CONFLICT (target_type, target_id) DO UPDATE SET removed_at = now(), removed_by = EXCLUDED.removed_by,
+         appeal_until = EXCLUDED.appeal_until, restored_at = NULL
+       RETURNING id`,
+      [owner, type, id, rows[0]?.label?.slice(0, 120) ?? null, RESTORABLE.has(type), adminId, APPEAL_DAYS],
+    );
+    return { id: ins[0]!.id, ownerId: owner };
+  }
+
+  /** Penurunan konten milik pengguna (90 hari terakhir), untuk layar banding di aplikasi. */
+  async myRemovals(userId: string) {
+    const { rows } = await this.pool.query<{
+      id: string;
+      target_type: ReportTarget;
+      label: string | null;
+      restorable: boolean;
+      removed_at: Date;
+      appeal_until: Date;
+      restored_at: Date | null;
+      appeal_status: string | null;
+      decision_note: string | null;
+    }>(
+      `SELECT r.id, r.target_type, r.label, r.restorable, r.removed_at, r.appeal_until, r.restored_at, a.status AS appeal_status, a.decision_note
+         FROM content_removals r LEFT JOIN appeals a ON a.removal_id = r.id
+        WHERE r.owner_id = $1 AND r.removed_at > now() - interval '90 days'
+        ORDER BY r.removed_at DESC LIMIT 100`,
+      [userId],
+    );
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        targetType: r.target_type,
+        label: r.label,
+        restorable: r.restorable,
+        removedAt: r.removed_at.toISOString(),
+        appealUntil: r.appeal_until.toISOString(),
+        canAppeal: !r.appeal_status && r.appeal_until.getTime() > Date.now(),
+        appeal: r.appeal_status ? { status: r.appeal_status, note: r.appeal_status === 'open' ? null : r.decision_note } : null,
+        restored: Boolean(r.restored_at),
+      })),
+    };
+  }
+
+  /** Banding atas satu penurunan konten milik sendiri, dalam 14 hari, sekali. Isi banding terenkripsi. */
+  async appealRemoval(userId: string, removalId: string, message: string): Promise<void> {
+    await withTx(this.pool, async (db) => {
+      const { rows } = await db.query<{ appeal_until: Date }>(
+        'SELECT appeal_until FROM content_removals WHERE id = $1 AND owner_id = $2 FOR UPDATE',
+        [removalId, userId],
+      );
+      if (!rows[0]) throw new ApiError(404, 'removal_not_found', 'Penurunan konten tidak ditemukan');
+      if (rows[0].appeal_until.getTime() <= Date.now()) throw new ApiError(409, 'appeal_closed', `Batas banding ${APPEAL_DAYS} hari sudah lewat`);
+      const { rows: ins } = await db.query<{ id: string }>(
+        `INSERT INTO appeals (user_id, removal_id, message_enc) VALUES ($1, $2, '\\x00')
+         ON CONFLICT (removal_id) WHERE removal_id IS NOT NULL DO NOTHING RETURNING id`,
+        [userId, removalId],
+      );
+      if (!ins[0]) throw new ApiError(409, 'appeal_exists', 'Banding untuk konten ini sudah diajukan');
+      await db.query('UPDATE appeals SET message_enc = $2 WHERE id = $1', [ins[0].id, this.crypto.encrypt(message, appealAad(ins[0].id))]);
+    });
   }
 
   async appeals(status: 'open' | 'closed') {
@@ -332,10 +444,18 @@ export class ModerationService {
       created_at: Date;
       decided_at: Date | null;
       decision_note: string | null;
+      removal_id: string | null;
+      target_type: string | null;
+      target_id: string | null;
+      label: string | null;
+      restorable: boolean | null;
+      removed_at: Date | null;
     }>(
       `SELECT a.id, a.user_id, u.display_name, u.status AS user_status, u.suspended_until, a.message_enc, a.status,
-              a.created_at, a.decided_at, a.decision_note
+              a.created_at, a.decided_at, a.decision_note,
+              a.removal_id, r.target_type, r.target_id, r.label, r.restorable, r.removed_at
          FROM appeals a JOIN users u ON u.id = a.user_id
+         LEFT JOIN content_removals r ON r.id = a.removal_id
         WHERE ${status === 'open' ? `a.status = 'open'` : `a.status <> 'open'`}
         ORDER BY a.created_at ${status === 'open' ? 'ASC' : 'DESC'} LIMIT 200`,
     );
@@ -347,19 +467,65 @@ export class ModerationService {
       createdAt: a.created_at.toISOString(),
       decidedAt: a.decided_at?.toISOString() ?? null,
       decisionNote: a.decision_note,
+      // null = banding akun; terisi = banding atas penurunan konten.
+      content: a.removal_id
+        ? { removalId: a.removal_id, type: a.target_type, id: a.target_id, label: a.label, restorable: a.restorable, removedAt: a.removed_at?.toISOString() ?? null }
+        : null,
     }));
   }
 
   async decideAppeal(adminId: string, appealId: string, accept: boolean, note: string) {
-    const { rows } = await this.pool.query<{ user_id: string }>(
-      `UPDATE appeals SET status = $2, decided_at = now(), decided_by = $3, decision_note = $4
-        WHERE id = $1 AND status = 'open' RETURNING user_id`,
-      [appealId, accept ? 'accepted' : 'rejected', adminId, note.slice(0, 500)],
-    );
-    const userId = rows[0]?.user_id;
-    if (!userId) throw new ApiError(404, 'appeal_not_found', 'Banding tidak ditemukan atau sudah diputuskan');
-    await audit(this.pool, adminId, accept ? 'appeal.accept' : 'appeal.reject', { type: 'appeal', id: appealId }, { user: userId });
-    if (accept) await this.reinstate(adminId, userId, `Banding diterima: ${note}`);
+    const decided = await withTx(this.pool, async (db) => {
+      const { rows } = await db.query<{ user_id: string; removal_id: string | null }>(
+        `UPDATE appeals SET status = $2, decided_at = now(), decided_by = $3, decision_note = $4
+          WHERE id = $1 AND status = 'open' RETURNING user_id, removal_id`,
+        [appealId, accept ? 'accepted' : 'rejected', adminId, note.slice(0, 500)],
+      );
+      const a = rows[0];
+      if (!a) throw new ApiError(404, 'appeal_not_found', 'Banding tidak ditemukan atau sudah diputuskan');
+      let restored = false;
+      let targetType: string | null = null;
+      if (a.removal_id) {
+        const { rows: r } = await db.query<{ target_type: string; target_id: string; restorable: boolean }>(
+          'SELECT target_type, target_id, restorable FROM content_removals WHERE id = $1 FOR UPDATE',
+          [a.removal_id],
+        );
+        targetType = r[0]?.target_type ?? null;
+        if (accept && r[0]?.restorable) {
+          const table = RESTORE_TABLE[r[0].target_type as keyof typeof RESTORE_TABLE];
+          // Dipulihkan apa adanya (foto listing yang sudah dihapus tidak kembali).
+          await db.query(`UPDATE ${table} SET removed_at = NULL WHERE id = $1`, [r[0].target_id]);
+          await db.query('UPDATE content_removals SET restored_at = now() WHERE id = $1', [a.removal_id]);
+          restored = true;
+        }
+      }
+      await audit(db, adminId, accept ? 'appeal.accept' : 'appeal.reject', { type: 'appeal', id: appealId }, {
+        user: a.user_id,
+        ...(a.removal_id ? { removal: a.removal_id, restored } : {}),
+      });
+      return { ...a, restored, targetType };
+    });
+    if (!decided.removal_id) {
+      if (accept) await this.reinstate(adminId, decided.user_id, `Banding diterima: ${note}`);
+      return;
+    }
+    const what = TARGET_LABEL[decided.targetType as ReportTarget] ?? 'Konten';
+    await this.notifications.notify([decided.user_id], {
+      category: 'account',
+      inbox: {
+        type: accept ? 'content_appeal_accepted' : 'content_appeal_rejected',
+        data: { removalId: decided.removal_id, restored: String(decided.restored) },
+      },
+      push: {
+        title: accept ? 'Banding diterima' : 'Banding ditolak',
+        body: accept
+          ? decided.restored
+            ? `${what} dipulihkan`
+            : `Penurunan dibatalkan. Isinya sudah terhapus permanen, kamu boleh mengunggahnya lagi`
+          : 'Lihat catatan tim di halaman Konten yang diturunkan',
+        data: { type: accept ? 'content_appeal_accepted' : 'content_appeal_rejected', removalId: decided.removal_id },
+      },
+    });
   }
 
   // ---------- Log ----------
