@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/realtime/realtime_client.dart';
+import 'chat_outbox.dart';
 import 'chat_repository.dart';
 
 class ChatRoomState {
@@ -64,6 +65,15 @@ class ChatRoomController extends Notifier<ChatRoomState> {
 
   ChatRepository get _repo => ref.read(chatRepositoryProvider);
 
+  /// Antrean kirim yang bertahan setelah aplikasi ditutup (null jika belum masuk atau tidak tersedia).
+  ChatOutbox? get _outbox {
+    try {
+      return ref.read(chatOutboxProvider);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   ChatRoomState build() {
     _sub = ref.read(chatEventsProvider)('conv:$convId').listen(_onEvent);
@@ -84,6 +94,41 @@ class ChatRoomController extends Notifier<ChatRoomState> {
       unawaited(_markRead());
     } catch (e) {
       state = state.copy(loading: false, error: ApiError.from(e).message);
+    }
+    await _resumeOutbox();
+  }
+
+  /// Pesan percakapan ini yang belum terkirim saat aplikasi ditutup: tampil lagi dan dikirim ulang (id klien sama).
+  Future<void> _resumeOutbox() async {
+    final outbox = _outbox;
+    if (outbox == null) return;
+    final List<OutboxEntry> pending;
+    try {
+      pending = await outbox.forConversation(convId);
+    } catch (_) {
+      return;
+    }
+    for (final e in pending) {
+      if (state.messages.any((m) => m.clientMsgId == e.clientMsgId)) continue;
+      final local = ChatMessage(
+        id: 'local-${e.clientMsgId}',
+        seq: -1,
+        senderId: outbox.ownerId,
+        senderName: e.senderName,
+        senderAvatarUrl: null,
+        isMine: true,
+        kind: e.kind,
+        createdAt: e.createdAt,
+        text: e.text,
+        invite: e.invite,
+        clientMsgId: e.clientMsgId,
+        sendState: SendState.sending,
+      );
+      try {
+        await _send(local, (m) => ChatOutbox.send(_repo, e));
+      } catch (_) {
+        // Tetap "gagal terkirim" (ketuk untuk kirim ulang); antrean dipertahankan bila galatnya sementara.
+      }
     }
   }
 
@@ -174,19 +219,40 @@ class ChatRoomController extends Notifier<ChatRoomState> {
 
   void discard(ChatMessage failed) {
     state = state.copy(messages: state.messages.where((m) => m.clientMsgId != failed.clientMsgId || !m.isPending).toList());
+    final id = failed.clientMsgId;
+    final outbox = _outbox;
+    if (id != null && outbox != null) unawaited(outbox.remove(id).catchError((_) {}));
   }
 
   Future<void> _send(ChatMessage local, Future<ChatMessage> Function(ChatMessage) call) async {
     state = state.copy(messages: [...state.messages.where((m) => m.clientMsgId != local.clientMsgId || !m.isPending), local]);
+    // Teks dan ajakan lari disimpan di antrean dulu, agar tetap terkirim walau aplikasi ditutup sebelum berhasil.
+    final outbox = (local.kind == 'text' || local.kind == 'run_invite') ? _outbox : null;
+    final id = local.clientMsgId!;
+    if (outbox != null) {
+      try {
+        await outbox.add(OutboxEntry(
+          clientMsgId: id,
+          convId: convId,
+          kind: local.kind,
+          senderName: local.senderName,
+          createdAt: local.createdAt,
+          text: local.text,
+          invite: local.invite,
+        ));
+      } catch (_) {}
+    }
     try {
       final saved = await call(local);
       final rest = state.messages.where((m) => !(m.isPending && m.clientMsgId == local.clientMsgId)).toList();
       state = state.copy(messages: _merge(rest, [saved]));
       _readSeq = math.max(_readSeq, saved.seq);
+      await outbox?.remove(id).catchError((_) {});
     } catch (e) {
       state = state.copy(
         messages: [for (final m in state.messages) m.isPending && m.clientMsgId == local.clientMsgId ? m.withState(SendState.failed) : m],
       );
+      if (isPermanentSendError(e)) await outbox?.remove(id).catchError((_) {});
       rethrow;
     }
   }

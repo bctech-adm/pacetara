@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
+import 'chat_outbox.dart';
 import 'chat_repository.dart';
 import 'chat_room.dart';
 
@@ -39,6 +40,9 @@ final inboxProvider = StreamProvider.autoDispose<List<ConversationSummary>>((ref
     }
     loading = true;
     try {
+      // Kirim antrean pesan yang tertunda (mis. dibuat offline lalu aplikasi ditutup) sebelum memuat daftar.
+      final outbox = ref.read(chatOutboxProvider);
+      if (outbox != null) await outbox.flush(repo).catchError((_) => 0);
       final items = await repo.conversations();
       if (out.isClosed) return;
       out.add(items);

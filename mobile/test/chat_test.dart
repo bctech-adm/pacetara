@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pacetara/core/api/api_error.dart';
 import 'package:pacetara/core/realtime/realtime_client.dart';
+import 'package:pacetara/features/chat/chat_outbox.dart';
 import 'package:pacetara/features/chat/chat_repository.dart';
 import 'package:pacetara/features/chat/chat_room.dart';
 import 'package:pacetara/features/chat/chat_screens.dart';
@@ -97,6 +98,7 @@ void main() {
       container = ProviderContainer(overrides: [
         chatRepositoryProvider.overrideWithValue(repo),
         chatEventsProvider.overrideWithValue((ch) => events.stream.where((e) => e.channel == ch)),
+        chatOutboxProvider.overrideWithValue(null),
       ]);
     });
     tearDown(() async {
@@ -215,6 +217,65 @@ void main() {
     expect(newClientId(), matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
   });
 
+  group('antrean kirim (outbox)', () {
+    late FakeChatRepository repo;
+    late MemoryOutboxStore store;
+
+    Future<void> settle() async {
+      for (var i = 0; i < 8; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    ProviderContainer app() => ProviderContainer(overrides: [
+          chatRepositoryProvider.overrideWithValue(repo),
+          chatEventsProvider.overrideWithValue((_) => const Stream.empty()),
+          chatOutboxProvider.overrideWithValue(ChatOutbox(store, _me)),
+        ]);
+
+    setUp(() {
+      repo = FakeChatRepository();
+      store = MemoryOutboxStore();
+    });
+
+    test('pesan gagal bertahan setelah aplikasi ditutup dan terkirim sekali saat percakapan dibuka lagi', () async {
+      final c1 = app();
+      c1.listen(chatRoomProvider(_conv), (_, _) {});
+      await settle();
+      repo.failSend = true;
+      await expectLater(c1.read(chatRoomProvider(_conv).notifier).sendText('halo offline', senderId: _me, senderName: 'Saya'), throwsA(isA<ApiError>()));
+      expect(await ChatOutbox(store, _me).all(), hasLength(1));
+      c1.dispose(); // aplikasi ditutup
+
+      repo.failSend = false;
+      final c2 = app();
+      c2.listen(chatRoomProvider(_conv), (_, _) {});
+      await settle();
+      expect(repo.server.where((m) => m.text == 'halo offline'), hasLength(1));
+      expect(repo.sentClientIds.toSet(), hasLength(1)); // id klien yang sama: server tidak membuat pesan ganda
+      expect(await ChatOutbox(store, _me).all(), isEmpty);
+      expect(c2.read(chatRoomProvider(_conv)).messages.where((m) => m.isPending), isEmpty);
+      c2.dispose();
+    });
+
+    test('galat permanen membuang antrean; buang manual juga; flush mengirim semua', () async {
+      final outbox = ChatOutbox(store, _me);
+      await outbox.add(OutboxEntry(clientMsgId: 'a', convId: _conv, kind: 'text', senderName: 'Saya', createdAt: DateTime.now(), text: 'satu'));
+      await outbox.add(OutboxEntry(clientMsgId: 'b', convId: 'lain', kind: 'text', senderName: 'Saya', createdAt: DateTime.now(), text: 'dua'));
+      // Kedaluwarsa (> 7 hari) diabaikan.
+      await outbox.add(OutboxEntry(clientMsgId: 'c', convId: _conv, kind: 'text', senderName: 'Saya', createdAt: DateTime.now().subtract(const Duration(days: 8)), text: 'lama'));
+      expect((await outbox.all()).map((e) => e.clientMsgId), ['a', 'b']);
+      expect(await outbox.flush(repo), 2);
+      expect(await outbox.all(), isEmpty);
+      expect(isPermanentSendError(const ApiError(403, 'cannot_message', 'x')), isTrue);
+      expect(isPermanentSendError(const ApiError(0, 'network', 'x')), isFalse);
+      expect(isPermanentSendError(const ApiError(429, 'rate', 'x')), isFalse);
+      // Antrean akun lain terpisah.
+      await outbox.add(OutboxEntry(clientMsgId: 'd', convId: _conv, kind: 'text', senderName: 'Saya', createdAt: DateTime.now(), text: 'x'));
+      expect(await ChatOutbox(store, 'akun-lain').all(), isEmpty);
+    });
+  });
+
   testWidgets('gelembung pesan: terhapus, kedaluwarsa, gagal terkirim, ajakan lari dengan tombol ikut', (tester) async {
     bool? rsvp;
     var retried = false;
@@ -262,4 +323,18 @@ void main() {
     await tester.tap(find.text('Ikut'));
     expect(rsvp, isTrue);
   });
+}
+
+class MemoryOutboxStore implements OutboxStore {
+  final data = <String, String>{};
+  @override
+  Future<String?> read(String key) async => data[key];
+  @override
+  Future<void> write(String key, String? value) async {
+    if (value == null) {
+      data.remove(key);
+    } else {
+      data[key] = value;
+    }
+  }
 }

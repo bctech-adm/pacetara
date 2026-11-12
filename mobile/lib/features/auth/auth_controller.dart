@@ -8,6 +8,7 @@ import '../../core/api/api_error.dart';
 import '../../core/config.dart';
 import '../../core/http/api_client.dart';
 import '../../core/session/session_manager.dart';
+import '../chat/chat_outbox.dart';
 import 'models.dart';
 
 const _device = 'Android';
@@ -184,7 +185,10 @@ class AuthController extends AsyncNotifier<MyProfile?> {
       });
 
   Future<void> deleteAccount({String? password}) => _call(() async {
+        final id = state.value?.id;
         await _dio.post<void>('/v1/me/delete', data: {'confirm': 'HAPUS', 'password': ?password});
+        // Pesan chat yang belum terkirim milik akun ini ikut dihapus dari perangkat.
+        if (id != null) await ChatOutbox.clear(const SecureOutboxStore(), id).catchError((_) {});
         await _session.clear();
         state = const AsyncData(null);
       });
