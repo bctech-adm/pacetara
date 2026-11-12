@@ -5,7 +5,8 @@ RUN apk upgrade --no-cache && apk add --no-cache nginx tini \
   && mkdir -p /tmp/nginx && chown -R nginx:nginx /tmp/nginx /var/lib/nginx /var/log/nginx
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY site /srv
+COPY entrypoint.sh /usr/local/bin/web-entrypoint.sh
 USER nginx
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["nginx", "-e", "/dev/stderr", "-g", "daemon off;"]
+CMD ["/bin/sh", "/usr/local/bin/web-entrypoint.sh"]

@@ -33,6 +33,7 @@ const premiumFeatures = <(String, String, String)>[
   ('Riwayat lari', '3 bulan terakhir', 'Penuh + statistik lengkap'),
   ('Rak medali', '5 medali', 'Tak terbatas'),
   ('Cari teman lari', 'Dasar (per kota)', 'Filter pace, lokasi, dan jam'),
+  ('Iklan', 'Ada (feed dan daftar event)', 'Tanpa iklan'),
   ('Lencana', '-', 'Premium di avatar dan profil'),
 ];
 

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/api/api_error.dart';
 import '../../core/http/api_client.dart';
 import '../../core/widgets/common.dart';
+import '../ads/ads.dart';
 import '../auth/auth_controller.dart';
 import '../chat/chat_screens.dart' show formatListTime;
 import '../moderation/moderation.dart';
@@ -52,7 +53,7 @@ class FeedScreen extends StatelessWidget {
           icon: const Icon(Icons.edit_outlined),
           label: const Text('Posting'),
         ),
-        body: TabBarView(children: [for (final t in FeedTab.values) PostList(key: PageStorageKey(t), load: (r, c) => r.list(t, cursor: c), empty: _emptyText(t))]),
+        body: TabBarView(children: [for (final t in FeedTab.values) PostList(key: PageStorageKey(t), load: (r, c) => r.list(t, cursor: c), empty: _emptyText(t), adPlacement: AdPlacement.feed)]),
       ),
     );
   }
@@ -66,10 +67,13 @@ class FeedScreen extends StatelessWidget {
 
 /// Daftar postingan dengan paging kursor dan tarik-untuk-memuat-ulang.
 class PostList extends ConsumerStatefulWidget {
-  const PostList({super.key, required this.load, required this.empty, this.header});
+  const PostList({super.key, required this.load, required this.empty, this.header, this.adPlacement});
   final Future<FeedPage<FeedPost>> Function(FeedRepository repo, String? cursor) load;
   final String empty;
   final Widget? header;
+
+  /// Hanya tab Feed yang memberi nilai ini (modul 2.7); profil pengguna lain tidak memuat iklan.
+  final AdPlacement? adPlacement;
 
   @override
   ConsumerState<PostList> createState() => _PostListState();
@@ -142,7 +146,13 @@ class _PostListState extends ConsumerState<PostList> {
               return const SizedBox(height: 24);
             }
             final p = _items[i - 1];
-            return PostCard(key: ValueKey(p.id), post: p, onChanged: _replace, onRemoved: () => _remove(p.id));
+            final card = PostCard(key: ValueKey(p.id), post: p, onChanged: _replace, onRemoved: () => _remove(p.id));
+            final placement = widget.adPlacement;
+            if (placement == null || !AdCadence.feed.after(i - 1)) return card;
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+              card,
+              AdSlot(key: ValueKey('ad-${i - 1}'), placement: placement),
+            ]);
           },
         ),
       ),

@@ -44,6 +44,11 @@ export interface MyProfile {
   /** Radius zona privasi rute lari (meter). */
   privacyRadiusM: number;
   badges: string[];
+  /**
+   * Iklan AdMob boleh tampil di aplikasi (modul 2.7). Satu-satunya sumber keputusan iklan: diturunkan dari
+   * `plan` yang hanya dihitung server, jadi tidak bisa diubah klien. Premium = tanpa iklan.
+   */
+  ads: boolean;
   createdAt: string;
 }
 
@@ -145,6 +150,7 @@ export class UsersRepository {
       privacyRadiusM: row.privacy_radius_m,
       // Terverifikasi = Level 2 (modul 3.1). Paket diubah hanya oleh server (modul 2.5).
       badges: [...(row.plan === 'premium' ? ['premium'] : []), ...(row.verification_level >= 2 ? ['verified'] : [])],
+      ads: row.plan !== 'premium',
       createdAt: row.created_at.toISOString(),
     };
   }

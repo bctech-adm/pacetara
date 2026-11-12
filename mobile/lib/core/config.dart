@@ -30,6 +30,13 @@ class AppConfig {
   static bool get pushConfigured =>
       firebaseApiKey.isNotEmpty && firebaseAppId.isNotEmpty && firebaseSenderId.isNotEmpty && firebaseProjectId.isNotEmpty;
 
+  /// ID unit iklan AdMob (modul 2.7). Diisi CI dari variabel repo; bukan rahasia (ikut di setiap APK).
+  /// Kosong di build rilis = tidak ada iklan sama sekali; di build debug memakai unit uji resmi Google.
+  /// ID aplikasi AdMob (`ADMOB_APP_ID`) tidak dibaca Dart: Gradle menaruhnya di manifest.
+  static const admobNativeFeed = String.fromEnvironment('ADMOB_NATIVE_FEED');
+  static const admobBannerFeed = String.fromEnvironment('ADMOB_BANNER_FEED');
+  static const admobBannerEvents = String.fromEnvironment('ADMOB_BANNER_EVENTS');
+
   /// Hanya untuk development dengan Caddy lokal (CA internal). Diabaikan di build rilis.
   static const allowDevCa = bool.fromEnvironment('ALLOW_DEV_CA');
 

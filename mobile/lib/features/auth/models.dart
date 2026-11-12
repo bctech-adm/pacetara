@@ -1,6 +1,6 @@
 /// Profil milik sendiri dari `GET /v1/me`.
 class MyProfile {
-  const MyProfile({
+  MyProfile({
     required this.id,
     required this.displayName,
     required this.email,
@@ -15,7 +15,8 @@ class MyProfile {
     required this.verificationLevel,
     required this.badges,
     this.privacyRadiusM = 250,
-  });
+    bool? ads,
+  }) : ads = ads ?? !badges.contains('premium');
 
   final String id;
   final String displayName;
@@ -39,6 +40,10 @@ class MyProfile {
   /// Paket diubah hanya oleh server (modul 2.5); lencana Premium tampil di avatar dan profil.
   bool get isPremium => badges.contains('premium');
 
+  /// Iklan AdMob boleh tampil (modul 2.7). Dari server (`ads`, diturunkan dari paket yang hanya dihitung server);
+  /// server lama tanpa field ini: Premium = tanpa iklan.
+  final bool ads;
+
   factory MyProfile.fromJson(Map<String, dynamic> j) => MyProfile(
         id: j['id'] as String,
         displayName: j['displayName'] as String,
@@ -54,6 +59,7 @@ class MyProfile {
         verificationLevel: (j['verificationLevel'] as num?)?.toInt() ?? 0,
         badges: (j['badges'] as List<dynamic>? ?? const []).whereType<String>().toList(),
         privacyRadiusM: (j['privacyRadiusM'] as num?)?.toInt() ?? 250,
+        ads: j['ads'] as bool?,
       );
 }
 

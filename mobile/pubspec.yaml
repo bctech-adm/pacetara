@@ -39,6 +39,9 @@ dependencies:
   # diminta saat membuka pemindai.
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.0.0
+  # Iklan AdMob (modul 2.7), paket resmi Google. Hanya banner/native di feed dan daftar event untuk pengguna gratis;
+  # SDK baru diinisialisasi saat slot iklan pertama tampil. ID aplikasi masuk manifest lewat Gradle.
+  google_mobile_ads: ^9.2.0
 
 dev_dependencies:
   flutter_test:

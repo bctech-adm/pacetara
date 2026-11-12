@@ -22,6 +22,7 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | 2.4 Engine event | Kode selesai (backend + worker + panel + aplikasi), teruji e2e dengan HTTP palsu: kirim event dari aplikasi (Level 1, maks. 5/hari), antrean di tab **Antrean event** panel (setujui dengan koreksi / tolak dengan alasan / gabung duplikat, semua di log), kandidat duplikat otomatis, scraping terjadwal idempoten (parser JSON-LD schema.org, robots.txt, anti-SSRF), sumber + halaman resmi di detail event, notifikasi ke pengirim. **Scraping mati sampai pemilik mengaktifkan sumber** (lihat "Mengaktifkan sumber scraping event"); belum diuji terhadap situs sungguhan (KEPUTUSAN #177–#191) |
 | 2.5 Langganan | Kode selesai (backend + worker + panel + aplikasi), teruji e2e dengan Google Play dan Pub/Sub palsu: Premium (akun) dan Komunitas Pro / Pro Unlimited (per komunitas, hanya pemilik) lewat Google Play Billing, diverifikasi server (`subscriptionsv2.get`) + acknowledge di server, RTDN dengan verifikasi token OIDC, rekonsiliasi berkala, lencana Premium/Pro, ajakan upgrade di setiap batas paket, tab **Langganan** panel (status + pemberian paket manual ber-log). **Mati sampai env diisi** (lihat "Mengaktifkan langganan Google Play"); **pembelian sungguhan belum diuji** — hanya bisa dari aplikasi yang dipasang lewat track uji Play, bukan APK GitHub (KEPUTUSAN #192–#209) |
 | 2.6 Fitur komunitas lanjutan | Kode selesai (backend + worker + panel + aplikasi), teruji e2e: jadwal lari rutin + RSVP (gratis, sesi dibentuk 28 hari ke depan, pengingat 2 jam), absensi QR berputar 30 detik / check-in GPS radius 200 m tanpa menyimpan lokasi (Pro), liga bulanan per kota dari snapshot worker (Pro, tanpa Strava/unverified/privat) + statistik komunitas (Pro), cari teman lari opt-in (gratis per kota, filter pace/jarak/jam Premium, sapa harus diterima sebelum chat), kas + pre-order jersey pencatatan saja (Pro), peta spot lari dengan antrean persetujuan di tab **Antrean spot** panel + laporan. Kebijakan privasi naik ke versi 2026-11-12. **Belum diuji di HP sungguhan:** pemindai QR (kamera), check-in GPS di lapangan, build APK dengan `mobile_scanner` (hanya CI) (KEPUTUSAN #210–#234) |
+| 2.7 Iklan AdMob | Kode selesai (aplikasi + flag `ads` di `/v1/me` + app-ads.txt di situs publik), teruji dengan pemuat iklan palsu: iklan native di tab Feed (setelah postingan ke-4, lalu tiap 8) dan banner adaptif di daftar event (setelah event ke-5, lalu tiap 10) hanya untuk pengguna gratis menurut server; Premium tanpa iklan dan SDK iklan tidak dijalankan; tidak ada iklan layar penuh, saat merekam lari, di chat, SOS, langganan, atau profil orang lain; iklan tidak dipersonalisasi. **Tanpa iklan sampai variabel repo diisi** (lihat "Mengaktifkan iklan AdMob"); **iklan sungguhan dan build APK dengan plugin belum diuji** (hanya CI) (KEPUTUSAN #235–#244) |
 
 ## Mencoba aplikasi di HP (APK uji)
 
@@ -108,6 +109,18 @@ Langganan mati sampai langkah ini selesai (aplikasi menampilkan "Langganan belum
 6. Tanpa Play pun fitur Premium/Pro bisa diuji: panel → **Langganan** → beri paket manual berbatas waktu (tercatat di log).
 
 Saat rilis di Play Store, izin `REQUEST_INSTALL_PACKAGES` dan pembaruan mandiri wajib dihapus (KEPUTUSAN #57, #207).
+
+## Mengaktifkan iklan AdMob (modul 2.7)
+
+Selama variabel di bawah kosong, APK rilis tidak menampilkan iklan sama sekali (manifest memakai ID aplikasi uji Google agar build tetap jalan).
+
+1. **Buat akun AdMob** (atas nama PT, data pembayaran dan pajak), lalu **Aplikasi → Tambah aplikasi** Android `tech.bimacreative.pacetara` (boleh sebelum aplikasi terbit di Play; tautkan ke listing Play setelah terbit). Catat **ID aplikasi** (`ca-app-pub-…~…`).
+2. **Buat unit iklan**: *Native* untuk feed dan *Banner* untuk daftar event (opsional *Banner* kedua untuk feed bila tidak ingin native). Di setelan unit/aplikasi, batasi rating konten maks. **PG** dan biarkan iklan tidak dipersonalisasi (aplikasi sudah memintanya).
+3. **GitHub → Settings → Secrets and variables → Actions → Variables** (bukan Secrets; nilai ini ikut di APK): `ADMOB_APP_ID`, `ADMOB_NATIVE_FEED`, `ADMOB_BANNER_EVENTS`, opsional `ADMOB_BANNER_FEED`. Jalankan ulang workflow CI agar APK baru dibangun dengan ID itu.
+4. **app-ads.txt**: isi `ADMOB_PUBLISHER_ID=pub-…` (AdMob → Pengaturan → Informasi akun) di `.env` VPS, lalu `docker compose up -d web`. Cek `https://pace.bimacreative.tech/app-ads.txt`. Pastikan kolom *Situs web* developer di Play Console menunjuk ke domain itu; jika AdMob memeriksa domain induk, taruh baris yang sama di `bimacreative.tech/app-ads.txt` (KEPUTUSAN #243).
+5. **Play Console**: *Konten aplikasi → ID iklan* = ya, untuk iklan; *Keamanan Data*: ID perangkat atau ID lainnya, info dan performa aplikasi, interaksi aplikasi, dikumpulkan dan dibagikan ke Google untuk iklan, analitik, dan pencegahan penipuan; *Berisi iklan* = ya.
+6. **Negara distribusi**: batasi ke Indonesia selama formulir persetujuan UMP belum ada; membuka EEA/UK/Swiss mewajibkan UMP lebih dulu (KEPUTUSAN #240).
+7. Saat menguji di HP sendiri, daftarkan HP sebagai **perangkat uji** di AdMob (Pengaturan → Perangkat uji) dan jangan mengeklik iklan sungguhan.
 
 ## Cadangan dan pemulihan
 

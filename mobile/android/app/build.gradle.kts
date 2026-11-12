@@ -15,6 +15,27 @@ val keyProps = Properties().apply {
 fun signing(prop: String, env: String): String? = System.getenv(env)?.takeIf { it.isNotEmpty() } ?: keyProps.getProperty(prop)
 val releaseStore = signing("storeFile", "PACETARA_KEYSTORE_PATH")
 
+// ID aplikasi AdMob (modul 2.7) untuk meta-data APPLICATION_ID di manifest. Sumber: --dart-define=ADMOB_APP_ID
+// (Flutter meneruskan semua dart-define ke Gradle sebagai properti `dart-defines`, base64 per entri), lalu env
+// ADMOB_APP_ID (CI), lalu ID aplikasi uji resmi Google agar build tanpa akun AdMob tetap jalan. Tanpa ID unit
+// iklan, build rilis tidak menampilkan iklan apa pun walau memakai ID uji ini.
+val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.mapNotNull { entry ->
+        runCatching { String(java.util.Base64.getDecoder().decode(entry), Charsets.UTF_8) }.getOrNull()
+    }
+    ?.filter { it.contains("=") }
+    ?.associate { it.substringBefore("=") to it.substringAfter("=") }
+    ?: emptyMap()
+val admobTestAppId = "ca-app-pub-3940256099942544~3347511713"
+val admobAppId: String = (dartDefines["ADMOB_APP_ID"]?.trim()?.takeIf { it.isNotEmpty() }
+    ?: System.getenv("ADMOB_APP_ID")?.trim()?.takeIf { it.isNotEmpty() }
+    ?: admobTestAppId).also {
+    if (!Regex("^ca-app-pub-[0-9]{10,20}~[0-9]{6,12}$").matches(it)) {
+        throw GradleException("ADMOB_APP_ID tidak valid (format ca-app-pub-<16 digit>~<10 digit>)")
+    }
+}
+
 android {
     namespace = "tech.bimacreative.pacetara"
     compileSdk = flutter.compileSdkVersion
@@ -32,6 +53,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     signingConfigs {

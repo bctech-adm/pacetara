@@ -211,6 +211,8 @@ describe.skipIf(!hasTestInfra)('Modul 2.5 Langganan (e2e)', () => {
     const blocked = await api(u).post(`/v1/communities/${ids[3]}/join`).expect(403);
     expect(blocked.body.limit.kind).toBe('user_join');
 
+    // Modul 2.7: pengguna gratis melihat iklan; flag dari server, bukan dari aplikasi.
+    expect((await api(u).get('/v1/me').expect(200)).body).toMatchObject({ plan: 'free', ads: true });
     const before = await api(u).get('/v1/subscriptions').expect(200);
     expect(before.body).toMatchObject({ enabled: true, products: { premium: 'pt_premium', pro: 'pt_pro', proUnlimited: 'pt_pro_unlimited' }, premium: { plan: 'free', subscription: null } });
 
@@ -218,7 +220,7 @@ describe.skipIf(!hasTestInfra)('Modul 2.5 Langganan (e2e)', () => {
     expect(res.body).toMatchObject({ userPlan: 'premium', subscription: { kind: 'premium', state: 'ACTIVE', active: true, autoRenewing: true, purchasedByMe: true } });
     expect(play.acked).toEqual([token]);
     const me = await api(u).get('/v1/me').expect(200);
-    expect(me.body).toMatchObject({ plan: 'premium', badges: ['premium'] });
+    expect(me.body).toMatchObject({ plan: 'premium', badges: ['premium'], ads: false });
     await api(u).post(`/v1/communities/${ids[3]}/join`).expect(200);
 
     // Token tidak disimpan polos.
@@ -359,6 +361,8 @@ describe.skipIf(!hasTestInfra)('Modul 2.5 Langganan (e2e)', () => {
     await rtdn(subNotif(token, 13)).expect(204);
     await queue.drain();
     expect(await plan(u)).toBe('free');
+    // Iklan kembali tampil setelah Premium berakhir (modul 2.7).
+    expect((await api(u).get('/v1/me').expect(200)).body.ads).toBe(true);
     // Data tidak dihapus: tetap anggota 4 komunitas, tetapi tidak bisa bergabung lagi.
     expect((await t.pool.query(`SELECT count(*)::int AS n FROM community_members WHERE user_id = $1 AND status = 'active'`, [u.id])).rows[0].n).toBe(4);
     expect((await api(u).post(`/v1/communities/${ids[4]}/join`).expect(403)).body.limit.kind).toBe('user_join');

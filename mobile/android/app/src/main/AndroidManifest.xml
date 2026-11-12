@@ -26,6 +26,9 @@
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <!-- Iklan AdMob (modul 2.7): ID iklan perangkat. Juga ditambahkan SDK Google Mobile Ads; dideklarasikan
+         eksplisit agar terlihat saat mengisi deklarasi "ID iklan" dan Keamanan Data di Play Console. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
     <!-- Pembaruan APK di dalam aplikasi (distribusi uji di luar Play Store). Hapus saat rilis di Play Store. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -77,6 +80,16 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+        <!-- AdMob (modul 2.7). Wajib ada: SDK menghentikan aplikasi saat start jika ID aplikasi tidak ada. Nilainya
+             diisi Gradle dari dart-define/env ADMOB_APP_ID (bawaan: ID aplikasi uji resmi Google). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+        <!-- Pengukuran aplikasi Google baru berjalan saat SDK iklan diinisialisasi (pengguna gratis membuka feed /
+             daftar event), bukan saat aplikasi dibuka. Pengguna Premium tidak pernah menginisialisasi SDK. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
+            android:value="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/widgets/common.dart';
+import '../ads/ads.dart';
 import '../chat/chat_repository.dart';
 import '../chat/chat_room.dart';
 import '../communities/widgets.dart';
@@ -190,6 +191,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               child: Text(monthLabel(e.date.substring(0, 7)), style: Theme.of(context).textTheme.titleSmall),
                             ),
                           EventTile(event: e, onTap: () => _open(e)),
+                          if (AdCadence.events.after(i)) AdSlot(key: ValueKey('ad-$i'), placement: AdPlacement.events),
                         ]);
                       },
                     ),
