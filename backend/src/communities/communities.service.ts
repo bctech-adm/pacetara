@@ -203,6 +203,13 @@ export class CommunitiesService {
   ) {
     const id = await withTx(this.pool, async (db) => {
       const user = await this.lockUser(db, userId);
+      // PRD: pemilik komunitas wajib Level 2 (KTP). Keputusan pemilik (3.1): hanya untuk komunitas BARU; komunitas
+      // yang sudah ada dan pemiliknya tidak terdampak (termasuk serah terima kepemilikan).
+      if (user.verification_level < this.env.COMMUNITY_OWNER_MIN_LEVEL) {
+        throw new ApiError(403, 'verification_required', 'Verifikasi KTP (Level 2) dulu untuk membuat komunitas', {
+          requiredLevel: this.env.COMMUNITY_OWNER_MIN_LEVEL,
+        });
+      }
       const ownedFree = Number(
         (
           await db.query<{ n: string }>(`SELECT count(*) AS n FROM communities WHERE owner_id = $1 AND plan = 'free'`, [userId])
@@ -803,8 +810,8 @@ export class CommunitiesService {
    * Urutan kunci selalu: baris pengguna lalu baris komunitas. Konsisten di semua alur agar
    * tidak terjadi deadlock, dan batas tidak bisa terlewati oleh permintaan yang bersamaan.
    */
-  private async lockUser(db: Queryable, userId: string): Promise<{ plan: UserPlan }> {
-    const { rows } = await db.query<{ plan: UserPlan; status: string }>('SELECT plan, status FROM users WHERE id = $1 FOR UPDATE', [
+  private async lockUser(db: Queryable, userId: string): Promise<{ plan: UserPlan; verification_level: number }> {
+    const { rows } = await db.query<{ plan: UserPlan; status: string; verification_level: number }>('SELECT plan, status, verification_level FROM users WHERE id = $1 FOR UPDATE', [
       userId,
     ]);
     if (!rows[0] || rows[0].status !== 'active') throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');

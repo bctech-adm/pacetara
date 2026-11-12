@@ -94,6 +94,8 @@ Future<bool> runCommunityAction(BuildContext context, Future<void> Function() ac
     final err = ApiError.from(e);
     if (err.code == 'limit_reached') {
       await showLimitDialog(context, err.message, kind: err.limitKind, ownedCommunityId: ownedCommunityId);
+    } else if (err.code == 'verification_required' && err.requiredLevel == 2) {
+      await showVerificationDialog(context, err.message);
     } else {
       showError(context, err);
     }
@@ -122,6 +124,29 @@ Future<void> showLimitDialog(BuildContext context, String message, {String? kind
             },
             child: Text(upgradeLabel(kind)),
           ),
+      ],
+    ),
+  );
+}
+
+/// Fitur yang mewajibkan Level 2 (KTP): ajak ke layar verifikasi.
+Future<void> showVerificationDialog(BuildContext context, String message) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      icon: const Icon(Icons.badge_outlined),
+      title: const Text('Perlu verifikasi KTP'),
+      content: Text(message),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Nanti')),
+        FilledButton(
+          key: const Key('verify-now'),
+          onPressed: () {
+            Navigator.pop(dialog);
+            context.push('/verification');
+          },
+          child: const Text('Verifikasi sekarang'),
+        ),
       ],
     ),
   );

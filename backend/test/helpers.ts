@@ -16,6 +16,8 @@ import { ImportQueue } from '../src/imports/import-queue.js';
 import { ImportsService } from '../src/imports/imports.service.js';
 import { assertAllowedUrl, ProviderHttp, type ProviderRequest } from '../src/imports/provider-http.js';
 import type { ImportJob } from '../src/imports/types.js';
+import { KycEngine } from '../src/kyc/kyc-engine.js';
+import type { KycAnalysis } from '../src/kyc/ktp.js';
 
 /**
  * Tes integrasi butuh Postgres+PostGIS dan Redis sungguhan:
@@ -129,6 +131,27 @@ export class FakeImportQueue {
   }
 }
 
+/**
+ * Mesin verifikasi KTP palsu (modul 3.1): tes mengatur hasil analisis berikutnya. Mesin asli (worker thread OCR +
+ * wajah) tidak pernah dijalankan di tes; diuji lewat scripts/kyc-smoke.
+ */
+export class FakeKycEngine {
+  enabled = true;
+  calls = 0;
+  /** Ukuran gambar yang diterima, untuk memastikan berkas sampai ke mesin. */
+  sizes: number[] = [];
+  next: KycAnalysis = FakeKycEngine.good('3174011205900001', 'BUDI SANTOSO');
+  static good(nik: string, name: string): KycAnalysis {
+    return { ocr: { nik, name, confidence: 85 }, ktpFaces: 1, selfieFaces: 1, faceSimilarity: 0.72, selfieReal: 0.9, selfieLive: 0.95 };
+  }
+  async analyze(ktp: Buffer, selfie: Buffer): Promise<KycAnalysis> {
+    if (!this.enabled) throw new ApiError(503, 'not_configured', 'Verifikasi KTP belum tersedia');
+    this.calls++;
+    this.sizes.push(ktp.length, selfie.length);
+    return structuredClone(this.next);
+  }
+}
+
 export interface TestApp {
   app: NestExpressApplication;
   http: ReturnType<NestExpressApplication['getHttpServer']>;
@@ -142,6 +165,7 @@ export interface TestApp {
   push: FakePushQueue;
   providerHttp: FakeProviderHttp;
   imports: FakeImportQueue;
+  kyc: FakeKycEngine;
   close(): Promise<void>;
 }
 
@@ -164,6 +188,8 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
     S3_ACCESS_KEY: 'test',
     S3_SECRET_KEY: 'testtest',
     S3_BUCKET: 'test',
+    // Tes modul lain membuat komunitas dengan pengguna Level 1; syarat Level 2 (3.1) diuji di kyc.e2e.spec.ts.
+    COMMUNITY_OWNER_MIN_LEVEL: '1',
     ...envOverrides,
   } as NodeJS.ProcessEnv);
 
@@ -174,6 +200,7 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
   const push = new FakePushQueue();
   const providerHttp = new FakeProviderHttp();
   const imports = new FakeImportQueue();
+  const kyc = new FakeKycEngine();
 
   let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ENV)
@@ -191,7 +218,9 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
     .overrideProvider(ProviderHttp)
     .useValue(providerHttp)
     .overrideProvider(ImportQueue)
-    .useValue(imports);
+    .useValue(imports)
+    .overrideProvider(KycEngine)
+    .useValue(kyc);
   for (const p of providers) builder = builder.overrideProvider(p.token).useValue(p.value);
   const moduleRef = await builder.compile();
 
@@ -215,6 +244,7 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
     push,
     providerHttp,
     imports,
+    kyc,
     async close() {
       await app.close();
       await pool.end();

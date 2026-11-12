@@ -109,6 +109,22 @@ export const envSchema = z.object({
   PLAY_RTDN_AUDIENCE: z.string().max(500).default(''),
   PLAY_RTDN_SERVICE_ACCOUNT_EMAIL: z.union([z.literal(''), z.string().email()]).default(''),
 
+  /**
+   * Verifikasi Level 2 (modul 3.1). `local` = OCR + pencocokan wajah self-hosted di dalam API (foto hanya di memori);
+   * `off` = endpoint verifikasi menjawab 503. Ambang dikalibrasi pemilik dengan data uji (README, scripts/kyc-smoke).
+   */
+  KYC_ENGINE: z.enum(['local', 'off']).default('local'),
+  KYC_FACE_PASS: z.coerce.number().min(0).max(1).default(0.6),
+  KYC_FACE_REJECT: z.coerce.number().min(0).max(1).default(0.45),
+  KYC_LIVENESS_MIN: z.coerce.number().min(0).max(1).default(0.5),
+  /** Versi naskah layar persetujuan verifikasi KTP; aplikasi wajib mengirim versi yang sama. */
+  KYC_CONSENT_VERSION: z.string().min(1).max(40).default('2026-11-12'),
+  /**
+   * Tingkat verifikasi minimum untuk MEMBUAT komunitas baru (PRD: pemilik komunitas Level 2; keputusan pemilik:
+   * hanya komunitas baru). Bisa diturunkan ke 1 sementara jika mesin verifikasi bermasalah.
+   */
+  COMMUNITY_OWNER_MIN_LEVEL: z.coerce.number().int().min(1).max(2).default(2),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()
@@ -133,6 +149,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const products = [parsed.data.PLAY_PRODUCT_PREMIUM, parsed.data.PLAY_PRODUCT_PRO, parsed.data.PLAY_PRODUCT_PRO_UNLIMITED];
   if (new Set(products).size !== products.length) {
     throw new Error('PLAY_PRODUCT_PREMIUM, PLAY_PRODUCT_PRO, dan PLAY_PRODUCT_PRO_UNLIMITED harus berbeda');
+  }
+  if (parsed.data.KYC_FACE_REJECT > parsed.data.KYC_FACE_PASS) {
+    throw new Error('KYC_FACE_REJECT tidak boleh lebih besar dari KYC_FACE_PASS');
   }
   return parsed.data;
 }

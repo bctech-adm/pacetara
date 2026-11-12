@@ -22,6 +22,7 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service.js'
 import { BuddiesService } from '../buddies/buddies.service.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
 import { SpotsService } from '../spots/spots.service.js';
+import { KycService } from '../kyc/kyc.service.js';
 import { TreasuryService } from '../treasury/treasury.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
 
@@ -60,6 +61,7 @@ export class UsersService {
     private readonly buddies: BuddiesService,
     private readonly treasury: TreasuryService,
     private readonly spots: SpotsService,
+    private readonly kyc: KycService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -166,6 +168,8 @@ export class UsersService {
       await this.buddies.onAccountDeletion(db, userId);
       await this.treasury.onAccountDeletion(db, userId);
       await this.spots.onAccountDeletion(db, userId);
+      // Modul 3.1: catatan percobaan verifikasi KTP dihapus; nik_hmac dan kyc_verified_at dikosongkan di bawah.
+      await this.kyc.onAccountDeletion(db, userId);
       // Feed: postingan (beserta foto, komentar, suka), komentar, suka, mengikuti, dan blokir dihapus.
       // Dijalankan sebelum lari dihapus agar tidak ada postingan yang sempat merujuk lari yang hilang.
       const feedPhotos = await this.feed.onAccountDeletion(db, userId);
@@ -196,7 +200,7 @@ export class UsersService {
            status = 'deleted', deleted_at = now(), display_name = $2,
            email_enc = NULL, email_bidx = NULL, email_verified_at = NULL,
            phone_enc = NULL, phone_bidx = NULL, phone_verified_at = NULL,
-           password_hash = NULL, google_sub = NULL, nik_hmac = NULL,
+           password_hash = NULL, google_sub = NULL, nik_hmac = NULL, kyc_verified_at = NULL,
            avatar_key = NULL, avatar_updated_at = NULL, city = NULL, avg_pace_sec_per_km = NULL,
            privacy_accepted_at = NULL, privacy_version = NULL, verification_level = 0
          WHERE id = $1`,

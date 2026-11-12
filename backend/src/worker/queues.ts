@@ -14,6 +14,8 @@ export const MAINTENANCE_JOBS = {
   subscriptionReconcile: 'subscription-reconcile',
   communitySessions: 'community-sessions',
   leagueSnapshot: 'league-snapshot',
+  // Modul 3.1: tinjauan verifikasi KTP > 30 hari kedaluwarsa.
+  kycReviewExpiry: 'kyc-review-expiry',
 } as const;
 
 /** Job di antrean notifications: satu kiriman push ke beberapa pengguna. */

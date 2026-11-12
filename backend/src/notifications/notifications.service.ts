@@ -11,9 +11,9 @@ import { hashPushToken, PushQueue, pushTokenAad } from './push.js';
  * Kategori pengaturan push (PRD 1.9: pesan baru, undangan komunitas, ajakan lari, teman mulai lari;
  * modul 2.1: social = pengikut baru, suka, dan komentar di feed; modul 2.2: achievement = lencana baru;
  * modul 2.4: event = kiriman event disetujui/ditolak (juga kiriman spot, modul 2.6); modul 2.6: schedule = sesi lari
- * baru/pengingat/dibatalkan, buddy = sapa cari teman lari).
+ * baru/pengingat/dibatalkan, buddy = sapa cari teman lari; modul 3.1: account = hasil verifikasi KTP).
  */
-export const NOTIF_CATEGORIES = ['chat', 'community', 'run_invite', 'friend_running', 'social', 'achievement', 'event', 'schedule', 'buddy'] as const;
+export const NOTIF_CATEGORIES = ['chat', 'community', 'run_invite', 'friend_running', 'social', 'achievement', 'event', 'schedule', 'buddy', 'account'] as const;
 export type NotifCategory = (typeof NOTIF_CATEGORIES)[number];
 
 /** Jenis entri di kotak notifikasi aplikasi. Pesan chat biasa dan teman mulai lari hanya push. */
@@ -26,7 +26,11 @@ export type InboxType = 'community_invite' | 'join_request' | 'join_approved' | 
   | 'buddy_request'
   | 'buddy_accepted'
   | 'spot_approved'
-  | 'spot_rejected';
+  | 'spot_rejected'
+  // Modul 3.1: hasil tinjauan manual verifikasi KTP dan pencabutan.
+  | 'kyc_approved'
+  | 'kyc_rejected'
+  | 'kyc_revoked';
 
 export const notifChannel = (userId: string) => `user:${userId}:notif`;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

@@ -23,6 +23,7 @@ import 'features/events/events_screens.dart';
 import 'features/feed/feed_screens.dart';
 import 'features/home/home_shell.dart';
 import 'features/imports/imports_screens.dart';
+import 'features/kyc/kyc_screens.dart';
 import 'features/notifications/notifications_screens.dart';
 import 'features/passport/passport_screens.dart';
 import 'features/profile/profile_screen.dart';
@@ -102,6 +103,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/buddies', builder: (_, _) => const BuddyScreen()),
       GoRoute(path: '/spots', builder: (_, _) => const SpotsMapScreen()),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+      GoRoute(path: '/verification', builder: (_, _) => const KycScreen()),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
       GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),

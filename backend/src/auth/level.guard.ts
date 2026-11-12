@@ -28,7 +28,11 @@ export class LevelGuard implements CanActivate {
     const row = rows[0];
     if (!row || row.status !== 'active') throw new ApiError(401, 'unauthorized', 'Perlu login');
     if (row.verification_level < level) {
-      throw new ApiError(403, 'verification_required', 'Verifikasi email dan nomor HP dulu untuk memakai fitur ini', {
+      const message =
+        level >= 2 && row.verification_level >= 1
+          ? 'Verifikasi KTP (Level 2) dulu untuk memakai fitur ini'
+          : 'Verifikasi email dan nomor HP dulu untuk memakai fitur ini';
+      throw new ApiError(403, 'verification_required', message, {
         requiredLevel: level,
       });
     }

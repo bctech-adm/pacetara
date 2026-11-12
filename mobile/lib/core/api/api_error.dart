@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 
 /// Galat dari API dengan kode mesin yang stabil (`error`) dan pesan siap tampil (`message`).
 class ApiError implements Exception {
-  const ApiError(this.status, this.code, this.message, {this.fields = const {}, this.limitKind});
+  const ApiError(this.status, this.code, this.message, {this.fields = const {}, this.limitKind, this.requiredLevel});
 
   final int status;
   final String code;
@@ -14,6 +14,9 @@ class ApiError implements Exception {
   /// Jenis batas paket untuk `limit_reached` (`limit.kind`, mis. user_join, medals, community_members), dipakai
   /// dialog upgrade untuk membuka layar langganan yang relevan.
   final String? limitKind;
+
+  /// Tingkat verifikasi yang diminta untuk `verification_required` (1 = email + HP, 2 = KTP).
+  final int? requiredLevel;
 
   factory ApiError.from(Object error) {
     if (error is ApiError) return error;
@@ -36,6 +39,7 @@ class ApiError implements Exception {
           message is String ? message : (fields.values.isNotEmpty ? fields.values.first : 'Terjadi kesalahan'),
           fields: fields,
           limitKind: (data['limit'] is Map<String, dynamic>) ? (data['limit'] as Map<String, dynamic>)['kind'] as String? : null,
+          requiredLevel: (data['requiredLevel'] as num?)?.toInt(),
         );
       }
       if (error.type == DioExceptionType.connectionTimeout ||

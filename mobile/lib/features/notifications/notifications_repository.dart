@@ -74,6 +74,9 @@ class AppNotification {
       'buddy_accepted' => '$who menerima sapaanmu. Sekarang kalian bisa mengobrol',
       'spot_approved' => 'Spot lari kirimanmu sudah tampil di peta',
       'spot_rejected' => 'Kiriman spot larimu ditolak. Lihat alasannya di Kiriman saya',
+      'kyc_approved' => 'Verifikasi KTP disetujui. Akunmu sekarang Terverifikasi',
+      'kyc_rejected' => 'Verifikasi KTP belum disetujui. Lihat alasannya dan coba lagi',
+      'kyc_revoked' => 'Status Terverifikasi akunmu dicabut',
       _ => 'Notifikasi baru',
     };
   }
@@ -91,6 +94,7 @@ class AppNotification {
         'session_new' => communityId == null ? null : '/communities/$communityId/sessions',
         'buddy_request' || 'buddy_accepted' => '/buddies',
         'spot_approved' || 'spot_rejected' => '/spots',
+        'kyc_approved' || 'kyc_rejected' || 'kyc_revoked' => '/verification',
         _ => null,
       };
 }
@@ -142,6 +146,7 @@ const notificationCategories = <String, (String, String)>{
   'event': ('Kiriman event & spot', 'Saat event atau spot lari yang kamu kirim disetujui atau ditolak'),
   'schedule': ('Jadwal lari', 'Sesi lari baru, pengingat sesi yang kamu ikuti, dan pembatalan'),
   'buddy': ('Cari teman lari', 'Sapaan baru dan sapaan yang diterima'),
+  'account': ('Akun', 'Hasil verifikasi KTP'),
 };
 
 class NotificationsRepository {
@@ -252,6 +257,7 @@ String? routeForPush(Map<String, dynamic> data) {
     'session_new' when community is String => '/communities/$community/sessions',
     'buddy_request' || 'buddy_accepted' => '/buddies',
     'spot_approved' || 'spot_rejected' => '/spots',
+    'kyc_approved' || 'kyc_rejected' || 'kyc_revoked' => '/verification',
     _ => null,
   };
 }

@@ -26,6 +26,7 @@ import { PlayApi } from '../subscriptions/play-api.js';
 import { type SubscriptionJob, SubscriptionQueue } from '../subscriptions/subscription-queue.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { LeagueService } from '../league/league.service.js';
+import { expireKycReviews } from '../kyc/kyc-expiry.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
 import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from './queues.js';
 
@@ -139,6 +140,13 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { name: MAINTENANCE_JOBS.leagueSnapshot, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
     );
 
+    // Modul 3.1: tinjauan verifikasi KTP > 30 hari kedaluwarsa (data tinjauan dihapus). Tiap jam.
+    await this.queue.upsertJobScheduler(
+      'kyc-review-expiry-hourly',
+      { every: 60 * 60_000 },
+      { name: MAINTENANCE_JOBS.kycReviewExpiry, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+    );
+
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
 
@@ -185,6 +193,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
         return this.schedules.runJobs();
       case MAINTENANCE_JOBS.leagueSnapshot:
         return this.league.runJob();
+      case MAINTENANCE_JOBS.kycReviewExpiry:
+        return expireKycReviews(this.pool).then((expired) => ({ expired }));
       default:
         return Promise.reject(new Error(`Job tidak dikenal: ${job.name}`));
     }

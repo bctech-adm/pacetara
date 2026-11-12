@@ -189,6 +189,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           title: Text(profile.phone ?? '-'),
           subtitle: Text(profile.phoneVerified ? 'Nomor HP terverifikasi' : 'Nomor HP belum terverifikasi'),
         ),
+        ListTile(
+          key: const Key('kyc-tile'),
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(profile.verificationLevel >= 2 ? Icons.verified : Icons.badge_outlined),
+          title: const Text('Verifikasi KTP (Level 2)'),
+          subtitle: Text(profile.verificationLevel >= 2
+              ? 'Terverifikasi'
+              : 'Wajib untuk membuat komunitas, berjualan dengan pembayaran di aplikasi, dan sponsor'),
+          onTap: () => context.push('/verification'),
+        ),
         const Divider(),
         ListTile(
           key: const Key('subscription-tile'),

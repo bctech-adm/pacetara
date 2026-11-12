@@ -66,6 +66,9 @@ import { SpotsService } from './spots/spots.service.js';
 import { CommunityTreasuryController, JerseyController } from './treasury/treasury.controller.js';
 import { TreasuryService } from './treasury/treasury.service.js';
 import { UsersRepository } from './users/users.repository.js';
+import { AdminKycController, KycController } from './kyc/kyc.controller.js';
+import { KycEngine } from './kyc/kyc-engine.js';
+import { KycService } from './kyc/kyc.service.js';
 import { UsersService } from './users/users.service.js';
 
 @Module({
@@ -78,7 +81,9 @@ import { UsersService } from './users/users.service.js';
   controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController,
     // Modul 2.6 Fitur komunitas lanjutan.
     CommunitySchedulesController, SessionsController, LeagueController, CommunityStatsController, BuddiesController, CommunityTreasuryController,
-    JerseyController, SpotsController, AdminSpotsController],
+    JerseyController, SpotsController, AdminSpotsController,
+    // Modul 3.1 Verifikasi Level 2.
+    KycController, AdminKycController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -121,6 +126,8 @@ import { UsersService } from './users/users.service.js';
     BuddiesService,
     TreasuryService,
     SpotsService,
+    KycEngine,
+    KycService,
     ReportsService,
     ModerationService,
     AdminAuthService,
