@@ -212,7 +212,17 @@ describe.skipIf(!hasTestInfra)('Modul 1.9 Notifikasi (e2e)', () => {
     expect((await t.pool.query('SELECT 1 FROM push_tokens')).rowCount).toBe(1);
     expect(await sendPushJob(t.pool, crypto, { enabled: false, send: async () => 'ok' }, job)).toEqual({ sent: 0, skipped: true });
     expect(fcmMessage('tok', job)).toEqual({
-      message: { token: 'tok', notification: { title: 'Judul', body: 'Isi' }, data: { type: 'chat' }, android: { priority: 'HIGH', notification: { tag: 'conv:1' } } },
+      message: {
+        token: 'tok',
+        notification: { title: 'Judul', body: 'Isi' },
+        data: { type: 'chat' },
+        android: { priority: 'HIGH', notification: { channel_id: 'activity', tag: 'conv:1' } },
+      },
     });
+    // Kanal Android per kategori (dibuat aplikasi dengan id yang sama).
+    const ch = (category: string) => fcmMessage('tok', { ...job, data: { category } }).message.android.notification.channel_id;
+    expect([ch('chat'), ch('run_invite'), ch('buddy')]).toEqual(['messages', 'messages', 'messages']);
+    expect([ch('account'), ch('market')]).toEqual(['account', 'account']);
+    expect([ch('social'), ch('event'), ch('schedule'), ch('lain')]).toEqual(['activity', 'activity', 'activity', 'activity']);
   });
 });

@@ -94,13 +94,35 @@ export class FcmSender implements PushSender {
   }
 }
 
+/**
+ * Kanal notifikasi Android (dibuat aplikasi di MainActivity dengan id yang sama): pengguna bisa mengatur suara/
+ * getar per kanal di setelan HP. Kategori tak dikenal jatuh ke kanal aktivitas.
+ */
+export const ANDROID_CHANNELS = { messages: 'messages', activity: 'activity', account: 'account' } as const;
+export function androidChannel(category: string | undefined): string {
+  switch (category) {
+    case 'chat':
+    case 'run_invite':
+    case 'buddy':
+      return ANDROID_CHANNELS.messages;
+    case 'account':
+    case 'market':
+      return ANDROID_CHANNELS.account;
+    default:
+      return ANDROID_CHANNELS.activity;
+  }
+}
+
 export function fcmMessage(token: string, job: PushJob) {
   return {
     message: {
       token,
       notification: { title: job.title, body: job.body },
       data: job.data,
-      android: { priority: 'HIGH', ...(job.tag ? { notification: { tag: job.tag } } : {}) },
+      android: {
+        priority: 'HIGH',
+        notification: { channel_id: androidChannel(job.data?.category), ...(job.tag ? { tag: job.tag } : {}) },
+      },
     },
   };
 }

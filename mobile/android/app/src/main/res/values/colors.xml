@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warna merek (sama dengan _brand di lib/app.dart) untuk ikon notifikasi. -->
+    <color name="notification_color">#F0590E</color>
+</resources>

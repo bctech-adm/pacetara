@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon kecil notifikasi: huruf P monokrom (Android hanya memakai kanal alfa; warna dari notification_color). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M6,3h7a6,6 0,0 1,0 12h-3v6H6V3zM10,7v4h3a2,2 0,0 0,0 -4h-3z" />
+</vector>

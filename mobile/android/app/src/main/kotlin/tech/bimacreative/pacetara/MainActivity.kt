@@ -1,5 +1,7 @@
 package tech.bimacreative.pacetara
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -12,6 +14,28 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         sanitizeDeepLink(intent)
         super.onCreate(savedInstanceState)
+        createNotificationChannels()
+    }
+
+    /**
+     * Kanal notifikasi (id sama dengan server, `androidChannel` di backend). Membuat ulang kanal yang sudah ada
+     * hanya memperbarui nama/deskripsi; pilihan suara/getar pengguna tetap.
+     */
+    private fun createNotificationChannels() {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        nm.createNotificationChannels(
+            listOf(
+                NotificationChannel("messages", "Pesan dan ajakan", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Chat, ajakan lari bareng, dan sapaan Cari teman lari"
+                },
+                NotificationChannel("activity", "Komunitas dan aktivitas", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Teman mulai lari, jadwal, event, lencana, pengikut, dan komentar"
+                },
+                NotificationChannel("account", "Akun dan transaksi", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Langganan, verifikasi, moderasi, dan pesanan marketplace"
+                },
+            ),
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
