@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -18,6 +18,8 @@ import { assertAllowedUrl, ProviderHttp, type ProviderRequest } from '../src/imp
 import type { ImportJob } from '../src/imports/types.js';
 import { KycEngine } from '../src/kyc/kyc-engine.js';
 import type { KycAnalysis } from '../src/kyc/ktp.js';
+import { XenditApi, type XenditAccount, type XenditInvoice } from '../src/market/xendit.js';
+import { MidtransApi, midtransSignatureOk, type MidtransStatus } from '../src/payments/midtrans.js';
 
 /**
  * Tes integrasi butuh Postgres+PostGIS dan Redis sungguhan:
@@ -152,6 +154,76 @@ export class FakeKycEngine {
   }
 }
 
+/** Xendit xenPlatform palsu (modul 3.2): akun, split rule, dan invoice di memori. */
+export class FakeXendit {
+  enabled = true;
+  static TOKEN = 'cb-token-uji-1234567890';
+  accounts = new Map<string, { email: string; status: string }>();
+  invoices = new Map<string, XenditInvoice & { forUserId: string; splitRuleId: string | null }>();
+  splitRules: { id: string; percent: number; flat: number; destinationAccountId: string }[] = [];
+  private seq = 0;
+  async createManagedAccount(email: string): Promise<XenditAccount> {
+    const id = `acc_${++this.seq}`;
+    this.accounts.set(id, { email, status: 'INVITED' });
+    return { id, status: 'INVITED' };
+  }
+  async getAccount(id: string): Promise<XenditAccount> {
+    const a = this.accounts.get(id);
+    if (!a) throw new Error('akun tidak ada');
+    return { id, status: a.status };
+  }
+  async createSplitRule(input: { percent: number; flat: number; destinationAccountId: string }) {
+    const rule = { id: `splitru_${++this.seq}`, ...input };
+    this.splitRules.push(rule);
+    return { id: rule.id };
+  }
+  async createInvoice(forUserId: string, splitRuleId: string | null, body: { externalId: string; amount: number }): Promise<XenditInvoice> {
+    const id = `inv_${++this.seq}`;
+    const inv = { id, external_id: body.externalId, amount: body.amount, status: 'PENDING', invoice_url: `https://checkout.xendit.co/web/${id}`, forUserId, splitRuleId };
+    this.invoices.set(id, inv);
+    return inv;
+  }
+  async getInvoice(forUserId: string, id: string): Promise<XenditInvoice> {
+    const inv = this.invoices.get(id);
+    if (!inv || inv.forUserId !== forUserId) throw new Error('invoice tidak ada');
+    return { ...inv };
+  }
+  async expireInvoice(forUserId: string, id: string) {
+    const inv = this.invoices.get(id);
+    if (inv && inv.forUserId === forUserId) inv.status = 'EXPIRED';
+  }
+  verifyCallbackToken(t: unknown) {
+    return t === FakeXendit.TOKEN;
+  }
+}
+
+/** Midtrans palsu (modul 3.2/3.3): Snap dan status transaksi di memori; signature memakai fungsi asli. */
+export class FakeMidtrans {
+  enabled = true;
+  static KEY = 'SB-Mid-server-uji';
+  snaps: { orderId: string; amount: number; itemName: string; finishUrl: string }[] = [];
+  statuses = new Map<string, MidtransStatus>();
+  async createSnap(input: { orderId: string; amount: number; itemName: string; finishUrl: string }) {
+    this.snaps.push(input);
+    this.statuses.set(input.orderId, { order_id: input.orderId, transaction_status: 'pending', status_code: '201', gross_amount: `${input.amount}.00` });
+    return { token: `tok-${input.orderId}`, redirectUrl: `https://app.sandbox.midtrans.com/snap/v4/redirection/tok-${input.orderId}` };
+  }
+  async status(orderId: string): Promise<MidtransStatus> {
+    return this.statuses.get(orderId) ?? { status_code: '404' };
+  }
+  verifyNotification(body: Record<string, unknown>) {
+    return midtransSignatureOk(FakeMidtrans.KEY, body);
+  }
+  /** Set status lalu kembalikan body notifikasi bertanda tangan sah. */
+  settle(orderId: string, transaction_status = 'settlement', gross?: string) {
+    const st = this.statuses.get(orderId)!;
+    const gross_amount = gross ?? st.gross_amount!;
+    const status_code = transaction_status === 'settlement' ? '200' : '201';
+    this.statuses.set(orderId, { ...st, transaction_status, status_code, gross_amount, payment_type: 'qris' });
+    return { order_id: orderId, status_code, gross_amount, transaction_status, signature_key: createHash('sha512').update(`${orderId}${status_code}${gross_amount}${FakeMidtrans.KEY}`).digest('hex') };
+  }
+}
+
 export interface TestApp {
   app: NestExpressApplication;
   http: ReturnType<NestExpressApplication['getHttpServer']>;
@@ -166,6 +238,8 @@ export interface TestApp {
   providerHttp: FakeProviderHttp;
   imports: FakeImportQueue;
   kyc: FakeKycEngine;
+  xendit: FakeXendit;
+  midtrans: FakeMidtrans;
   close(): Promise<void>;
 }
 
@@ -201,6 +275,8 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
   const providerHttp = new FakeProviderHttp();
   const imports = new FakeImportQueue();
   const kyc = new FakeKycEngine();
+  const xendit = new FakeXendit();
+  const midtrans = new FakeMidtrans();
 
   let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ENV)
@@ -220,7 +296,11 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
     .overrideProvider(ImportQueue)
     .useValue(imports)
     .overrideProvider(KycEngine)
-    .useValue(kyc);
+    .useValue(kyc)
+    .overrideProvider(XenditApi)
+    .useValue(xendit)
+    .overrideProvider(MidtransApi)
+    .useValue(midtrans);
   for (const p of providers) builder = builder.overrideProvider(p.token).useValue(p.value);
   const moduleRef = await builder.compile();
 
@@ -245,6 +325,8 @@ export async function createTestApp(envOverrides: Record<string, string> = {}, p
     providerHttp,
     imports,
     kyc,
+    xendit,
+    midtrans,
     async close() {
       await app.close();
       await pool.end();

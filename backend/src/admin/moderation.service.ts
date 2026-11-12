@@ -133,6 +133,8 @@ export class ModerationService {
       target = await this.userSummary(id);
     } else if (type === 'spot') {
       target = await this.spotSummary(id);
+    } else if (type === 'listing') {
+      target = await this.listingSummary(id);
     } else if (type === 'event') {
       const { rows } = await this.pool.query<{
         name: string;
@@ -229,6 +231,15 @@ export class ModerationService {
           photoKeys = rows.map((r) => r.storage_key);
         } else {
           await db.query('UPDATE feed_posts SET held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
+        }
+      } else if (type === 'listing') {
+        // Diturunkan (modul 3.2): hilang bagi semua orang termasuk penjual; foto dihapus dari penyimpanan.
+        if (action === 'remove') {
+          await db.query('UPDATE market_listings SET removed_at = now(), held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
+          const { rows } = await db.query<{ storage_key: string }>('DELETE FROM market_listing_photos WHERE listing_id = $1 RETURNING storage_key', [id]);
+          photoKeys = rows.map((r) => r.storage_key);
+        } else {
+          await db.query('UPDATE market_listings SET held_at = NULL, hidden_at = NULL WHERE id = $1', [id]);
         }
       } else if (type === 'spot') {
         // Diturunkan: hilang dari peta bagi semua orang. Abaikan: penyembunyian otomatis dicabut.
@@ -594,6 +605,50 @@ export class ModerationService {
       : null;
   }
 
+  /** Listing marketplace yang dilaporkan (modul 3.2): informasi publik listing + nama penjual. */
+  private async listingSummary(id: string) {
+    const { rows } = await this.pool.query<{
+      title: string;
+      description: string;
+      model: string;
+      category: string;
+      condition: string;
+      price: string;
+      city: string;
+      affiliate_url: string | null;
+      status: string;
+      seller_id: string;
+      seller: string;
+      hidden_at: Date | null;
+      removed_at: Date | null;
+      photos: number;
+    }>(
+      `SELECT l.title, l.description, l.model, l.category, l.condition, l.price, l.city, l.affiliate_url, l.status, l.seller_id,
+              u.display_name AS seller, l.hidden_at, l.removed_at, (SELECT count(*)::int FROM market_listing_photos p WHERE p.listing_id = l.id) AS photos
+         FROM market_listings l JOIN users u ON u.id = l.seller_id WHERE l.id = $1`,
+      [id],
+    );
+    const r = rows[0];
+    return r
+      ? {
+          id,
+          title: r.title,
+          description: r.description,
+          model: r.model,
+          category: r.category,
+          condition: r.condition,
+          price: Number(r.price),
+          city: r.city,
+          affiliateUrl: r.affiliate_url,
+          status: r.status,
+          seller: { id: r.seller_id, displayName: r.seller },
+          photos: r.photos,
+          hidden: Boolean(r.hidden_at),
+          removed: Boolean(r.removed_at),
+        }
+      : null;
+  }
+
   private async labels(targets: { type: ReportTarget; id: string }[]) {
     const out = new Map<string, string>();
     const ids = (t: ReportTarget) => targets.filter((x) => x.type === t).map((x) => x.id);
@@ -622,6 +677,10 @@ export class ModerationService {
         [ids('comment')],
       );
       for (const r of rows) out.set(`comment:${r.id}`, `Komentar dari ${r.display_name}`);
+    }
+    if (ids('listing').length) {
+      const { rows } = await this.pool.query<{ id: string; title: string }>('SELECT id, title FROM market_listings WHERE id = ANY($1::uuid[])', [ids('listing')]);
+      for (const r of rows) out.set(`listing:${r.id}`, `Listing ${r.title}`);
     }
     if (ids('spot').length) {
       const { rows } = await this.pool.query<{ id: string; name: string; city: string }>('SELECT id, name, city FROM run_spots WHERE id = ANY($1::uuid[])', [ids('spot')]);

@@ -24,6 +24,7 @@ import 'features/feed/feed_screens.dart';
 import 'features/home/home_shell.dart';
 import 'features/imports/imports_screens.dart';
 import 'features/kyc/kyc_screens.dart';
+import 'features/market/market_screens.dart';
 import 'features/notifications/notifications_screens.dart';
 import 'features/passport/passport_screens.dart';
 import 'features/profile/profile_screen.dart';
@@ -104,6 +105,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/spots', builder: (_, _) => const SpotsMapScreen()),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/verification', builder: (_, _) => const KycScreen()),
+      GoRoute(path: '/market', builder: (_, _) => const MarketScreen()),
+      GoRoute(path: '/market/new', builder: (_, _) => const ListingFormScreen()),
+      GoRoute(path: '/market/mine', builder: (_, _) => const MyListingsScreen()),
+      GoRoute(path: '/market/seller', builder: (_, _) => const SellerAccountScreen()),
+      GoRoute(path: '/market/orders', builder: (_, _) => const OrdersScreen()),
+      GoRoute(path: '/market/orders/:id', builder: (_, state) => OrderDetailScreen(id: state.pathParameters['id']!)),
+      GoRoute(path: '/market/listings/:id', builder: (_, state) => ListingDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
       GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),

@@ -16,6 +16,8 @@ export const MAINTENANCE_JOBS = {
   leagueSnapshot: 'league-snapshot',
   // Modul 3.1: tinjauan verifikasi KTP > 30 hari kedaluwarsa.
   kycReviewExpiry: 'kyc-review-expiry',
+  // Modul 3.2/3.3: pesanan marketplace (kedaluwarsa, selesai otomatis), listing lewat masa tayang, rekonsiliasi Midtrans.
+  marketMaintenance: 'market-maintenance',
 } as const;
 
 /** Job di antrean notifications: satu kiriman push ke beberapa pengguna. */

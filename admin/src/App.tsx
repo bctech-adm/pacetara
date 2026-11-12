@@ -4,6 +4,7 @@ import { api, ApiError, apiImage, hasStoredSession, login, logout, setLogoutHand
 import { EventQueue } from './EventQueue';
 import { Events } from './Events';
 import { Kyc } from './Kyc';
+import { Market } from './Market';
 import { Spots } from './Spots';
 import { Subscriptions } from './Subscriptions';
 
@@ -12,7 +13,7 @@ import { Subscriptions } from './Subscriptions';
  * banding, tindakan akun, log tindakan, input event manual (modul 1.7), dan antrean event (modul 2.4), langganan (modul 2.5),
  * antrean spot lari (modul 2.6), tinjauan verifikasi KTP (modul 3.1). Dasbor sponsor menyusul di 3.3.
  */
-type Tab = 'reports' | 'events' | 'queue' | 'spots' | 'kyc' | 'appeals' | 'users' | 'subs' | 'audit';
+type Tab = 'reports' | 'events' | 'queue' | 'spots' | 'kyc' | 'market' | 'appeals' | 'users' | 'subs' | 'audit';
 
 const REASONS: Record<string, string> = {
   spam: 'Spam',
@@ -24,7 +25,7 @@ const REASONS: Record<string, string> = {
   impersonation: 'Menyamar',
   other: 'Lainnya',
 };
-const TARGETS: Record<string, string> = { message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event', post: 'Postingan', comment: 'Komentar', spot: 'Spot lari' };
+const TARGETS: Record<string, string> = { listing: 'Listing', message: 'Pesan', community: 'Komunitas', user: 'Pengguna', event: 'Event', post: 'Postingan', comment: 'Komentar', spot: 'Spot lari' };
 const VISIBILITY: Record<string, string> = { public: 'Semua orang', community: 'Anggota komunitas', followers: 'Pengikut' };
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('id-ID') : '–');
 
@@ -40,9 +41,9 @@ export function App() {
       <header className="topbar">
         <h1>PaceTara Admin</h1>
         <nav>
-          {(['reports', 'events', 'queue', 'spots', 'kyc', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
+          {(['reports', 'events', 'queue', 'spots', 'kyc', 'market', 'appeals', 'users', 'subs', 'audit'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', spots: 'Antrean spot', kyc: 'Verifikasi KTP', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
+              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', spots: 'Antrean spot', kyc: 'Verifikasi KTP', market: 'Marketplace', appeals: 'Banding', users: 'Pengguna', subs: 'Langganan', audit: 'Log' }[t]}
             </button>
           ))}
           <button
@@ -61,6 +62,7 @@ export function App() {
       {tab === 'queue' && <EventQueue />}
       {tab === 'spots' && <Spots />}
       {tab === 'kyc' && <Kyc />}
+      {tab === 'market' && <Market />}
       {tab === 'appeals' && <Appeals />}
       {tab === 'users' && <Users />}
       {tab === 'subs' && <Subscriptions />}
@@ -288,6 +290,30 @@ function ReportDetail({ item, onBack }: { item: QueueItem; onBack: () => void })
           <dd>{t.submitter ? String(t.submitter) : '–'}</dd>
           <dt>Status</dt>
           <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : 'Tampil'}</dd>
+        </dl>
+      )}
+      {t && item.targetType === 'listing' && (
+        <dl>
+          <dt>Judul</dt>
+          <dd>{String(t.title)}</dd>
+          <dt>Penjual</dt>
+          <dd>{(t.seller as { displayName: string }).displayName}</dd>
+          <dt>Model</dt>
+          <dd>{String(t.model)}</dd>
+          <dt>Harga</dt>
+          <dd>Rp{Number(t.price).toLocaleString('id-ID')} · {String(t.city)}</dd>
+          <dt>Deskripsi</dt>
+          <dd>{String(t.description) || '–'}</dd>
+          {t.affiliateUrl ? (
+            <>
+              <dt>Tautan toko</dt>
+              <dd className="mono">{String(t.affiliateUrl)}</dd>
+            </>
+          ) : null}
+          <dt>Foto</dt>
+          <dd>{String(t.photos)}</dd>
+          <dt>Status</dt>
+          <dd>{t.removed ? 'Diturunkan' : t.hidden ? 'Disembunyikan otomatis' : String(t.status)}</dd>
         </dl>
       )}
       {t && item.targetType === 'post' && (

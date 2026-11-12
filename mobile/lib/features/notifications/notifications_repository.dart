@@ -77,6 +77,13 @@ class AppNotification {
       'kyc_approved' => 'Verifikasi KTP disetujui. Akunmu sekarang Terverifikasi',
       'kyc_rejected' => 'Verifikasi KTP belum disetujui. Lihat alasannya dan coba lagi',
       'kyc_revoked' => 'Status Terverifikasi akunmu dicabut',
+      'market_order_paid' => 'Pesanan baru sudah dibayar. Kirim barangnya',
+      'market_order_shipped' => 'Pesananmu sudah dikirim penjual',
+      'market_order_completed' => 'Pesanan selesai diterima pembeli',
+      'market_order_disputed' => 'Pembeli membuka sengketa pesanan',
+      'market_order_resolved' => 'Keputusan sengketa pesanan sudah keluar',
+      'market_seller_live' => 'Pembayaran di aplikasi untuk tokomu sudah aktif',
+      'market_listing_paid' => 'Pembayaran listing diterima',
       _ => 'Notifikasi baru',
     };
   }
@@ -95,6 +102,10 @@ class AppNotification {
         'buddy_request' || 'buddy_accepted' => '/buddies',
         'spot_approved' || 'spot_rejected' => '/spots',
         'kyc_approved' || 'kyc_rejected' || 'kyc_revoked' => '/verification',
+        'market_order_paid' || 'market_order_shipped' || 'market_order_completed' || 'market_order_disputed' || 'market_order_resolved' =>
+          data['orderId'] == null ? '/market/orders' : '/market/orders/${data['orderId']}',
+        'market_seller_live' => '/market/seller',
+        'market_listing_paid' => data['listingId'] == null ? '/market/mine' : '/market/listings/${data['listingId']}',
         _ => null,
       };
 }
@@ -147,6 +158,7 @@ const notificationCategories = <String, (String, String)>{
   'schedule': ('Jadwal lari', 'Sesi lari baru, pengingat sesi yang kamu ikuti, dan pembatalan'),
   'buddy': ('Cari teman lari', 'Sapaan baru dan sapaan yang diterima'),
   'account': ('Akun', 'Hasil verifikasi KTP'),
+  'market': ('Marketplace', 'Pesanan, sengketa, pembayaran listing, dan akun penjual'),
 };
 
 class NotificationsRepository {
@@ -258,6 +270,10 @@ String? routeForPush(Map<String, dynamic> data) {
     'buddy_request' || 'buddy_accepted' => '/buddies',
     'spot_approved' || 'spot_rejected' => '/spots',
     'kyc_approved' || 'kyc_rejected' || 'kyc_revoked' => '/verification',
+    'market_order_paid' || 'market_order_shipped' || 'market_order_completed' || 'market_order_disputed' || 'market_order_resolved' when data['orderId'] is String =>
+      '/market/orders/${data['orderId']}',
+    'market_seller_live' => '/market/seller',
+    'market_listing_paid' when data['listingId'] is String => '/market/listings/${data['listingId']}',
     _ => null,
   };
 }

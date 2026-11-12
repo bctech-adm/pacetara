@@ -346,9 +346,23 @@ export class ChatService implements OnModuleInit {
     const { rows } = await this.pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [otherId]);
     if (rows[0]?.status !== 'active') throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
     // Modul 2.6: sapa Cari teman lari yang sudah DITERIMA juga membuka chat pribadi (tanpa blokir feed).
-    if (!(await this.communities.shareCommunity(userId, otherId)) && !(await this.buddies.areConnected(userId, otherId))) {
+    // Modul 3.2: pembeli yang menekan "Hubungi penjual" pada listing (dan penjual itu) juga boleh chat pribadi.
+    if (
+      !(await this.communities.shareCommunity(userId, otherId)) &&
+      !(await this.buddies.areConnected(userId, otherId)) &&
+      !(await this.marketConnected(userId, otherId))
+    ) {
       throw new ApiError(403, 'no_shared_community', 'Chat pribadi hanya bisa dengan sesama anggota komunitasmu atau teman lari yang menerima sapaanmu');
     }
+  }
+
+  /** Pasangan pembeli–penjual yang terhubung lewat "Hubungi penjual" di marketplace (modul 3.2). */
+  private async marketConnected(a: string, b: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      'SELECT 1 FROM market_contacts WHERE (buyer_id = $1 AND seller_id = $2) OR (buyer_id = $2 AND seller_id = $1) LIMIT 1',
+      [a, b],
+    );
+    return Boolean(rows[0]);
   }
 
   private async isActiveMember(db: Queryable, userId: string, communityId: string): Promise<boolean> {

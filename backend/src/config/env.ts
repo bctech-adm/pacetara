@@ -125,6 +125,42 @@ export const envSchema = z.object({
    */
   COMMUNITY_OWNER_MIN_LEVEL: z.coerce.number().int().min(1).max(2).default(2),
 
+  /**
+   * Midtrans (modul 3.2/3.3): biaya listing, boost, dan banner sponsor, dibayar di dasbor web (bukan di aplikasi,
+   * REVIEW-PRD C1). Kosong = pembayaran web menjawab 503. Server key dari dasbor Midtrans (Settings → Access Keys).
+   */
+  MIDTRANS_SERVER_KEY: z.string().default(''),
+  MIDTRANS_PRODUCTION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Alamat dasbor web penjual/sponsor (tujuan kembali setelah bayar). */
+  DASHBOARD_URL: z.string().url().default('https://pace-admin.bimacreative.tech/dasbor'),
+
+  /**
+   * Xendit xenPlatform (modul 3.2, split payment). Aktif hanya jika ketiganya diisi: secret key, token callback
+   * (header x-callback-token), dan id akun bisnis master PaceTara (tujuan komisi di split rule).
+   */
+  XENDIT_SECRET_KEY: z.string().default(''),
+  XENDIT_CALLBACK_TOKEN: z.union([z.literal(''), z.string().min(16)]).default(''),
+  XENDIT_MASTER_ACCOUNT_ID: z.string().default(''),
+
+  /** Marketplace: harga dalam rupiah bulat. */
+  MARKET_LISTING_FEE: z.coerce.number().int().min(1000).max(10_000_000).default(15_000),
+  MARKET_LISTING_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  MARKET_BOOST_FEE: z.coerce.number().int().min(1000).max(10_000_000).default(10_000),
+  MARKET_BOOST_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  /** Komisi split payment per transaksi: persen (0–30) + flat rupiah. */
+  MARKET_FEE_PERCENT: z.coerce.number().min(0).max(30).default(5),
+  MARKET_FEE_FLAT: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  /** Versi kebijakan transaksi (situs publik /kebijakan-transaksi); wajib disetujui sebelum memasang/membeli. */
+  MARKET_POLICY_VERSION: z.string().min(1).max(40).default('2026-11-12'),
+  /**
+   * Template tautan afiliasi per host marketplace, JSON `{"shopee.co.id":"https://…{url}…"}`. `{url}` diganti URL
+   * produk (di-encode). Kosong = tautan asli penjual (tanpa komisi).
+   */
+  AFFILIATE_TEMPLATES: z.string().default(''),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()

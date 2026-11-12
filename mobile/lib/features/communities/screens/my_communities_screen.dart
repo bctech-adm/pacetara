@@ -177,6 +177,7 @@ class CommunityPlusEntry extends StatelessWidget {
         Expanded(child: _Shortcut(key: const Key('buddies-entry'), icon: Icons.diversity_3, label: 'Cari teman', onTap: () => context.push('/buddies'))),
         Expanded(child: _Shortcut(icon: Icons.map_outlined, label: 'Spot lari', onTap: () => context.push('/spots'))),
         Expanded(child: _Shortcut(icon: Icons.emoji_events_outlined, label: 'Liga', onTap: () => context.push('/league'))),
+        Expanded(child: _Shortcut(key: const Key('market-entry'), icon: Icons.storefront_outlined, label: 'Marketplace', onTap: () => context.push('/market'))),
       ]),
     );
   }

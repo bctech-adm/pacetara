@@ -10,8 +10,9 @@ import { EventsService } from '../events/events.service.js';
 import { FeedService } from '../feed/feed.service.js';
 import { BuddiesService } from '../buddies/buddies.service.js';
 import { SpotsService } from '../spots/spots.service.js';
+import { MarketService } from '../market/market.service.js';
 
-export type ReportTarget = 'user' | 'community' | 'message' | 'event' | 'post' | 'comment' | 'spot';
+export type ReportTarget = 'user' | 'community' | 'message' | 'event' | 'post' | 'comment' | 'spot' | 'listing';
 export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'sexual', 'violence', 'scam', 'impersonation', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
@@ -36,6 +37,7 @@ export class ReportsService {
     private readonly feed: FeedService,
     private readonly buddies: BuddiesService,
     private readonly spots: SpotsService,
+    private readonly market: MarketService,
   ) {}
 
   async create(
@@ -72,6 +74,7 @@ export class ReportsService {
     if (type === 'message') await db.query('UPDATE chat_messages SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
     if (type === 'post') await db.query('UPDATE feed_posts SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
     if (type === 'comment') await db.query('UPDATE feed_comments SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'listing') await db.query('UPDATE market_listings SET held_at = COALESCE(held_at, now()) WHERE id = $1', [targetId]);
     const { rows } = await db.query<{ n: string }>(
       `SELECT count(DISTINCT reporter_id) AS n FROM reports WHERE target_type = $1 AND target_id = $2 AND status = 'open'`,
       [type, targetId],
@@ -83,6 +86,7 @@ export class ReportsService {
     if (type === 'post') await db.query('UPDATE feed_posts SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'comment') await db.query('UPDATE feed_comments SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
     if (type === 'spot') await db.query('UPDATE run_spots SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
+    if (type === 'listing') await db.query('UPDATE market_listings SET hidden_at = COALESCE(hidden_at, now()) WHERE id = $1', [targetId]);
   }
 
   private async assertReportable(reporterId: string, type: ReportTarget, targetId: string) {
@@ -120,6 +124,12 @@ export class ReportsService {
         if (sp.submittedBy === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan spot kirimanmu sendiri');
         return;
       }
+      case 'listing': {
+        // Listing tayang terlihat semua pengguna Level 1 (modul 3.2). Penjual dilaporkan lewat sasaran `user`.
+        const l = await this.market.reportable(reporterId, targetId);
+        if (l.sellerId === reporterId) throw new ApiError(400, 'cannot_report_self', 'Tidak bisa melaporkan listing sendiri');
+        return;
+      }
       case 'event':
         // Event dimasukkan super admin dan terlihat oleh semua pengguna Level 1.
         await this.events.assertExists(targetId);
@@ -133,7 +143,9 @@ export class ReportsService {
             (await this.chat.haveDirectConversation(reporterId, targetId)) ||
             (await this.feed.canSeeProfile(reporterId, targetId)) ||
             // Cari teman lari (modul 2.6): pernah saling sapa atau terlihat di pencarian.
-            (await this.buddies.canSee(reporterId, targetId)));
+            (await this.buddies.canSee(reporterId, targetId)) ||
+            // Marketplace (modul 3.2): penjual listing yang tayang, atau pasangan yang terhubung lewat "Hubungi penjual".
+            (await this.market.canReportUser(reporterId, targetId)));
         if (!known) throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
         return;
       }

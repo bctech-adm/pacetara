@@ -199,6 +199,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               : 'Wajib untuk membuat komunitas, berjualan dengan pembayaran di aplikasi, dan sponsor'),
           onTap: () => context.push('/verification'),
         ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.storefront_outlined),
+          title: const Text('Marketplace'),
+          subtitle: const Text('Listing saya, pesanan, dan akun pembayaran'),
+          onTap: () => context.push('/market/mine'),
+        ),
         const Divider(),
         ListTile(
           key: const Key('subscription-tile'),

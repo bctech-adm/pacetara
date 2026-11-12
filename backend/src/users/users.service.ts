@@ -23,6 +23,8 @@ import { BuddiesService } from '../buddies/buddies.service.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
 import { SpotsService } from '../spots/spots.service.js';
 import { KycService } from '../kyc/kyc.service.js';
+import { MarketService } from '../market/market.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { TreasuryService } from '../treasury/treasury.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
 
@@ -62,6 +64,8 @@ export class UsersService {
     private readonly treasury: TreasuryService,
     private readonly spots: SpotsService,
     private readonly kyc: KycService,
+    private readonly market: MarketService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -159,6 +163,10 @@ export class UsersService {
     let importTokens: Awaited<ReturnType<ImportsService['onAccountDeletion']>> = [];
     let playSubs: Awaited<ReturnType<SubscriptionsService['onAccountDeletion']>> = [];
     const logos = await withTx(this.pool, async (db) => {
+      // Marketplace (modul 3.2): ditolak jika masih ada pesanan berjalan; listing + foto + kontak dihapus; pesanan,
+      // akun penjual, dan pembayaran tetap untuk akuntansi/sengketa tanpa tautan ke akun (REVIEW-PRD C4).
+      const listingPhotos = await this.market.onAccountDeletion(db, userId);
+      await this.payments.onAccountDeletion(db, userId);
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
       // Modul 2.6: RSVP dan absensi dihapus; profil cari teman dan sapaan dihapus; pesanan jersey belum lunas dihapus,
@@ -206,7 +214,7 @@ export class UsersService {
          WHERE id = $1`,
         [userId, DELETED_USER_NAME],
       );
-      return [...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
+      return [...listingPhotos, ...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
     });
     // Cabut izin di Garmin/Strava (best effort; token sudah terhapus dari database).
     await this.imports.revokeAll(importTokens).catch(() => this.logger.warn('Gagal mencabut izin impor akun terhapus'));

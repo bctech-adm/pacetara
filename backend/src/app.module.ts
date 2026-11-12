@@ -69,6 +69,13 @@ import { UsersRepository } from './users/users.repository.js';
 import { AdminKycController, KycController } from './kyc/kyc.controller.js';
 import { KycEngine } from './kyc/kyc-engine.js';
 import { KycService } from './kyc/kyc.service.js';
+import { AdminMarketController, MarketController, XenditWebhookController } from './market/market.controller.js';
+import { MarketOrderSync } from './market/market-orders.js';
+import { MarketService } from './market/market.service.js';
+import { XenditApi } from './market/xendit.js';
+import { MidtransApi } from './payments/midtrans.js';
+import { AdminPaymentsController, PaymentsController } from './payments/payments.controller.js';
+import { PaymentsService } from './payments/payments.service.js';
 import { UsersService } from './users/users.service.js';
 
 @Module({
@@ -83,7 +90,9 @@ import { UsersService } from './users/users.service.js';
     CommunitySchedulesController, SessionsController, LeagueController, CommunityStatsController, BuddiesController, CommunityTreasuryController,
     JerseyController, SpotsController, AdminSpotsController,
     // Modul 3.1 Verifikasi Level 2.
-    KycController, AdminKycController],
+    KycController, AdminKycController,
+    // Modul 3.2 Marketplace (+ pembayaran Midtrans bersama 3.3).
+    MarketController, XenditWebhookController, AdminMarketController, PaymentsController, AdminPaymentsController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -128,6 +137,11 @@ import { UsersService } from './users/users.service.js';
     SpotsService,
     KycEngine,
     KycService,
+    MidtransApi,
+    PaymentsService,
+    XenditApi,
+    MarketOrderSync,
+    MarketService,
     ReportsService,
     ModerationService,
     AdminAuthService,

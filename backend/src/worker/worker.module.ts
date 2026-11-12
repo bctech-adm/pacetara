@@ -27,6 +27,10 @@ import { type SubscriptionJob, SubscriptionQueue } from '../subscriptions/subscr
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { LeagueService } from '../league/league.service.js';
 import { expireKycReviews } from '../kyc/kyc-expiry.js';
+import { MarketOrderSync } from '../market/market-orders.js';
+import { XenditApi } from '../market/xendit.js';
+import { MidtransApi } from '../payments/midtrans.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
 import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from './queues.js';
 
@@ -62,6 +66,11 @@ import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from
     // Modul 2.6: pembentukan sesi jadwal rutin + pengingat, snapshot liga.
     SchedulesService,
     LeagueService,
+    // Modul 3.2/3.3: sinkron pesanan Xendit dan pembayaran Midtrans.
+    XenditApi,
+    MarketOrderSync,
+    MidtransApi,
+    PaymentsService,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
@@ -82,6 +91,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     private readonly subscriptions: SubscriptionsService,
     private readonly schedules: SchedulesService,
     private readonly league: LeagueService,
+    private readonly marketOrders: MarketOrderSync,
+    private readonly payments: PaymentsService,
   ) {}
 
   async onModuleInit() {
@@ -147,6 +158,13 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { name: MAINTENANCE_JOBS.kycReviewExpiry, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
     );
 
+    // Modul 3.2/3.3: pemeliharaan marketplace + rekonsiliasi pembayaran Midtrans. Tiap 15 menit.
+    await this.queue.upsertJobScheduler(
+      'market-maintenance',
+      { every: 15 * 60_000 },
+      { name: MAINTENANCE_JOBS.marketMaintenance, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+    );
+
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
 
@@ -193,6 +211,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
         return this.schedules.runJobs();
       case MAINTENANCE_JOBS.leagueSnapshot:
         return this.league.runJob();
+      case MAINTENANCE_JOBS.marketMaintenance:
+        return Promise.all([this.marketOrders.maintenance(), this.payments.reconcile()]).then(([market, payments]) => ({ market, payments }));
       case MAINTENANCE_JOBS.kycReviewExpiry:
         return expireKycReviews(this.pool).then((expired) => ({ expired }));
       default:
