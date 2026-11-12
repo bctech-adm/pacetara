@@ -8,6 +8,7 @@ import { ApiError } from '../common/http.js';
 import { PG_POOL } from '../core.module.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { LiveService } from '../live/live.service.js';
+import { deleteRuns, findOverlaps, lockUserRuns, SOURCE_PRIORITY } from './dedup.js';
 import { BadgesService } from '../passport/badges.service.js';
 import { RUN_HISTORY_DAYS, type UserPlan } from '../plans/plans.js';
 import { processImage } from '../storage/image.js';
@@ -41,15 +42,21 @@ interface RunRow {
   avg_pace_s_per_km: number | null;
   elevation_gain_m: number | null;
   point_count: number;
+  stats_verified: boolean;
   created_at: Date;
 }
 
 const COLS = `r.id, r.user_id, r.source, r.title, r.notes, r.visibility, r.started_at, r.ended_at, r.distance_m,
-  r.moving_time_s, r.elapsed_time_s, r.avg_pace_s_per_km, r.elevation_gain_m, r.point_count, r.created_at`;
+  r.moving_time_s, r.elapsed_time_s, r.avg_pace_s_per_km, r.elevation_gain_m, r.point_count, r.stats_verified, r.created_at`;
 
 const MAX_PHOTOS = 4;
-const fullAad = (id: string) => `runs.route_full:${id}`;
-const publicAad = (id: string) => `runs.route_public:${id}`;
+export const fullAad = (id: string) => `runs.route_full:${id}`;
+export const publicAad = (id: string) => `runs.route_public:${id}`;
+
+/** Rute terenkripsi (gzip JSON → FieldCrypto, AAD per lari). Dipakai juga oleh impor (modul 2.3). */
+export function encryptRoute(crypto: FieldCrypto, segments: Point[][], aad: string): Buffer {
+  return crypto.encrypt(gzipSync(Buffer.from(JSON.stringify(segments))), aad);
+}
 
 @Injectable()
 export class RunsService {
@@ -121,6 +128,8 @@ export class RunsService {
       }
       throw err;
     }
+    // Lari aplikasi menggantikan lari impor yang tumpang-tindih (modul 2.3: tidak terhitung ganda).
+    await this.supersedeImports(userId, id, input.startedAt, input.endedAt);
     // Lencana pencapaian dihitung saat lari disimpan (dengan notifikasi). Tidak pernah menggagalkan penyimpanan.
     await this.badges.evaluate(userId, { notify: true });
     return { created: true, run: await this.detail(userId, id, true) };
@@ -210,6 +219,11 @@ export class RunsService {
 
   async update(userId: string, runId: string, patch: { title?: string; notes?: string; visibility?: RunVisibility }) {
     await this.requireOwner(this.pool, userId, runId);
+    if (patch.visibility !== undefined && patch.visibility !== 'private') {
+      const { rows } = await this.pool.query<{ source: string }>('SELECT source FROM runs WHERE id = $1', [runId]);
+      // PRD 2.3 / keputusan #63: lari impor Strava hanya untuk pemiliknya dan tidak bisa diubah.
+      if (rows[0]?.source === 'strava') throw new ApiError(409, 'strava_private', 'Lari dari Strava hanya bisa dilihat olehmu');
+    }
     const sets: string[] = [];
     const values: unknown[] = [runId];
     for (const [col, v] of [
@@ -334,6 +348,24 @@ export class RunsService {
 
   // ---------- Bantuan ----------
 
+  /** Hapus lari impor yang tumpang-tindih dengan lari aplikasi [runId] (prioritas aplikasi tertinggi). */
+  private async supersedeImports(userId: string, runId: string, start: Date, end: Date) {
+    try {
+      const keys = await withTx(this.pool, async (db) => {
+        await lockUserRuns(db, userId);
+        const overlaps = await findOverlaps(db, userId, start, end, runId);
+        const lower = overlaps.filter((r) => (SOURCE_PRIORITY[r.source] ?? 0) < SOURCE_PRIORITY.app!).map((r) => r.id);
+        if (lower.length) {
+          await db.query(`UPDATE import_records SET status = 'duplicate', run_id = $2 WHERE user_id = $1 AND run_id = ANY($3::uuid[])`, [userId, runId, lower]);
+        }
+        return deleteRuns(db, lower);
+      });
+      await this.deleteObjects(keys);
+    } catch (err) {
+      this.logger.warn(`Gagal deduplikasi lari impor: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
   private async detailAccess(viewerId: string, runId: string) {
     const { rows } = await this.pool.query<RunRow>(`SELECT ${COLS} FROM runs r WHERE r.id = $1`, [runId]);
     const r = rows[0];
@@ -371,7 +403,7 @@ export class RunsService {
   }
 
   private encryptRoute(segments: Point[][], aad: string): Buffer {
-    return this.crypto.encrypt(gzipSync(Buffer.from(JSON.stringify(segments))), aad);
+    return encryptRoute(this.crypto, segments, aad);
   }
 
   private decryptRoute(payload: Buffer | null, aad: string): Point[][] {
@@ -393,6 +425,8 @@ export class RunsService {
       elapsedTimeS: r.elapsed_time_s,
       avgPaceSPerKm: r.avg_pace_s_per_km,
       elevationGainM: r.elevation_gain_m,
+      // false = statistik dilaporkan sumber impor tanpa rute GPS (tidak dihitung untuk liga 2.6).
+      statsVerified: r.stats_verified,
     };
   }
 }

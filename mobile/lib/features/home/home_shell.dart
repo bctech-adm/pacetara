@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../chat/chat_screens.dart';
 import '../chat/inbox.dart';
 import '../communities/screens/my_communities_screen.dart';
 import '../feed/feed_screens.dart';
+import '../imports/health_connect_source.dart';
 import '../notifications/push_registrar.dart';
 import '../profile/profile_screen.dart';
 import '../update/update_service.dart';
@@ -42,6 +44,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ref.invalidate(pendingUploadsProvider);
         ref.invalidate(myRunsProvider);
       }
+    });
+    // Dibuka Health Connect untuk menjelaskan pemakaian izin (wajib menurut Health Connect): tampilkan penjelasan.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final action = await launchAction();
+      if (action != null && hcRationaleActions.contains(action) && mounted) context.push('/imports/health-connect/about');
     });
   }
 

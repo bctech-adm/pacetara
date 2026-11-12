@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { type AuthUser, CurrentUser, Public, ZodPipe } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
+import { garminEnabled, stravaEnabled } from '../imports/config.js';
 import { normalizePhoneId } from '../crypto/field-crypto.js';
 import { AuthService } from './auth.service.js';
 import { GoogleVerifier, Mailer } from './channels.js';
@@ -74,6 +75,8 @@ export class AuthController {
       privacyUrl: this.env.PRIVACY_POLICY_URL,
       googleEnabled: this.googleVerifier.enabled,
       emailEnabled: this.mailer.enabled,
+      // Modul 2.3: aplikasi menyembunyikan tombol penyedia yang belum dikonfigurasi.
+      imports: { garmin: garminEnabled(this.env), strava: stravaEnabled(this.env) },
     };
   }
 

@@ -101,7 +101,7 @@
     <ul>
       <li><strong>Pengguna lain</strong> melihat nama, foto profil, kota, dan lencanamu. Email dan nomor HP tidak pernah ditampilkan.</li>
       <li><strong>Anggota komunitasmu</strong> melihat aktivitasmu di komunitas itu, dan status lari langsungmu jika kamu menyalakannya untuk komunitas tersebut.</li>
-      <li><strong>Lari</strong> terlihat sesuai pilihanmu untuk tiap lari: semua orang, komunitas, atau hanya kamu. Lari yang diimpor dari Strava hanya terlihat olehmu.</li>
+      <li><strong>Lari</strong> terlihat sesuai pilihanmu untuk tiap lari: semua orang, komunitas, atau hanya kamu. Lari yang diimpor dari Strava hanya terlihat olehmu dan tidak pernah tampil di feed, komunitas, papan peringkat, atau statistik komunitas; ini juga berlaku untuk lari Strava yang masuk lewat Health Connect. Lari yang masuk otomatis dari Garmin bawaannya hanya terlihat olehmu sampai kamu mengubahnya.</li>
       <li><strong>Paspor lari</strong> (medali, hasil resmi, lencana) bawaannya terlihat oleh anggota komunitasmu, dan bisa kamu ubah menjadi hanya untukmu. Lencana yang hanya tercapai berkat lari impor Strava tidak pernah ditampilkan ke orang lain.</li>
       <li><strong>Postingan feed</strong> terlihat sesuai pilihanmu untuk tiap postingan: semua orang, anggota komunitasmu, atau pengikutmu. Postingan hasil lari tidak bisa lebih luas dari visibilitas larinya, dan rutenya selalu tanpa area zona privasi. Komentar dan suka terlihat oleh siapa pun yang bisa melihat postingannya. Daftar pengikut dan yang kamu ikuti hanya terlihat olehmu; orang lain hanya melihat jumlahnya.</li>
       <li><strong>Event yang kamu tandai "ikut"</strong> terlihat oleh sesama anggota komunitasmu. Pengguna lain hanya melihat jumlah peserta, tanpa nama.</li>
@@ -116,13 +116,16 @@
       <tbody>
         <tr><td>WhatsApp</td><td>Mengirim kode verifikasi nomor HP, dan pesan SOS ke kontak daruratmu</td><td>Nomor HP dan kode verifikasi. Untuk SOS: nomor kontak darurat, namamu, dan lokasimu saat tombol SOS ditekan (lokasi tidak kami simpan)</td></tr>
         <tr><td>Google</td><td>Masuk dengan Google, Google Play Billing, notifikasi push (Firebase Cloud Messaging), AdMob, Health Connect (dibaca di perangkatmu)</td><td>Sesuai layanan yang kamu pakai. Untuk notifikasi push: token perangkat dan teks notifikasi (mis. nama pengirim atau komunitas). Isi pesan chat tidak pernah dikirim ke Google.</td></tr>
-        <tr><td>Garmin, Strava</td><td>Mengimpor aktivitas lari</td><td>Hanya jika kamu menghubungkan akunmu</td></tr>
+        <tr><td>Garmin, Strava</td><td>Mengimpor aktivitas lari</td><td>Hanya jika kamu menghubungkan akunmu. Kami menerima dari mereka aktivitas lari (waktu, jarak, rute) dan token akses yang kami simpan terenkripsi. Kami tidak mengirim data PaceTara-mu ke Garmin atau Strava selain permintaan izin dan pencabutannya. Data Strava hanya ditampilkan kepadamu, sesuai syarat Strava.</td></tr>
         <tr><td>Midtrans, Xendit</td><td>Pembayaran marketplace dan banner sponsor</td><td>Data transaksi yang diperlukan</td></tr>
         <tr><td>Penyedia peta (saat ini OpenStreetMap)</td><td>Menampilkan peta rute lari</td><td>Alamat IP dan area peta yang sedang kamu lihat (bukan rute lari atau akunmu)</td></tr>
         <tr><td>Penyedia server (VPS)</td><td>Menjalankan server dan menyimpan data</td><td>Data tersimpan dalam bentuk terenkripsi sesuai bagian 6</td></tr>
       </tbody>
     </table>
     <p>Data dapat diproses di server yang berada di luar Indonesia. Dalam hal itu kami memastikan tingkat pelindungan yang setara sesuai UU PDP.</p>
+
+    <p><strong>Health Connect.</strong> Aplikasi PaceTara membaca dari Health Connect di perangkatmu hanya saat kamu membuka layar impor: sesi olahraga lari, jarak, kalori, dan langkah selama sesi itu, serta rute GPS jika kamu mengizinkannya. Hanya lari yang kamu pilih yang dikirim ke server kami. PaceTara tidak menulis ke Health Connect, tidak membaca di latar belakang, tidak menjual data ini, dan tidak memakainya untuk iklan. Izin bisa dicabut kapan saja di Health Connect.</p>
+    <p><strong>Lari impor</strong> diperlakukan sama dengan lari yang direkam di aplikasi: rute dienkripsi, titik awal dan akhirnya disembunyikan dari orang lain (zona privasi), dan lari yang sama dari beberapa sumber hanya disimpan sekali.</p>
 
     <h2 id="keamanan">6. Cara kami melindungi data</h2>
     <ul>
@@ -153,7 +156,7 @@
       <li>mendapat informasi tentang pemrosesan datamu dan mengakses salinannya;</li>
       <li>memperbaiki data yang tidak akurat (sebagian bisa langsung di menu Profil);</li>
       <li>menghapus data pribadimu (menu Profil → Hapus akun);</li>
-      <li>menarik persetujuan, misalnya mematikan status lari atau memutus Garmin/Strava;</li>
+      <li>menarik persetujuan, misalnya mematikan status lari, mencabut izin Health Connect, atau memutus Garmin/Strava (menu Profil → Impor data lari, dengan pilihan menghapus lari hasil impornya);</li>
       <li>mengajukan keberatan atas pemrosesan tertentu;</li>
       <li>mendapatkan dan memindahkan datamu dalam format yang umum dipakai.</li>
     </ul>
@@ -167,6 +170,7 @@
       <li>tanda "ikut" di kalender event dihapus;</li>
       <li>medali beserta fotonya, hasil resmi, dan lencana di paspor lari dihapus;</li>
       <li>postingan feed beserta fotonya, komentar, suka, daftar mengikuti/pengikut, dan blokir dihapus;</li>
+      <li>semua lari (termasuk hasil impor) dihapus, sambungan Garmin/Strava diputus, token aksesnya dihapus, dan izinnya dicabut di penyedia;</li>
       <li>di chat komunitas, pesanmu tetap ada demi keutuhan percakapan, tetapi namamu diganti "Pengguna dihapus";</li>
       <li>salinan di cadangan terenkripsi ikut terhapus dalam 30 hari;</li>
       <li>catatan transaksi disimpan sesuai kewajiban hukum (bagian 7).</li>

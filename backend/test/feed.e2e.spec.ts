@@ -177,8 +177,9 @@ describe.skipIf(!hasTestInfra)('Modul 2.1 Feed sosial (e2e)', () => {
     const priv = await run(ani, 'private');
     expect((await api(ani).post('/v1/feed/posts', { runId: priv, visibility: 'public' }).expect(409)).body.error).toBe('run_not_shareable');
     const strava = await run(ani, 'public');
-    await t.pool.query(`UPDATE runs SET source = 'strava' WHERE id = $1`, [strava]);
-    await api(ani).post('/v1/feed/posts', { runId: strava, visibility: 'public' }).expect(409);
+    // Lari Strava selalu privat (constraint runs_strava_private, modul 2.3); pesan galatnya khusus Strava.
+    await t.pool.query(`UPDATE runs SET source = 'strava', visibility = 'private' WHERE id = $1`, [strava]);
+    expect((await api(ani).post('/v1/feed/posts', { runId: strava, visibility: 'public' }).expect(409)).body.message).toMatch(/Strava/);
     // Lari orang lain tidak bisa diposting.
     const budiRun = await run(budi, 'public');
     await api(ani).post('/v1/feed/posts', { runId: budiRun, visibility: 'public' }).expect(404);

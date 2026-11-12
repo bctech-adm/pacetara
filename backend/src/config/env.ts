@@ -58,6 +58,29 @@ export const envSchema = z.object({
   /** Situs publik; dipakai untuk tautan undangan komunitas (`/j/<kode>`). */
   PUBLIC_WEB_URL: z.string().url().default('https://pace.bimacreative.tech'),
 
+  /**
+   * URL publik API (https://domain[:port]) untuk alamat callback OAuth impor (modul 2.3). Kosong = dibentuk
+   * dari API_DOMAIN. Keduanya kosong = OAuth Garmin/Strava mati.
+   */
+  API_PUBLIC_URL: z.union([z.literal(''), z.string().url()]).default(''),
+  API_DOMAIN: z.string().default(''),
+
+  /** Garmin Connect Developer Program (modul 2.3). Aktif hanya jika ketiganya diisi. */
+  GARMIN_CLIENT_ID: z.string().default(''),
+  GARMIN_CLIENT_SECRET: z.string().default(''),
+  /** Kunci acak di alamat endpoint push Garmin (/v1/imports/garmin/push/<kunci>), min. 32 karakter. */
+  GARMIN_PUSH_KEY: z.union([z.literal(''), z.string().min(32, 'GARMIN_PUSH_KEY minimal 32 karakter')]).default(''),
+  /** Akses Starter Garmin: maks. 1.000 pengguna terhubung. */
+  GARMIN_MAX_USERS: z.coerce.number().int().min(1).default(1000),
+
+  /** Strava API (modul 2.3). Aktif hanya jika client id dan secret diisi. */
+  STRAVA_CLIENT_ID: z.string().default(''),
+  STRAVA_CLIENT_SECRET: z.string().default(''),
+  /** Token verifikasi langganan webhook Strava. Kosong = webhook mati (sinkron manual tetap jalan). */
+  STRAVA_WEBHOOK_VERIFY_TOKEN: z.string().default(''),
+  /** Id langganan webhook Strava; jika diisi, event dengan id lain ditolak. */
+  STRAVA_WEBHOOK_SUBSCRIPTION_ID: z.string().default(''),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()

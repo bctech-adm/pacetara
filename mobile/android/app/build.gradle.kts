@@ -27,7 +27,8 @@ android {
 
     defaultConfig {
         applicationId = "tech.bimacreative.pacetara"
-        minSdk = flutter.minSdkVersion
+        // Health Connect (plugin `health`, modul 2.3) butuh Android 8.0 / API 26.
+        minSdk = maxOf(26, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

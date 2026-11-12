@@ -31,6 +31,11 @@ import { StatsService } from './passport/stats.service.js';
 import { SafetyController } from './safety/safety.controller.js';
 import { SafetyService } from './safety/safety.service.js';
 import { HealthController } from './health/health.controller.js';
+import { ImportQueue } from './imports/import-queue.js';
+import { ImportWriter } from './imports/import-writer.js';
+import { ImportsController, ImportWebhooksController } from './imports/imports.controller.js';
+import { ImportsService } from './imports/imports.service.js';
+import { ProviderHttp } from './imports/provider-http.js';
 import { UserThrottlerGuard } from './http/user-throttler.guard.js';
 import { LiveController } from './live/live.controller.js';
 import { LiveService } from './live/live.service.js';
@@ -51,7 +56,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -78,6 +83,10 @@ import { UsersService } from './users/users.service.js';
     BadgesService,
     PassportService,
     StatsService,
+    ProviderHttp,
+    ImportWriter,
+    ImportQueue,
+    ImportsService,
     ReportsService,
     ModerationService,
     AdminAuthService,

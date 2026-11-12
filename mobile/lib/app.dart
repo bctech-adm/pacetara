@@ -16,6 +16,7 @@ import 'features/communities/screens/join_by_code_screen.dart';
 import 'features/events/events_screens.dart';
 import 'features/feed/feed_screens.dart';
 import 'features/home/home_shell.dart';
+import 'features/imports/imports_screens.dart';
 import 'features/notifications/notifications_screens.dart';
 import 'features/passport/passport_screens.dart';
 import 'features/profile/profile_screen.dart';
@@ -78,6 +79,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/feed/connections', builder: (_, _) => const FeedConnectionsScreen()),
       GoRoute(path: '/feed/posts/:id', builder: (_, state) => PostDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/feed/users/:id', builder: (_, state) => FeedProfileScreen(userId: state.pathParameters['id']!)),
+      GoRoute(path: '/imports', builder: (_, _) => const ImportsScreen()),
+      GoRoute(path: '/imports/health-connect', builder: (_, _) => const HealthConnectImportScreen()),
+      GoRoute(path: '/imports/health-connect/about', builder: (_, _) => const HealthConnectAboutScreen()),
       GoRoute(path: '/passport', builder: (_, _) => const PassportScreen()),
       GoRoute(path: '/passport/medals/new', builder: (_, _) => const AddMedalScreen()),
       GoRoute(path: '/passport/results/new', builder: (_, _) => const AddResultScreen()),

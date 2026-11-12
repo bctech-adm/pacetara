@@ -203,6 +203,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.sync_alt),
+          title: const Text('Impor data lari'),
+          subtitle: const Text('Health Connect, Garmin, Strava'),
+          onTap: () => context.push('/imports'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.dynamic_feed_outlined),
           title: const Text('Profil feed saya'),
           subtitle: const Text('Postingan, pengikut, dan blokir'),

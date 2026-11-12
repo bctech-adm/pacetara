@@ -26,6 +26,9 @@ set_var BLIND_INDEX_KEY "$(rand_b64)"
 set_var JWT_SECRET "$(rand_b64)"
 set_var WA_OTP_SHARED_SECRET "$(rand_hex)"
 set_var S3_SECRET_KEY "$(rand_hex)"
+# Hanya dipakai jika Garmin dikonfigurasi (modul 2.3); diisi acak agar siap pakai.
+set_var GARMIN_PUSH_KEY "$(rand_hex)"
+set_var STRAVA_WEBHOOK_VERIFY_TOKEN "$(rand_hex)"
 
 if [ "${1:-}" = "--local" ]; then
   set_var API_DOMAIN api.localhost

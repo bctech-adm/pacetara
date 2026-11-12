@@ -12,6 +12,10 @@ import { ENV, type Env, loadEnv } from '../src/config/env.js';
 import { configureApp } from '../src/http/configure-app.js';
 import { StorageService } from '../src/storage/storage.service.js';
 import { type PushJob, PushQueue } from '../src/notifications/push.js';
+import { ImportQueue } from '../src/imports/import-queue.js';
+import { ImportsService } from '../src/imports/imports.service.js';
+import { assertAllowedUrl, ProviderHttp, type ProviderRequest } from '../src/imports/provider-http.js';
+import type { ImportJob } from '../src/imports/types.js';
 
 /**
  * Tes integrasi butuh Postgres+PostGIS dan Redis sungguhan:
@@ -85,6 +89,46 @@ export class FakePushQueue {
   }
 }
 
+/**
+ * HTTP penyedia impor palsu (Garmin/Strava). Tetap memakai pemeriksaan allowlist yang sama dengan
+ * ProviderHttp asli, lalu menjawab dari [routes] (pola regex atas "METHOD url"). Semua panggilan dicatat.
+ */
+export class FakeProviderHttp {
+  calls: { method: string; url: string; bearer?: string; form?: Record<string, string> }[] = [];
+  routes: { pattern: RegExp; handler: (url: URL, req: ProviderRequest) => unknown }[] = [];
+  on(pattern: RegExp, handler: (url: URL, req: ProviderRequest) => unknown) {
+    this.routes.unshift({ pattern, handler });
+  }
+  reset() {
+    this.calls = [];
+    this.routes = [];
+  }
+  async request<T = unknown>(rawUrl: string, req: ProviderRequest = {}): Promise<T> {
+    const url = assertAllowedUrl(rawUrl);
+    const method = req.method ?? (req.form ? 'POST' : 'GET');
+    this.calls.push({ method, url: url.toString(), bearer: req.bearer, form: req.form });
+    const key = `${method} ${url.toString()}`;
+    const route = this.routes.find((r) => r.pattern.test(key));
+    if (!route) throw new Error(`FakeProviderHttp: tidak ada rute untuk ${key}`);
+    return (await route.handler(url, req)) as T;
+  }
+}
+
+/** Antrean impor palsu: mencatat job; tes menjalankannya dengan drain(). */
+export class FakeImportQueue {
+  jobs: ImportJob[] = [];
+  service?: ImportsService;
+  async enqueue(job: ImportJob) {
+    this.jobs.push(job);
+  }
+  /** Jalankan semua job yang menunggu (seperti worker). */
+  async drain() {
+    const results: unknown[] = [];
+    while (this.jobs.length) results.push(await this.service!.process(this.jobs.shift()!));
+    return results;
+  }
+}
+
 export interface TestApp {
   app: NestExpressApplication;
   http: ReturnType<NestExpressApplication['getHttpServer']>;
@@ -96,10 +140,13 @@ export interface TestApp {
   google: FakeGoogle;
   storage: MemoryStorage;
   push: FakePushQueue;
+  providerHttp: FakeProviderHttp;
+  imports: FakeImportQueue;
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
+/** [envOverrides] untuk mengaktifkan fitur opsional (mis. GARMIN_*, STRAVA_*). */
+export async function createTestApp(envOverrides: Record<string, string> = {}): Promise<TestApp> {
   const key = () => randomBytes(32).toString('base64');
   const env = loadEnv({
     NODE_ENV: 'test',
@@ -114,6 +161,7 @@ export async function createTestApp(): Promise<TestApp> {
     S3_ACCESS_KEY: 'test',
     S3_SECRET_KEY: 'testtest',
     S3_BUCKET: 'test',
+    ...envOverrides,
   } as NodeJS.ProcessEnv);
 
   const mailer = new FakeMailer();
@@ -121,6 +169,8 @@ export async function createTestApp(): Promise<TestApp> {
   const google = new FakeGoogle();
   const storage = new MemoryStorage();
   const push = new FakePushQueue();
+  const providerHttp = new FakeProviderHttp();
+  const imports = new FakeImportQueue();
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ENV)
@@ -135,11 +185,16 @@ export async function createTestApp(): Promise<TestApp> {
     .useValue(storage)
     .overrideProvider(PushQueue)
     .useValue(push)
+    .overrideProvider(ProviderHttp)
+    .useValue(providerHttp)
+    .overrideProvider(ImportQueue)
+    .useValue(imports)
     .compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   configureApp(app, env);
   await app.init();
+  imports.service = app.get(ImportsService);
 
   const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
   const redis = new Redis(env.REDIS_URL);
@@ -154,6 +209,8 @@ export async function createTestApp(): Promise<TestApp> {
     google,
     storage,
     push,
+    providerHttp,
+    imports,
     async close() {
       await app.close();
       await pool.end();

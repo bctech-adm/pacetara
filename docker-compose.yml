@@ -7,6 +7,7 @@ x-backend: &backend
   image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-backend:${IMAGE_TAG:-latest}
   build: ./backend
   restart: unless-stopped
+  # Semua variabel .env (termasuk GARMIN_*, STRAVA_*, API_PUBLIC_URL untuk impor modul 2.3) diteruskan ke api/worker.
   env_file: .env
   environment:
     DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

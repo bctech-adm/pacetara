@@ -2,6 +2,7 @@
 export const QUEUES = {
   maintenance: 'maintenance',
   notifications: 'notifications',
+  imports: 'imports',
 } as const;
 
 export const MAINTENANCE_JOBS = {
@@ -12,3 +13,6 @@ export const MAINTENANCE_JOBS = {
 
 /** Job di antrean notifications: satu kiriman push ke beberapa pengguna. */
 export const PUSH_JOB = 'push';
+
+/** Job di antrean imports (modul 2.3): tarik/olah aktivitas Garmin dan Strava. */
+export const IMPORT_JOB = 'import';

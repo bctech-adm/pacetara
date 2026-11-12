@@ -9,6 +9,7 @@ import { ChatService } from '../chat/chat.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { EventsService } from '../events/events.service.js';
 import { FeedService } from '../feed/feed.service.js';
+import { ImportsService } from '../imports/imports.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { LiveService } from '../live/live.service.js';
 import { PassportService } from '../passport/passport.service.js';
@@ -48,6 +49,7 @@ export class UsersService {
     private readonly safety: SafetyService,
     private readonly feed: FeedService,
     private readonly passport: PassportService,
+    private readonly imports: ImportsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -142,6 +144,7 @@ export class UsersService {
       throw new ApiError(401, 'invalid_credentials', 'Kata sandi salah');
     }
 
+    let importTokens: Awaited<ReturnType<ImportsService['onAccountDeletion']>> = [];
     const logos = await withTx(this.pool, async (db) => {
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
@@ -150,7 +153,9 @@ export class UsersService {
       const feedPhotos = await this.feed.onAccountDeletion(db, userId);
       // Paspor lari: medali (beserta foto), hasil resmi, dan lencana dihapus.
       const medalPhotos = await this.passport.onAccountDeletion(db, userId);
-      // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya.
+      // Impor (modul 2.3): koneksi Garmin/Strava (token) dan catatan impor dihapus; izin dicabut setelah commit.
+      importTokens = await this.imports.onAccountDeletion(db, userId);
+      // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya (termasuk lari hasil impor).
       const runPhotos = await this.runs.onAccountDeletion(db, userId);
       // Chat: pesan di chat pribadi dihapus; di chat komunitas nama menjadi "Pengguna dihapus".
       const chatImages = await this.chat.onAccountDeletion(db, userId);
@@ -178,6 +183,8 @@ export class UsersService {
       );
       return [...communityLogos, ...feedPhotos, ...medalPhotos, ...runPhotos, ...chatImages];
     });
+    // Cabut izin di Garmin/Strava (best effort; token sudah terhapus dari database).
+    await this.imports.revokeAll(importTokens).catch(() => this.logger.warn('Gagal mencabut izin impor akun terhapus'));
     // Status lari langsung (Redis) ikut dihapus.
     await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));
     for (const key of logos) await this.storage.delete(key).catch(() => undefined);
