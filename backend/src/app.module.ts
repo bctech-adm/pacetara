@@ -17,6 +17,10 @@ import { CommunitiesController, InvitationsController } from './communities/comm
 import { CommunitiesService } from './communities/communities.service.js';
 import { TokenService } from './auth/token.service.js';
 import { CoreModule } from './core.module.js';
+import { EventScraper } from './event-engine/event-scraper.js';
+import { AdminEventQueueController, EventSubmissionsController } from './event-engine/event-submissions.controller.js';
+import { EventSubmissionsService } from './event-engine/event-submissions.service.js';
+import { ScrapeHttp } from './event-engine/scrape-http.js';
 import { AdminEventsController, EventsController } from './events/events.controller.js';
 import { EventsService } from './events/events.service.js';
 import { FeedController } from './feed/feed.controller.js';
@@ -56,7 +60,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -76,6 +80,9 @@ import { UsersService } from './users/users.service.js';
     LiveService,
     ChatService,
     EventsService,
+    EventSubmissionsService,
+    ScrapeHttp,
+    EventScraper,
     NotificationsService,
     PushQueue,
     SafetyService,

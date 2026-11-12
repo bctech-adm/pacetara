@@ -11,6 +11,18 @@ export async function archivePastEvents(pool: Pick<pg.Pool, 'query'>): Promise<n
   return rowCount ?? 0;
 }
 
+/**
+ * Modul 2.4: kiriman event yang masih menunggu tetapi tanggalnya sudah lewat ditutup (ditolak dengan alasan
+ * otomatis). Event hasil engine yang sudah tayang diarsipkan oleh archivePastEvents seperti event manual.
+ */
+export async function expireStaleSubmissions(pool: Pick<pg.Pool, 'query'>): Promise<number> {
+  const { rowCount } = await pool.query(
+    `UPDATE event_submissions SET status = 'rejected', reject_reason = 'Tanggal event sudah lewat sebelum ditinjau', reviewed_at = now(), updated_at = now()
+      WHERE status = 'pending' AND event_date < ${TODAY_SQL}`,
+  );
+  return rowCount ?? 0;
+}
+
 /** Tanggal hari ini (WIB) sebagai YYYY-MM-DD, sama dengan TODAY_SQL. */
 export function todayWib(now = Date.now()): string {
   return new Date(now + 7 * 3_600_000).toISOString().slice(0, 10);

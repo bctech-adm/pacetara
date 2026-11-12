@@ -4,7 +4,11 @@ import type pg from 'pg';
 import { expireChatImages } from '../chat/chat-expiry.js';
 import { ENV, type Env } from '../config/env.js';
 import { CoreModule, PG_POOL } from '../core.module.js';
-import { archivePastEvents } from '../events/event-archive.js';
+import { archivePastEvents, expireStaleSubmissions } from '../events/event-archive.js';
+import { EventsService } from '../events/events.service.js';
+import { EventScraper } from '../event-engine/event-scraper.js';
+import { EventSubmissionsService } from '../event-engine/event-submissions.service.js';
+import { ScrapeHttp } from '../event-engine/scrape-http.js';
 import { FieldCrypto } from '../crypto/field-crypto.js';
 import { ImportQueue } from '../imports/import-queue.js';
 import { ImportWriter } from '../imports/import-writer.js';
@@ -21,13 +25,29 @@ import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES } from './queues.js';
 
 /**
  * Tugas latar. Modul berikutnya menambah prosesor: kedaluwarsa gambar chat (1.6),
- * arsip event (1.7), notifikasi (1.9), impor Garmin/Strava (2.3), engine event (2.4).
+ * arsip event (1.7), notifikasi (1.9), impor Garmin/Strava (2.3), scraping event (2.4).
  */
 @Module({
   imports: [CoreModule],
   // Impor (modul 2.3) butuh penulis lari + lencana (+ notifikasi). RealtimeService tanpa server HTTP hanya
   // menerbitkan sinyal lewat Redis.
-  providers: [StorageService, TokenService, RealtimeService, PushQueue, NotificationsService, BadgesService, ProviderHttp, ImportWriter, ImportQueue, ImportsService],
+  providers: [
+    StorageService,
+    TokenService,
+    RealtimeService,
+    PushQueue,
+    NotificationsService,
+    BadgesService,
+    ProviderHttp,
+    ImportWriter,
+    ImportQueue,
+    ImportsService,
+    // Engine event (modul 2.4): scraping terjadwal ke antrean event_submissions.
+    EventsService,
+    EventSubmissionsService,
+    ScrapeHttp,
+    EventScraper,
+  ],
 })
 export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger('Worker');
@@ -42,6 +62,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     private readonly storage: StorageService,
     private readonly crypto: FieldCrypto,
     private readonly imports: ImportsService,
+    private readonly scraper: EventScraper,
   ) {}
 
   async onModuleInit() {
@@ -66,6 +87,18 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { every: 60 * 60_000 },
       { name: MAINTENANCE_JOBS.eventArchive, opts: { removeOnComplete: 10, removeOnFail: 50 } },
     );
+
+    // Scraping event (modul 2.4). Hanya jika pemilik mengisi EVENT_SCRAPE_SOURCES; selain itu jadwal dihapus.
+    if (this.scraper.enabled) {
+      await this.queue.upsertJobScheduler(
+        'event-scrape',
+        { every: this.env.EVENT_SCRAPE_INTERVAL_HOURS * 3_600_000 },
+        { name: MAINTENANCE_JOBS.eventScrape, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+      );
+      this.logger.log(`Scraping event aktif: ${this.scraper.sources.map((s) => s.id).join(', ')}`);
+    } else {
+      await this.queue.removeJobScheduler('event-scrape');
+    }
 
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
@@ -97,7 +130,9 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       case MAINTENANCE_JOBS.chatImageExpiry:
         return expireChatImages(this.pool, this.storage).then((expired) => ({ expired }));
       case MAINTENANCE_JOBS.eventArchive:
-        return archivePastEvents(this.pool).then((archived) => ({ archived }));
+        return Promise.all([archivePastEvents(this.pool), expireStaleSubmissions(this.pool)]).then(([archived, expiredSubmissions]) => ({ archived, expiredSubmissions }));
+      case MAINTENANCE_JOBS.eventScrape:
+        return this.scraper.runAll().then((stats) => ({ stats }));
       default:
         return Promise.reject(new Error(`Job tidak dikenal: ${job.name}`));
     }

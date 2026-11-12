@@ -20,7 +20,7 @@ const ListQuery = z.object({
   cursor: z.string().max(200).optional(),
 });
 
-const isoDate = z
+export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD')
   .refine((s) => {
@@ -29,7 +29,7 @@ const isoDate = z
   }, 'Tanggal tidak valid');
 
 /** Hanya https, tanpa kredensial di URL. */
-const httpsUrl = z
+export const httpsUrl = z
   .string()
   .trim()
   .max(500)
@@ -42,7 +42,7 @@ const httpsUrl = z
     }
   }, 'Tautan harus diawali https:// dan valid');
 
-const EventBody = z
+export const EventBody = z
   .object({
     name: z.string().trim().min(3, 'Nama minimal 3 karakter').max(120),
     date: isoDate,
@@ -60,6 +60,9 @@ const EventBody = z
       .max(EVENT_CATEGORIES.length)
       .transform((a) => [...new Set(a)]),
     registrationUrl: httpsUrl,
+    /** Modul 2.4: sumber dan halaman resmi. Kosong = event manual tim PaceTara. */
+    sourceName: z.string().trim().min(2).max(80).nullable().default(null),
+    sourceUrl: httpsUrl.nullable().default(null),
   })
   .strict();
 const CreateBody = EventBody.refine((b) => b.date >= todayWib(), { message: 'Tanggal sudah lewat', path: ['date'] });

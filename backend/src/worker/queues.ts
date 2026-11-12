@@ -9,6 +9,7 @@ export const MAINTENANCE_JOBS = {
   heartbeat: 'heartbeat',
   chatImageExpiry: 'chat-image-expiry',
   eventArchive: 'event-archive',
+  eventScrape: 'event-scrape',
 } as const;
 
 /** Job di antrean notifications: satu kiriman push ke beberapa pengguna. */

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pacetara/core/http/api_client.dart';
 import 'package:pacetara/features/chat/chat_repository.dart';
 import 'package:pacetara/features/chat/chat_screens.dart';
+import 'package:pacetara/features/notifications/notifications_repository.dart';
+import 'package:pacetara/features/events/event_submit_screens.dart';
 import 'package:pacetara/features/events/events_repository.dart';
 import 'package:pacetara/features/events/events_screens.dart';
 
@@ -33,6 +35,7 @@ Map<String, dynamic> detailJson({bool iAmGoing = false}) => {
       ...eventJson(iAmGoing: iAmGoing, friendsGoing: 1),
       'description': 'Lomba tahunan',
       'registrationUrl': 'https://contoh-lari.id/daftar',
+      'source': {'origin': 'scrape', 'name': 'Kalender Lari Uji', 'url': 'https://kalender.uji.id/event/bm'},
       'friendsPreview': [
         {'id': 'u2', 'displayName': 'Teman', 'avatarUrl': null, 'communities': ['Lari Pagi']},
       ],
@@ -53,6 +56,16 @@ Dio fakeDio(List<RequestOptions> seen) => Dio()
           'nextCursor': null,
         },
       '/v1/events/e1/going' => detailJson(iAmGoing: o.method == 'POST'),
+      '/v1/event-submissions' => o.method == 'POST'
+          ? {'id': 's9', 'status': 'pending'}
+          : {
+              'items': [
+                {'id': 's1', 'status': 'pending', 'name': 'Bogor Trail', 'date': '2026-12-20', 'city': 'Bogor', 'rejectReason': null, 'eventId': null, 'createdAt': '2026-11-12T00:00:00Z'},
+                {'id': 's2', 'status': 'rejected', 'name': 'Lari Palsu', 'date': '2026-12-21', 'city': 'Depok', 'rejectReason': 'Tautan tidak resmi', 'eventId': null, 'createdAt': '2026-11-12T00:00:00Z'},
+                {'id': 's3', 'status': 'approved', 'name': 'Bandung Marathon', 'date': '2026-12-14', 'city': 'Bandung', 'rejectReason': null, 'eventId': 'e1', 'createdAt': '2026-11-12T00:00:00Z'},
+              ],
+              'dailyLimit': 5,
+            },
       _ => detailJson(),
     };
     h.resolve(Response(requestOptions: o, statusCode: 200, data: data));
@@ -121,6 +134,9 @@ void main() {
     expect(find.text('3 pelari menandai ikut'), findsOneWidget);
     expect(find.text('Teman'), findsOneWidget);
     expect(find.text('Daftar di contoh-lari.id'), findsOneWidget);
+    // PRD 2.4: sumber dan tautan resmi selalu tampil.
+    expect(find.text('Sumber: Kalender Lari Uji · '), findsOneWidget);
+    expect(find.text('Lihat halaman resmi'), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const Key('event-going')));
     await tester.tap(find.byKey(const Key('event-going')));
@@ -140,5 +156,69 @@ void main() {
     expect(find.text('Sen, 14 Des 2026'), findsOneWidget);
     expect(find.text('Marathon'), findsOneWidget);
     expect(find.text('Event tidak tersedia lagi'), findsOneWidget);
+  });
+
+  test('sumber event: dari server dan cadangan untuk respons lama', () {
+    final d = EventDetail.fromJson(detailJson());
+    expect(d.source.label, 'Sumber: Kalender Lari Uji');
+    expect(d.source.url, 'https://kalender.uji.id/event/bm');
+    final old = EventDetail.fromJson({...detailJson()}..remove('source'));
+    expect(old.source.label, 'Sumber: Tim PaceTara');
+    expect(old.source.url, 'https://contoh-lari.id/daftar');
+    expect(const EventSourceInfo(origin: 'user', name: 'Bogor Trail', url: 'https://x.id').label, 'Sumber: Bogor Trail (kiriman penyelenggara)');
+  });
+
+  test('formulir kirim event: validasi tautan dan body', () {
+    expect(validateHttpsUrl('https://daftar.id/x'), isNull);
+    expect(validateHttpsUrl('http://daftar.id/x'), isNotNull);
+    expect(validateHttpsUrl('https://localhost'), isNotNull);
+    expect(validateHttpsUrl(''), 'Wajib diisi');
+    expect(validateHttpsUrl('', required: false), isNull);
+    final body = const EventSubmissionInput(
+      name: ' Bogor Trail ',
+      date: '2026-12-20',
+      city: 'Bogor',
+      categories: ['10k'],
+      registrationUrl: 'https://daftar.id/x',
+      officialUrl: ' ',
+      organizer: 'Komunitas',
+      contact: '',
+    ).toJson();
+    expect(body['name'], 'Bogor Trail');
+    expect(body['officialUrl'], isNull);
+    expect(body['contact'], isNull);
+  });
+
+  testWidgets('formulir kirim event: field wajib divalidasi, tidak ada permintaan', (tester) async {
+    final seen = <RequestOptions>[];
+    await tester.pumpWidget(host(seen, const SubmitEventScreen()));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('submit-send')));
+    await tester.tap(find.byKey(const Key('submit-send')));
+    await tester.pumpAndSettle();
+    expect(find.text('Minimal 3 karakter'), findsOneWidget);
+    expect(seen.where((o) => o.path == '/v1/event-submissions'), isEmpty);
+  });
+
+  testWidgets('kiriman saya: status dan alasan penolakan', (tester) async {
+    final seen = <RequestOptions>[];
+    await tester.pumpWidget(host(seen, const MySubmissionsScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Menunggu ditinjau'), findsOneWidget);
+    expect(find.text('Ditolak'), findsOneWidget);
+    expect(find.text('Alasan: Tautan tidak resmi'), findsOneWidget);
+    expect(find.text('Tayang'), findsOneWidget);
+  });
+
+  test('notifikasi kiriman event: teks dan tujuan', () {
+    AppNotification n(String type, Map<String, String> data) =>
+        AppNotification.fromJson({'id': 'n1', 'type': type, 'createdAt': '2026-11-12T00:00:00Z', 'read': false, 'actor': null, 'community': null, 'data': data});
+    final ok = n('event_submission_approved', {'submissionId': 's1', 'eventId': 'e1'});
+    expect(ok.text, 'Event kirimanmu sudah tayang di kalender');
+    expect(ok.route, '/events/e1');
+    expect(n('event_submission_rejected', {'submissionId': 's1'}).route, '/events/submissions');
+    expect(routeForPush({'type': 'event_submission_approved', 'eventId': 'e1'}), '/events/e1');
+    expect(routeForPush({'type': 'event_submission_rejected'}), '/events/submissions');
+    expect(notificationCategories.containsKey('event'), isTrue);
   });
 }

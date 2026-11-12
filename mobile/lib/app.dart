@@ -13,6 +13,7 @@ import 'features/communities/screens/community_detail_screen.dart';
 import 'features/communities/screens/community_form_screen.dart';
 import 'features/communities/screens/directory_screen.dart';
 import 'features/communities/screens/join_by_code_screen.dart';
+import 'features/events/event_submit_screens.dart';
 import 'features/events/events_screens.dart';
 import 'features/feed/feed_screens.dart';
 import 'features/home/home_shell.dart';
@@ -74,6 +75,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
       GoRoute(path: '/settings/emergency-contacts', builder: (_, _) => const EmergencyContactsScreen()),
       GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),
+      GoRoute(path: '/events/submit', builder: (_, _) => const SubmitEventScreen()),
+      GoRoute(path: '/events/submissions', builder: (_, _) => const MySubmissionsScreen()),
       GoRoute(path: '/events/:id', builder: (_, state) => EventDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/feed/new', builder: (_, state) => ComposePostScreen(runId: state.uri.queryParameters['runId'])),
       GoRoute(path: '/feed/connections', builder: (_, _) => const FeedConnectionsScreen()),

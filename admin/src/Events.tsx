@@ -26,6 +26,9 @@ type AdminEvent = {
   description: string;
   categories: string[];
   registrationUrl: string;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  origin: 'admin' | 'scrape' | 'user';
   archived: boolean;
   goingCount: number;
   hidden: boolean;
@@ -34,9 +37,14 @@ type AdminEvent = {
   updatedAt: string;
 };
 
-type Draft = Omit<AdminEvent, 'id' | 'archived' | 'goingCount' | 'hidden' | 'removed' | 'createdBy' | 'updatedAt'>;
+export type Draft = Omit<AdminEvent, 'id' | 'archived' | 'goingCount' | 'hidden' | 'removed' | 'createdBy' | 'updatedAt' | 'origin'>;
 
-const EMPTY: Draft = { name: '', date: '', startTime: null, city: '', venue: '', description: '', categories: [], registrationUrl: 'https://' };
+const EMPTY: Draft = { name: '', date: '', startTime: null, city: '', venue: '', description: '', categories: [], registrationUrl: 'https://', sourceName: null, sourceUrl: null };
+
+export const ORIGINS: Record<string, string> = { admin: 'Manual', scrape: 'Scraping', user: 'Kiriman penyelenggara' };
+
+/** Body API dari draf: field opsional kosong dikirim sebagai null. */
+export const draftBody = (d: Draft) => ({ ...d, startTime: d.startTime || null, sourceName: d.sourceName?.trim() || null, sourceUrl: d.sourceUrl?.trim() || null });
 
 const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -80,6 +88,7 @@ export function Events() {
             <th>Nama</th>
             <th>Kota</th>
             <th>Kategori</th>
+            <th>Asal</th>
             <th>Ikut</th>
           </tr>
         </thead>
@@ -97,6 +106,10 @@ export function Events() {
               </td>
               <td>{e.city}</td>
               <td>{e.categories.map((c) => CATEGORIES[c]?.split(' ')[0] ?? c).join(', ')}</td>
+              <td>
+                {ORIGINS[e.origin] ?? e.origin}
+                {e.sourceName ? <span className="muted"> · {e.sourceName}</span> : null}
+              </td>
               <td>{e.goingCount}</td>
             </tr>
           ))}
@@ -107,7 +120,7 @@ export function Events() {
 }
 
 function EventForm({ event, onDone }: { event: AdminEvent | null; onDone: () => void }) {
-  const [d, setD] = useState<Draft>(event ? { ...event } : EMPTY);
+  const [d, setD] = useState<Draft>(event ? toDraft(event) : EMPTY);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
@@ -118,7 +131,7 @@ function EventForm({ event, onDone }: { event: AdminEvent | null; onDone: () => 
     if (d.categories.length === 0) return setMsg('Pilih minimal satu kategori jarak');
     setBusy(true);
     setMsg(null);
-    const body = { ...d, startTime: d.startTime || null };
+    const body = draftBody(d);
     try {
       if (event) await api('PUT', `/v1/admin/events/${event.id}`, body);
       else await api('POST', '/v1/admin/events', body);
@@ -188,6 +201,7 @@ function EventForm({ event, onDone }: { event: AdminEvent | null; onDone: () => 
           Tautan pendaftaran resmi (https)
           <input type="url" required pattern="https://.*" maxLength={500} value={d.registrationUrl} onChange={(e) => set('registrationUrl', e.target.value)} />
         </label>
+        <SourceFields d={d} set={set} />
         <label>
           Deskripsi (opsional)
           <textarea rows={4} maxLength={2000} value={d.description} onChange={(e) => set('description', e.target.value)} />
@@ -207,5 +221,36 @@ function EventForm({ event, onDone }: { event: AdminEvent | null; onDone: () => 
         </div>
       </form>
     </section>
+  );
+}
+
+function toDraft(e: AdminEvent): Draft {
+  return {
+    name: e.name,
+    date: e.date,
+    startTime: e.startTime,
+    city: e.city,
+    venue: e.venue,
+    description: e.description,
+    categories: e.categories,
+    registrationUrl: e.registrationUrl,
+    sourceName: e.sourceName,
+    sourceUrl: e.sourceUrl,
+  };
+}
+
+/** Sumber dan halaman resmi: selalu ditampilkan di aplikasi ("Sumber: … · Lihat halaman resmi"). */
+export function SourceFields({ d, set }: { d: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void }) {
+  return (
+    <div className="grid2">
+      <label>
+        Nama sumber (kosong = "Tim PaceTara")
+        <input maxLength={80} value={d.sourceName ?? ''} onChange={(e) => set('sourceName', e.target.value || null)} />
+      </label>
+      <label>
+        Halaman resmi (https, kosong = tautan pendaftaran)
+        <input type="url" pattern="https://.*" maxLength={500} value={d.sourceUrl ?? ''} onChange={(e) => set('sourceUrl', e.target.value || null)} />
+      </label>
+    </div>
   );
 }

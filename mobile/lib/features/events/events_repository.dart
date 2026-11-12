@@ -91,19 +91,138 @@ class Participant {
       );
 }
 
+/// Sumber event dan halaman resminya (modul 2.4): selalu ditampilkan di detail.
+class EventSourceInfo {
+  const EventSourceInfo({required this.origin, required this.name, required this.url});
+
+  /// `admin` (dimasukkan tim PaceTara), `scrape` (dari situs kalender lari), `user` (kiriman penyelenggara).
+  final String origin;
+  final String name;
+  final String url;
+
+  factory EventSourceInfo.fromJson(Map<String, dynamic>? j, String fallbackUrl) => EventSourceInfo(
+        origin: j?['origin'] as String? ?? 'admin',
+        name: j?['name'] as String? ?? 'Tim PaceTara',
+        url: j?['url'] as String? ?? fallbackUrl,
+      );
+
+  /// "Sumber: Kalender Lari ID" / "Sumber: Bogor Trail (kiriman penyelenggara)".
+  String get label => origin == 'user' ? 'Sumber: $name (kiriman penyelenggara)' : 'Sumber: $name';
+}
+
 class EventDetail {
-  const EventDetail({required this.summary, required this.description, required this.registrationUrl, required this.friendsPreview});
+  const EventDetail({required this.summary, required this.description, required this.registrationUrl, required this.source, required this.friendsPreview});
   final EventSummary summary;
   final String description;
   final String registrationUrl;
+  final EventSourceInfo source;
   final List<Participant> friendsPreview;
 
   factory EventDetail.fromJson(Map<String, dynamic> j) => EventDetail(
         summary: EventSummary.fromJson(j),
         description: j['description'] as String? ?? '',
         registrationUrl: j['registrationUrl'] as String,
+        source: EventSourceInfo.fromJson(j['source'] as Map<String, dynamic>?, j['registrationUrl'] as String),
         friendsPreview: (j['friendsPreview'] as List<dynamic>? ?? const []).map((e) => Participant.fromJson(e as Map<String, dynamic>)).toList(),
       );
+}
+
+/// Kiriman event milik pengguna ("Kiriman saya").
+class EventSubmission {
+  const EventSubmission({
+    required this.id,
+    required this.status,
+    required this.name,
+    required this.date,
+    required this.city,
+    required this.rejectReason,
+    required this.eventId,
+    required this.createdAt,
+  });
+
+  final String id;
+
+  /// pending | approved | rejected | merged
+  final String status;
+  final String name;
+  final String date;
+  final String city;
+  final String? rejectReason;
+
+  /// Event yang tayang (disetujui atau digabung ke event yang sudah ada).
+  final String? eventId;
+  final DateTime createdAt;
+
+  factory EventSubmission.fromJson(Map<String, dynamic> j) => EventSubmission(
+        id: j['id'] as String,
+        status: j['status'] as String,
+        name: j['name'] as String,
+        date: j['date'] as String,
+        city: j['city'] as String? ?? '',
+        rejectReason: j['rejectReason'] as String?,
+        eventId: j['eventId'] as String?,
+        createdAt: DateTime.parse(j['createdAt'] as String),
+      );
+
+  String get statusLabel => switch (status) {
+        'pending' => 'Menunggu ditinjau',
+        'approved' => 'Tayang',
+        'merged' => 'Tayang (digabung dengan event yang sudah ada)',
+        'rejected' => 'Ditolak',
+        _ => status,
+      };
+}
+
+/// Isi formulir kirim event. Kontak penyelenggara opsional, hanya untuk tim PaceTara (disimpan terenkripsi).
+class EventSubmissionInput {
+  const EventSubmissionInput({
+    required this.name,
+    required this.date,
+    this.startTime,
+    required this.city,
+    this.venue = '',
+    this.description = '',
+    required this.categories,
+    required this.registrationUrl,
+    this.officialUrl,
+    required this.organizer,
+    this.contact,
+  });
+
+  final String name;
+  final String date;
+  final String? startTime;
+  final String city;
+  final String venue;
+  final String description;
+  final List<String> categories;
+  final String registrationUrl;
+  final String? officialUrl;
+  final String organizer;
+  final String? contact;
+
+  Map<String, dynamic> toJson() => {
+        'name': name.trim(),
+        'date': date,
+        'startTime': startTime,
+        'city': city.trim(),
+        'venue': venue.trim(),
+        'description': description.trim(),
+        'categories': categories,
+        'registrationUrl': registrationUrl.trim(),
+        'officialUrl': (officialUrl?.trim().isEmpty ?? true) ? null : officialUrl!.trim(),
+        'organizer': organizer.trim(),
+        'contact': (contact?.trim().isEmpty ?? true) ? null : contact!.trim(),
+      };
+}
+
+/// Validasi tautan formulir: wajib https dan berdomain (server memeriksa ulang).
+String? validateHttpsUrl(String? v, {bool required = true}) {
+  final s = v?.trim() ?? '';
+  if (s.isEmpty) return required ? 'Wajib diisi' : null;
+  final u = Uri.tryParse(s);
+  if (u == null || u.scheme != 'https' || !u.host.contains('.') || u.userInfo.isNotEmpty) return 'Tautan harus diawali https://';
+  return null;
 }
 
 class EventPage {
@@ -155,6 +274,17 @@ class EventsRepository {
         return (res.data!['items'] as List<dynamic>).map((e) => Participant.fromJson(e as Map<String, dynamic>)).toList();
       });
 
+  /// Kirim event untuk ditinjau tim PaceTara (maks. 5 per hari).
+  Future<String> submit(EventSubmissionInput input) => _call(() async {
+        final res = await _dio.post<Map<String, dynamic>>('/v1/event-submissions', data: input.toJson());
+        return res.data!['id'] as String;
+      });
+
+  Future<List<EventSubmission>> mySubmissions() => _call(() async {
+        final res = await _dio.get<Map<String, dynamic>>('/v1/event-submissions');
+        return (res.data!['items'] as List<dynamic>).map((e) => EventSubmission.fromJson(e as Map<String, dynamic>)).toList();
+      });
+
   Future<EventDetail> _detail(Future<Response<Map<String, dynamic>>> Function() fn) => _call(() async => EventDetail.fromJson((await fn()).data!));
 }
 
@@ -166,3 +296,5 @@ final eventDetailProvider = FutureProvider.autoDispose.family<EventDetail, Strin
 
 final eventParticipantsProvider =
     FutureProvider.autoDispose.family<List<Participant>, String>((ref, id) => ref.watch(eventsRepositoryProvider).participants(id));
+
+final mySubmissionsProvider = FutureProvider.autoDispose<List<EventSubmission>>((ref) => ref.watch(eventsRepositoryProvider).mySubmissions());

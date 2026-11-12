@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PaceTaraBot</title>
+  <meta name="description" content="Tentang PaceTaraBot, pembaca kalender event lari milik PaceTara.">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3A7.3 7.3 0 0 0 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
+        PaceTara
+      </a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>PaceTaraBot</h1>
+    <p><code>PaceTaraBot/1.0</code> adalah program milik PaceTara yang membaca jadwal event lari dari sejumlah kecil situs kalender lari, untuk ditampilkan di kalender event aplikasi PaceTara beserta nama situs sumber dan tautan ke halaman resminya.</p>
+
+    <h2>Cara kerjanya</h2>
+    <ul>
+      <li>Hanya membaca situs yang ketentuan layanannya sudah kami periksa dan mengizinkan.</li>
+      <li>Selalu membaca dan mematuhi <code>robots.txt</code>, termasuk <code>Crawl-delay</code>. Token yang dicocokkan: <code>PaceTaraBot</code>.</li>
+      <li>Hanya membaca halaman jadwal tertentu, paling sering sekali sehari, dengan jeda minimal 5 detik antar permintaan.</li>
+      <li>Hanya mengambil data event terstruktur (schema.org <code>Event</code>): nama, tanggal, lokasi, dan tautan. Tidak mengambil data pribadi.</li>
+      <li>Setiap event ditinjau manusia sebelum tayang, dan selalu ditampilkan dengan sumber serta tautan ke situs aslinya.</li>
+    </ul>
+
+    <h2>Menghentikan PaceTaraBot</h2>
+    <p>Tambahkan ini ke <code>robots.txt</code> situs Anda:</p>
+    <pre><code>User-agent: PaceTaraBot
+Disallow: /</code></pre>
+    <p>Atau kirim email ke <a href="mailto:postmaster@bimacreative.tech">postmaster@bimacreative.tech</a> dengan subjek "PaceTaraBot". Kami juga bisa menghapus event dari situs Anda yang sudah tayang.</p>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">© 2026 PaceTara · <a href="/">Beranda</a> · <a href="/privasi">Kebijakan Privasi</a></div>
+  </footer>
+</body>
+</html>

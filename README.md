@@ -19,6 +19,7 @@ Aplikasi Android untuk komunitas lari Indonesia. Spesifikasi: [docs/PRD.md](docs
 | 2.1 Feed sosial | Selesai (backend + aplikasi + panel), teruji e2e; tab Feed menggantikan tab Riwayat (riwayat lewat tab Lari/Profil). **Uji kartu Instagram Story di HP belum** |
 | 2.2 Riwayat dan paspor lari | Selesai (backend + aplikasi), teruji e2e: statistik minggu/bulan WIB (+ tahunan/rekor Premium), rak medali (gratis 5), hasil resmi, lencana otomatis. **Uji unggah foto medali dari kamera HP belum** |
 | 2.3 Impor data lari | Kode selesai (backend + worker + aplikasi), teruji e2e dengan penyedia palsu: Health Connect (pilih sesi di HP), Garmin (OAuth2 PKCE + push/ping), Strava (OAuth + webhook, selalu privat), dedup antar-sumber. Garmin/Strava **mati sampai env diisi**. Pemilik perlu: (1) daftar Garmin Connect Developer Program atas nama PT → isi `GARMIN_CLIENT_ID/SECRET`, `GARMIN_PUSH_KEY`, daftarkan endpoint `https://<api>/v1/imports/garmin/push/<GARMIN_PUSH_KEY>` (Activity Details) dan callback `https://<api>/v1/imports/garmin/callback`, lalu cek ulang alamat OAuth Garmin (KEPUTUSAN #160–#176); (2) buat aplikasi di strava.com/settings/api (Callback Domain = domain API) → isi `STRAVA_CLIENT_ID/SECRET`, opsional buat langganan webhook ke `https://<api>/v1/imports/strava/webhook` dengan `STRAVA_WEBHOOK_VERIFY_TOKEN` lalu isi `STRAVA_WEBHOOK_SUBSCRIPTION_ID`; (3) pasang `API_PUBLIC_URL`. **Uji Health Connect di HP sungguhan dan build APK (minSdk 26, plugin `health`) belum**; deklarasi izin Health Connect di Play Console diperlukan saat rilis |
+| 2.4 Engine event | Kode selesai (backend + worker + panel + aplikasi), teruji e2e dengan HTTP palsu: kirim event dari aplikasi (Level 1, maks. 5/hari), antrean di tab **Antrean event** panel (setujui dengan koreksi / tolak dengan alasan / gabung duplikat, semua di log), kandidat duplikat otomatis, scraping terjadwal idempoten (parser JSON-LD schema.org, robots.txt, anti-SSRF), sumber + halaman resmi di detail event, notifikasi ke pengirim. **Scraping mati sampai pemilik mengaktifkan sumber** (lihat "Mengaktifkan sumber scraping event"); belum diuji terhadap situs sungguhan (KEPUTUSAN #177–#191) |
 
 ## Mencoba aplikasi di HP (APK uji)
 
@@ -76,6 +77,22 @@ docker compose exec api node dist/scripts/admin.js promote email@contoh.com
 ```
 
 Perintah mencetak URI `otpauth://` dan kunci manual satu kali. Pindai dengan aplikasi authenticator (Google Authenticator, Aegis, 1Password), lalu bersihkan layar terminal. Login panel memakai email + kata sandi + kode 6 digit. HP hilang: `reset-totp <email>`. Mencabut: `demote <email>`. Setiap perintah dan tindakan di panel tercatat di log (tab Log).
+
+## Mengaktifkan sumber scraping event (modul 2.4)
+
+Tidak ada sumber yang aktif secara bawaan. Untuk setiap situs kalender lari yang ingin dibaca:
+
+1. **Periksa ketentuan layanan** situs itu (Terms of Service / Syarat dan Ketentuan): pastikan tidak melarang pengambilan data otomatis atau penggunaan ulang jadwal event. Jika ragu, minta izin tertulis ke pengelolanya. Simpan bukti (tangkapan layar/email) dan catat di KEPUTUSAN.md.
+2. **Periksa `https://<situs>/robots.txt`**: halaman jadwal tidak boleh di-`Disallow` untuk `*` atau `PaceTaraBot`. Scraper tetap memeriksa robots.txt setiap 24 jam dan berhenti sendiri jika dilarang.
+3. **Pastikan halaman memuat data terstruktur** schema.org `Event` (JSON-LD): buka sumber halaman, cari `application/ld+json` berisi `"@type":"Event"`/`"SportsEvent"`. Tanpa itu parser `jsonld` tidak menemukan apa pun; parser khusus situs perlu ditambahkan di `backend/src/event-engine/sources.ts` (beserta tes).
+4. **Isi `.env`** (satu baris JSON), lalu jalankan ulang worker:
+   ```
+   EVENT_SCRAPE_SOURCES=[{"id":"kalender-contoh","name":"Kalender Contoh","urls":["https://kalender.contoh.id/lari"]}]
+   ```
+   `id` tetap (huruf kecil/angka/strip; jangan diganti, dipakai untuk idempotensi), `name` tampil sebagai "Sumber: …", `urls` maks. 20 halaman https (host-nya menjadi allowlist). Nonaktifkan sementara dengan `"enabled":false`. Jarak putaran `EVENT_SCRAPE_INTERVAL_HOURS` (bawaan 24), jeda per permintaan `EVENT_SCRAPE_DELAY_MS` (bawaan 5000).
+5. Periksa hasil di panel → **Antrean event** → kartu "Sumber scraping" (putaran terakhir, galat seperti `robots_disallowed`), lalu tinjau kiriman. Tidak ada event yang tayang tanpa disetujui.
+
+Bot memperkenalkan diri sebagai `PaceTaraBot/1.0 (+<PUBLIC_WEB_URL>/bot)`; halaman `web/site/bot/` menjelaskan cara memblokirnya.
 
 ## Cadangan dan pemulihan
 

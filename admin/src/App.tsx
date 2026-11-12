@@ -1,13 +1,14 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useLoad } from './useLoad';
 import { api, ApiError, apiImage, hasStoredSession, login, logout, setLogoutHandler } from './api';
+import { EventQueue } from './EventQueue';
 import { Events } from './Events';
 
 /**
  * Panel super admin (modul 1.8): login dengan kata sandi + kode authenticator, antrean laporan,
- * banding, tindakan akun, log tindakan, dan input event manual (modul 1.7). Dasbor sponsor menyusul di 3.3.
+ * banding, tindakan akun, log tindakan, input event manual (modul 1.7), dan antrean event (modul 2.4). Dasbor sponsor menyusul di 3.3.
  */
-type Tab = 'reports' | 'events' | 'appeals' | 'users' | 'audit';
+type Tab = 'reports' | 'events' | 'queue' | 'appeals' | 'users' | 'audit';
 
 const REASONS: Record<string, string> = {
   spam: 'Spam',
@@ -35,9 +36,9 @@ export function App() {
       <header className="topbar">
         <h1>PaceTara Admin</h1>
         <nav>
-          {(['reports', 'events', 'appeals', 'users', 'audit'] as Tab[]).map((t) => (
+          {(['reports', 'events', 'queue', 'appeals', 'users', 'audit'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-              {{ reports: 'Laporan', events: 'Event', appeals: 'Banding', users: 'Pengguna', audit: 'Log' }[t]}
+              {{ reports: 'Laporan', events: 'Event', queue: 'Antrean event', appeals: 'Banding', users: 'Pengguna', audit: 'Log' }[t]}
             </button>
           ))}
           <button
@@ -53,6 +54,7 @@ export function App() {
       </header>
       {tab === 'reports' && <Reports />}
       {tab === 'events' && <Events />}
+      {tab === 'queue' && <EventQueue />}
       {tab === 'appeals' && <Appeals />}
       {tab === 'users' && <Users />}
       {tab === 'audit' && <Audit />}

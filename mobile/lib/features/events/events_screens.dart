@@ -88,7 +88,20 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final cities = ref.watch(eventCitiesProvider).value ?? const <String>[];
     final months = upcomingMonths(DateTime.now());
     return Scaffold(
-      appBar: AppBar(title: const Text('Kalender event')),
+      appBar: AppBar(title: const Text('Kalender event'), actions: [
+        IconButton(
+          key: const Key('my-submissions'),
+          tooltip: 'Kiriman saya',
+          icon: const Icon(Icons.outbox_outlined),
+          onPressed: () => context.push('/events/submissions'),
+        ),
+        IconButton(
+          key: const Key('submit-event'),
+          tooltip: 'Kirim event',
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: () => context.push('/events/submit'),
+        ),
+      ]),
       body: Column(children: [
         SizedBox(
           height: 52,
@@ -311,8 +324,10 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
     }
   }
 
-  Future<void> _openRegistration() async {
-    final uri = Uri.tryParse(widget.detail.registrationUrl);
+  Future<void> _openRegistration() => _openExternal(widget.detail.registrationUrl);
+
+  Future<void> _openExternal(String url) async {
+    final uri = Uri.tryParse(url);
     // Server hanya menerima https; periksa lagi sebelum membuka browser.
     if (uri == null || uri.scheme != 'https') return;
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) showInfo(context, 'Tidak bisa membuka tautan');
@@ -347,6 +362,18 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
       const Padding(
         padding: EdgeInsets.only(top: 4),
         child: Text('Pendaftaran dan pembayaran dilakukan di situs penyelenggara, bukan di PaceTara.', style: TextStyle(fontSize: 12)),
+      ),
+      // PRD 2.4: sumber dan tautan resmi selalu ditampilkan.
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text('${d.source.label} · ', key: const Key('event-source'), style: theme.textTheme.bodySmall),
+          InkWell(
+            key: const Key('event-official'),
+            onTap: () => _openExternal(d.source.url),
+            child: Text('Lihat halaman resmi', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary, decoration: TextDecoration.underline)),
+          ),
+        ]),
       ),
       const Divider(height: 32),
       Text('Siapa ikut?', style: theme.textTheme.titleMedium),

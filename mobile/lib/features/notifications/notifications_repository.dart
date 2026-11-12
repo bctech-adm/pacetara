@@ -66,6 +66,8 @@ class AppNotification {
       'post_like' => '$who menyukai postinganmu',
       'post_comment' => '$who mengomentari postinganmu',
       'badge_earned' => 'Kamu mendapat lencana baru',
+      'event_submission_approved' => 'Event kirimanmu sudah tayang di kalender',
+      'event_submission_rejected' => 'Kiriman eventmu ditolak. Lihat alasannya di Kiriman saya',
       _ => 'Notifikasi baru',
     };
   }
@@ -77,6 +79,8 @@ class AppNotification {
         'post_like' || 'post_comment' => data['postId'] == null ? null : '/feed/posts/${data['postId']}',
         'new_follower' => data['userId'] == null ? null : '/feed/users/${data['userId']}',
         'badge_earned' => '/passport',
+        'event_submission_approved' => data['eventId'] == null ? '/events/submissions' : '/events/${data['eventId']}',
+        'event_submission_rejected' => '/events/submissions',
         _ => null,
       };
 }
@@ -125,6 +129,7 @@ const notificationCategories = <String, (String, String)>{
   'friend_running': ('Teman mulai lari', 'Saat anggota komunitasmu menyalakan status lari'),
   'social': ('Feed', 'Pengikut baru, suka, dan komentar di postinganmu'),
   'achievement': ('Lencana', 'Saat kamu mendapat lencana pencapaian baru'),
+  'event': ('Kiriman event', 'Saat event yang kamu kirim disetujui atau ditolak'),
 };
 
 class NotificationsRepository {
@@ -229,6 +234,8 @@ String? routeForPush(Map<String, dynamic> data) {
     'post_like' || 'post_comment' when data['postId'] is String => '/feed/posts/${data['postId']}',
     'new_follower' when data['userId'] is String => '/feed/users/${data['userId']}',
     'badge_earned' => '/passport',
+    'event_submission_approved' when data['eventId'] is String => '/events/${data['eventId']}',
+    'event_submission_approved' || 'event_submission_rejected' => '/events/submissions',
     _ => null,
   };
 }

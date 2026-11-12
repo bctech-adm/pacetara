@@ -81,6 +81,16 @@ export const envSchema = z.object({
   /** Id langganan webhook Strava; jika diisi, event dengan id lain ditolak. */
   STRAVA_WEBHOOK_SUBSCRIPTION_ID: z.string().default(''),
 
+  /**
+   * Sumber scraping event (modul 2.4), JSON array `[{"id","name","urls":[...],"parser"?}]`. Kosong (bawaan) =
+   * scraping mati. Isi hanya setelah ketentuan layanan + robots.txt situs diperiksa (lihat README).
+   */
+  EVENT_SCRAPE_SOURCES: z.string().default(''),
+  /** Jarak antar putaran scraping (jam). */
+  EVENT_SCRAPE_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  /** Jeda minimal antar permintaan ke host yang sama (ms); Crawl-delay robots.txt yang lebih besar menang. */
+  EVENT_SCRAPE_DELAY_MS: z.coerce.number().int().min(1000).max(60_000).default(5000),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()

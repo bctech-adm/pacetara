@@ -29,7 +29,15 @@ export interface EventInput {
   description: string;
   categories: EventCategory[];
   registrationUrl: string;
+  /** Nama situs sumber dan halaman resmi (modul 2.4). Null = event manual tim PaceTara. */
+  sourceName: string | null;
+  sourceUrl: string | null;
 }
+
+export type EventOrigin = 'admin' | 'scrape' | 'user';
+
+/** Nama sumber untuk event manual tanpa sumber. */
+export const DEFAULT_SOURCE_NAME = 'Tim PaceTara';
 
 interface EventRow {
   id: string;
@@ -41,6 +49,9 @@ interface EventRow {
   description: string;
   categories: EventCategory[];
   registration_url: string;
+  origin: EventOrigin;
+  source_name: string | null;
+  source_url: string | null;
   archived: boolean;
   hidden_at: Date | null;
   removed_at: Date | null;
@@ -61,7 +72,7 @@ const CO_MEMBER = (viewer: string, other: string) => `EXISTS (
    WHERE a.user_id = ${viewer} AND a.status = 'active')`;
 
 const COLS = (viewer: string) => `e.id, e.name, to_char(e.event_date, 'YYYY-MM-DD') AS date, to_char(e.start_time, 'HH24:MI') AS start_time,
-  e.city, e.venue, e.description, e.categories, e.registration_url, e.hidden_at, e.removed_at,
+  e.city, e.venue, e.description, e.categories, e.registration_url, e.origin, e.source_name, e.source_url, e.hidden_at, e.removed_at,
   (e.archived_at IS NOT NULL OR e.event_date < ${TODAY_SQL}) AS archived,
   (SELECT count(*) FROM event_participants p JOIN users pu ON pu.id = p.user_id AND pu.status = 'active' WHERE p.event_id = e.id) AS going_count,
   EXISTS (SELECT 1 FROM event_participants p WHERE p.event_id = e.id AND p.user_id = ${viewer}) AS i_am_going,
@@ -126,6 +137,7 @@ export class EventsService {
       ...this.summary(row),
       description: row.description,
       registrationUrl: row.registration_url,
+      source: source(row),
       friendsPreview: friends,
     };
   }
@@ -174,9 +186,14 @@ export class EventsService {
     await this.nameForShare(id);
   }
 
-  /** Hapus akun: tanda "ikut" dihapus. */
+  /**
+   * Hapus akun: tanda "ikut" dihapus. Kiriman event (modul 2.4) yang belum ditinjau dihapus; yang sudah
+   * ditinjau dianonimkan (pengirim dan kontak penyelenggara dikosongkan). Event yang sudah tayang tetap.
+   */
   async onAccountDeletion(db: Queryable, userId: string): Promise<void> {
     await db.query('DELETE FROM event_participants WHERE user_id = $1', [userId]);
+    await db.query(`DELETE FROM event_submissions WHERE submitted_by = $1 AND status = 'pending'`, [userId]);
+    await db.query('UPDATE event_submissions SET submitted_by = NULL, organizer_contact_enc = NULL WHERE submitted_by = $1', [userId]);
   }
 
   // ---------- Super admin ----------
@@ -192,6 +209,10 @@ export class EventsService {
       ...this.summary(r),
       description: r.description,
       registrationUrl: r.registration_url,
+      origin: r.origin,
+      sourceName: r.source_name,
+      sourceUrl: r.source_url,
+      source: source(r),
       hidden: Boolean(r.hidden_at),
       removed: Boolean(r.removed_at),
       createdBy: r.created_by_name,
@@ -202,17 +223,35 @@ export class EventsService {
 
   async create(adminId: string, input: EventInput) {
     return withTx(this.pool, async (db) => {
-      const { rows } = await db
-        .query<{ id: string }>(
-          `INSERT INTO events (name, event_date, start_time, city, venue, description, categories, registration_url, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-          [input.name, input.date, input.startTime, input.city, input.venue, input.description, input.categories, input.registrationUrl, adminId],
-        )
-        .catch(duplicate);
-      const id = rows[0]!.id;
+      const id = await this.insertEvent(db, adminId, input, 'admin');
       await audit(db, adminId, 'event.create', { type: 'event', id }, { name: input.name, date: input.date });
       return { id };
     });
+  }
+
+  /** Tulis event yang tayang (manual atau hasil persetujuan antrean). 409 event_exists jika nama+tanggal sudah ada. */
+  async insertEvent(db: Queryable, createdBy: string, input: EventInput, origin: EventOrigin): Promise<string> {
+    const { rows } = await db
+      .query<{ id: string }>(
+        `INSERT INTO events (name, event_date, start_time, city, venue, description, categories, registration_url, created_by, origin, source_name, source_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        [
+          input.name,
+          input.date,
+          input.startTime,
+          input.city,
+          input.venue,
+          input.description,
+          input.categories,
+          input.registrationUrl,
+          createdBy,
+          origin,
+          input.sourceName,
+          input.sourceUrl,
+        ],
+      )
+      .catch(duplicate);
+    return rows[0]!.id;
   }
 
   /** Ubah event. Mengubah tanggal ke masa depan membatalkan arsip. */
@@ -221,10 +260,22 @@ export class EventsService {
       const { rowCount } = await db
         .query(
           `UPDATE events SET name = $2, event_date = $3, start_time = $4, city = $5, venue = $6, description = $7,
-                  categories = $8, registration_url = $9, updated_at = now(),
+                  categories = $8, registration_url = $9, source_name = $10, source_url = $11, updated_at = now(),
                   archived_at = CASE WHEN $3::date >= ${TODAY_SQL} THEN NULL ELSE archived_at END
             WHERE id = $1`,
-          [id, input.name, input.date, input.startTime, input.city, input.venue, input.description, input.categories, input.registrationUrl],
+          [
+            id,
+            input.name,
+            input.date,
+            input.startTime,
+            input.city,
+            input.venue,
+            input.description,
+            input.categories,
+            input.registrationUrl,
+            input.sourceName,
+            input.sourceUrl,
+          ],
         )
         .catch(duplicate);
       if (!rowCount) throw notFound();
@@ -288,6 +339,11 @@ export class EventsService {
   private card(r: Pick<EventRow, 'id' | 'name' | 'date' | 'start_time' | 'city' | 'categories' | 'archived'>) {
     return { id: r.id, name: r.name, date: r.date, startTime: r.start_time, city: r.city, categories: r.categories, archived: r.archived };
   }
+}
+
+/** "Sumber: <nama> · Lihat halaman resmi" — selalu ada (PRD 2.4). */
+function source(r: Pick<EventRow, 'origin' | 'source_name' | 'source_url' | 'registration_url'>) {
+  return { origin: r.origin, name: r.source_name ?? DEFAULT_SOURCE_NAME, url: r.source_url ?? r.registration_url };
 }
 
 function notFound() {
