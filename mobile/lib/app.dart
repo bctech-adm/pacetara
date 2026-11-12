@@ -123,7 +123,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/feed/connections', builder: (_, _) => const FeedConnectionsScreen()),
       GoRoute(path: '/feed/posts/:id', builder: (_, state) => PostDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/feed/users/:id', builder: (_, state) => FeedProfileScreen(userId: state.pathParameters['id']!)),
-      GoRoute(path: '/imports', builder: (_, _) => const ImportsScreen()),
+      GoRoute(
+        path: '/imports',
+        builder: (_, state) => ImportsScreen(
+          completeProvider: state.uri.queryParameters['provider'],
+          completeCode: state.uri.queryParameters['complete'],
+        ),
+      ),
       GoRoute(path: '/imports/health-connect', builder: (_, _) => const HealthConnectImportScreen()),
       GoRoute(path: '/imports/health-connect/about', builder: (_, _) => const HealthConnectAboutScreen()),
       GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionScreen()),

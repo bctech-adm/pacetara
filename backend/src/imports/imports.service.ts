@@ -21,6 +21,8 @@ import { StravaClient, stravaToImported, validStravaId } from './strava.js';
 import type { ImportJob, ImportResult, ImportSource, OAuthProvider } from './types.js';
 
 const STATE_TTL_S = 600;
+/** Event webhook Strava per pengguna per jam (pelari sungguhan jauh di bawah ini). */
+const STRAVA_EVENTS_PER_HOUR = 60;
 const SYNC_COOLDOWN_S = 300;
 /** Sinkron Strava menarik paling jauh 30 hari ke belakang, maks. 30 aktivitas per putaran (batas laju API Strava). */
 const STRAVA_SYNC_DAYS = 30;
@@ -29,6 +31,9 @@ const OWN_PACKAGE = 'tech.bimacreative.pacetara';
 const STRAVA_PACKAGE = 'com.strava';
 
 const stateKey = (s: string) => `oauth:state:${s}`;
+/** Hasil tukar kode yang menunggu diselesaikan aplikasi (POST .../complete). */
+const pendingKey = (c: string) => `oauth:pending:${c}`;
+const PENDING_AAD = 'oauth:pending';
 const tokenAad = (userId: string, provider: OAuthProvider, kind: 'access' | 'refresh') => `import_connections.${kind}:${userId}:${provider}`;
 const jobAad = (userId: string) => `imports.job:${userId}`;
 const sha = (v: string) => createHash('sha256').update(v).digest('hex').slice(0, 40);
@@ -59,6 +64,15 @@ export interface CallbackOutcome {
   ok: boolean;
   title: string;
   message: string;
+  /** Kode sekali pakai untuk deep link kembali ke aplikasi; hanya ada jika berhasil. */
+  complete?: { provider: OAuthProvider; code: string };
+}
+
+interface PendingLink {
+  u: string;
+  p: OAuthProvider;
+  x: string;
+  t: OAuthTokens;
 }
 
 /**
@@ -119,7 +133,7 @@ export class ImportsService {
     return {
       healthConnect: { enabled: true, runs: runs('health_connect') },
       garmin: conn('garmin'),
-      strava: { ...conn('strava'), webhook: Boolean(this.env.STRAVA_WEBHOOK_VERIFY_TOKEN) },
+      strava: { ...conn('strava'), webhook: Boolean(this.env.STRAVA_WEBHOOK_VERIFY_TOKEN && this.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID) },
     };
   }
 
@@ -182,23 +196,57 @@ export class ImportsService {
       this.logger.warn(`OAuth ${provider} gagal: ${err instanceof Error ? err.message : 'unknown'}`);
       return fail('Penyedia menolak permintaan. Coba lagi beberapa saat lagi.');
     }
-    await this.saveConnection(saved.u, provider, externalId, tokens);
-    if (provider === 'strava') await this.queue.enqueue({ kind: 'strava-sync', userId: saved.u }).catch(() => undefined);
+    // Penautan TIDAK diselesaikan di sini: callback publik tidak tahu siapa pemilik browser ini. Hasilnya
+    // disimpan terenkripsi di bawah kode sekali pakai yang hanya dikirim ke browser ini (deep link ke aplikasi
+    // di HP yang sama). Aplikasi menyelesaikannya dengan token login-nya; akun berbeda dari yang memulai = ditolak.
+    // Ini menutup "login CSRF": tautan otorisasi milik penyerang yang dibuka korban tidak menautkan akun korban.
+    const completeCode = randomBytes(32).toString('base64url');
+    const pending: PendingLink = { u: saved.u, p: provider, x: externalId, t: tokens };
+    const enc = this.crypto.encrypt(JSON.stringify(pending), PENDING_AAD).toString('base64');
+    await this.redis.set(pendingKey(completeCode), enc, 'EX', STATE_TTL_S);
     return {
       ok: true,
-      title: 'Berhasil terhubung',
-      message:
-        provider === 'garmin'
-          ? 'Akun Garmin terhubung. Lari baru dari Garmin akan masuk otomatis ke PaceTara. Silakan kembali ke aplikasi.'
-          : 'Akun Strava terhubung. Lari 30 hari terakhir sedang diimpor sebagai riwayat pribadi. Silakan kembali ke aplikasi.',
+      title: 'Satu langkah lagi',
+      message: `Izin ${provider === 'garmin' ? 'Garmin' : 'Strava'} diterima. Tekan tombol di bawah untuk kembali ke aplikasi PaceTara dan menyelesaikan penautan.`,
+      complete: { provider, code: completeCode },
     };
+  }
+
+  /** Menyelesaikan penautan dari aplikasi (login). Hanya akun yang memulai `connect` yang bisa menyelesaikan. */
+  async complete(userId: string, provider: OAuthProvider, code: string): Promise<{ connected: true; provider: OAuthProvider }> {
+    this.requireEnabled(provider);
+    const raw = await this.redis.getdel(pendingKey(code));
+    if (!raw) throw new ApiError(410, 'link_expired', 'Penautan sudah kedaluwarsa atau sudah dipakai. Ulangi dari halaman Impor.');
+    let pending: PendingLink;
+    try {
+      pending = JSON.parse(this.crypto.decryptString(Buffer.from(raw, 'base64'), PENDING_AAD)) as PendingLink;
+    } catch {
+      throw new ApiError(410, 'link_expired', 'Penautan sudah kedaluwarsa atau sudah dipakai. Ulangi dari halaman Impor.');
+    }
+    if (pending.p !== provider) throw new ApiError(410, 'link_expired', 'Penautan tidak valid. Ulangi dari halaman Impor.');
+    if (pending.u !== userId) {
+      this.logger.warn(`Penautan ${provider} ditolak: diselesaikan dari akun lain`);
+      throw new ApiError(403, 'wrong_account', 'Penautan ini dimulai dari akun PaceTara lain. Jika bukan kamu yang memulainya, abaikan. Untuk menautkan ke akun ini, ulangi dari halaman Impor.');
+    }
+    const t = pending.t;
+    const tokens: OAuthTokens = { ...t, expiresAt: t.expiresAt ? new Date(t.expiresAt) : null };
+    await this.saveConnection(userId, provider, pending.x, tokens);
+    if (provider === 'strava') await this.queue.enqueue({ kind: 'strava-sync', userId }).catch(() => undefined);
+    return { connected: true, provider };
   }
 
   private async saveConnection(userId: string, provider: OAuthProvider, externalId: string, t: OAuthTokens) {
     const hmac = this.crypto.blindIndex(provider === 'garmin' ? 'garmin_user' : 'strava_athlete', externalId);
     await withTx(this.pool, async (db) => {
-      // Akun penyedia yang sama hanya terhubung ke satu akun PaceTara: koneksi lama dipindahkan.
-      await db.query('DELETE FROM import_connections WHERE provider = $1 AND external_user_hmac = $2 AND user_id <> $3', [provider, hmac, userId]);
+      // Akun penyedia yang sama hanya terhubung ke satu akun PaceTara. Koneksi milik akun lain tidak dipindahkan
+      // diam-diam (pemilik akun itu harus memutuskannya sendiri).
+      const { rows: other } = await db.query(
+        'SELECT 1 FROM import_connections WHERE provider = $1 AND external_user_hmac = $2 AND user_id <> $3 FOR UPDATE',
+        [provider, hmac, userId],
+      );
+      if (other.length) {
+        throw new ApiError(409, 'linked_elsewhere', `Akun ${provider === 'garmin' ? 'Garmin' : 'Strava'} ini sudah terhubung ke akun PaceTara lain. Putuskan dulu dari akun itu.`);
+      }
       await db.query(
         `INSERT INTO import_connections (user_id, provider, external_user_hmac, access_token_enc, refresh_token_enc, token_expires_at, scope)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -433,14 +481,21 @@ export class ImportsService {
     updates?: Record<string, unknown>;
   }): Promise<{ accepted: boolean }> {
     if (!this.enabled('strava') || !this.env.STRAVA_WEBHOOK_VERIFY_TOKEN) throw new ApiError(503, 'not_configured', 'Webhook Strava belum aktif');
-    if (this.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID && String(body.subscription_id) !== this.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID) {
-      throw new ApiError(403, 'forbidden', 'Langganan tidak dikenal');
+    // Strava tidak menandatangani event, jadi subscription_id wajib dikonfigurasi dan dicocokkan. Jawaban untuk
+    // langganan salah sama dengan event yang diabaikan (200 accepted:false) agar tidak menjadi alat tebak.
+    if (!this.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID || String(body.subscription_id) !== this.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID) {
+      return { accepted: false };
     }
     const athlete = validStravaId(body.owner_id);
     const objectId = validStravaId(body.object_id);
     if (!athlete || !objectId) return { accepted: false };
     const userId = await this.ownerOf('strava', athlete);
     if (!userId) return { accepted: false };
+    // Batas event per pengguna per jam: event palsu untuk atlet terdaftar tidak bisa menguras kuota API Strava.
+    const bucket = `strava:events:${userId}:${Math.floor(Date.now() / 3_600_000)}`;
+    const n = await this.redis.incr(bucket);
+    if (n === 1) await this.redis.expire(bucket, 3600);
+    if (n > STRAVA_EVENTS_PER_HOUR) return { accepted: false };
     if (body.object_type === 'activity') {
       await this.queue.enqueue({ kind: 'strava-activity', userId, activityId: objectId, aspect: body.aspect_type }, `strava-${body.aspect_type}-${objectId}`);
       return { accepted: true };
@@ -520,7 +575,22 @@ export class ImportsService {
 
   private async stravaActivity(userId: string, activityId: string, aspect: 'create' | 'update' | 'delete') {
     if (aspect === 'delete') {
-      // Pemilik menghapus aktivitas di Strava: salinannya di PaceTara ikut dihapus.
+      // Pemilik menghapus aktivitas di Strava: salinannya di PaceTara ikut dihapus. Event tidak bertanda tangan,
+      // jadi penghapusan dikonfirmasi dulu ke API Strava: hanya jika aktivitas memang sudah tidak ada (404).
+      const { rows: known } = await this.pool.query(
+        `SELECT 1 FROM import_records WHERE user_id = $1 AND source = 'strava' AND external_id = $2`,
+        [userId, activityId],
+      );
+      if (!known[0]) return { skipped: 'unknown' };
+      const token = await this.accessToken(userId, 'strava');
+      if (!token) return { skipped: 'not_connected' };
+      try {
+        await this.strava.activity(token, activityId);
+        // Masih ada di Strava: event palsu. Abaikan.
+        return { deleted: false };
+      } catch (err) {
+        if (!(err instanceof ProviderHttpError) || err.status !== 404) throw err;
+      }
       const keys = await withTx(this.pool, async (db) => {
         const { rows } = await db.query<{ run_id: string | null; status: string }>(
           `DELETE FROM import_records WHERE user_id = $1 AND source = 'strava' AND external_id = $2 RETURNING run_id, status`,
@@ -534,7 +604,14 @@ export class ImportsService {
     }
     const token = await this.accessToken(userId, 'strava');
     if (!token) return { skipped: 'not_connected' };
-    const activity = await this.strava.activity(token, activityId);
+    let activity: Awaited<ReturnType<StravaClient['activity']>>;
+    try {
+      activity = await this.strava.activity(token, activityId);
+    } catch (err) {
+      // Aktivitas tidak ada / bukan milik atlet ini: hasil akhir, bukan galat yang diulang (hemat kuota API).
+      if (err instanceof ProviderHttpError && (err.status === 404 || err.status === 403)) return { skipped: 'not_found' };
+      throw err;
+    }
     const preview = stravaToImported(activity);
     if (!preview) return { skipped: 'not_run' };
     const run = stravaToImported(activity, await this.strava.streams(token, activityId));

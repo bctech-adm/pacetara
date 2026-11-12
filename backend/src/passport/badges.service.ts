@@ -13,6 +13,7 @@ interface RunRow {
   distance_m: number;
   avg_pace_s_per_km: number | null;
   source: string;
+  visibility: string;
 }
 
 /**
@@ -65,8 +66,16 @@ export class BadgesService {
       'SELECT code, achieved_at, private_only FROM user_badges WHERE user_id = $1',
       [userId],
     );
-    const earned = new Map(rows.filter((r) => !forViewer || !r.private_only).map((r) => [r.code, r]));
     const runs = await this.runs(userId);
+    // Orang lain hanya melihat lencana yang tercapai dari lari yang memang boleh mereka lihat (bukan Strava, bukan
+    // "hanya saya"), dihitung ulang dari data sekarang, dan hanya tanggalnya: jam mulai lari privat tidak bocor.
+    const visibleRuns = runs.filter((r) => r.source !== 'strava' && r.visibility !== 'private');
+    const publicDates = forViewer ? computeBadges(visibleRuns) : null;
+    const earned = new Map(
+      rows
+        .filter((r) => !forViewer || (!r.private_only && publicDates!.has(r.code)))
+        .map((r) => [r.code, forViewer ? { ...r, achieved_at: dateOnly(publicDates!.get(r.code)!) } : r]),
+    );
     return {
       items: BADGES.filter((b) => !forViewer || earned.has(b.code)).map((b) => {
         const e = earned.get(b.code);
@@ -80,7 +89,7 @@ export class BadgesService {
           ...(forViewer ? {} : { privateOnly: e?.private_only ?? false }),
         };
       }),
-      currentStreakWeeks: currentStreakWeeks(forViewer ? runs.filter((r) => r.source !== 'strava') : runs),
+      currentStreakWeeks: currentStreakWeeks(forViewer ? visibleRuns : runs),
     };
   }
 
@@ -88,12 +97,18 @@ export class BadgesService {
     await db.query('DELETE FROM user_badges WHERE user_id = $1', [userId]);
   }
 
-  private async runs(userId: string): Promise<(BadgeRun & { source: string })[]> {
+  private async runs(userId: string): Promise<(BadgeRun & { source: string; visibility: string })[]> {
     const { rows } = await this.pool.query<RunRow>(
-      'SELECT started_at, distance_m, avg_pace_s_per_km, source FROM runs WHERE user_id = $1 ORDER BY started_at',
+      'SELECT started_at, distance_m, avg_pace_s_per_km, source, visibility FROM runs WHERE user_id = $1 ORDER BY started_at',
       [userId],
     );
-    return rows.map((r) => ({ startedAt: r.started_at, distanceM: r.distance_m, avgPaceSPerKm: r.avg_pace_s_per_km, source: r.source }));
+    return rows.map((r) => ({
+      startedAt: r.started_at,
+      distanceM: r.distance_m,
+      avgPaceSPerKm: r.avg_pace_s_per_km,
+      source: r.source,
+      visibility: r.visibility,
+    }));
   }
 
   private async notifyEarned(userId: string, codes: string[]) {
@@ -109,4 +124,10 @@ export class BadgesService {
       },
     });
   }
+}
+
+/** Tanggal (WIB) tanpa jam, untuk ditampilkan ke orang lain. */
+function dateOnly(d: Date): Date {
+  const wib = new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+  return new Date(`${wib}T00:00:00+07:00`);
 }

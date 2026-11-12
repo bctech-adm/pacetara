@@ -117,7 +117,11 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     }));
     t.providerHttp.on(/^GET https:\/\/www\.strava\.com\/api\/v3\/athlete\/activities\?/, () => opts.activities ?? []);
     t.providerHttp.on(/^GET https:\/\/www\.strava\.com\/api\/v3\/activities\/\d+\/streams\?/, (u) => opts.streams?.[u.pathname.split('/')[4]!] ?? {});
-    t.providerHttp.on(/^GET https:\/\/www\.strava\.com\/api\/v3\/activities\/\d+$/, (u) => (opts.activities ?? []).find((a) => String((a as { id: number }).id) === u.pathname.split('/')[4]) ?? {});
+    t.providerHttp.on(/^GET https:\/\/www\.strava\.com\/api\/v3\/activities\/\d+$/, (u) => {
+      const found = (opts.activities ?? []).find((a) => String((a as { id: number }).id) === u.pathname.split('/')[4]);
+      if (!found) throw new ProviderHttpError(404, 'www.strava.com menjawab 404');
+      return found;
+    });
     t.providerHttp.on(/^POST https:\/\/www\.strava\.com\/oauth\/deauthorize$/, () => ({}));
     t.providerHttp.on(/^GET https:\/\/www\.strava\.com\/api\/v3\/athlete$/, () => ({ id: opts.athleteId ?? 9001 }));
   }
@@ -154,11 +158,17 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     };
   };
 
-  async function oauth(u: U, provider: 'garmin' | 'strava', query = 'code=kode-otorisasi&scope=read,activity:read_all') {
+  /** Kode sekali pakai dari tombol deep link di halaman callback. */
+  const completeCode = (html: string) => /complete=([A-Za-z0-9_-]+)/.exec(html.replaceAll('&#38;', '&'))?.[1] ?? null;
+
+  /** connect → callback (browser) → complete (aplikasi). `completeAs` = akun yang menyelesaikan; null = tidak diselesaikan. */
+  async function oauth(u: U, provider: 'garmin' | 'strava', query = 'code=kode-otorisasi&scope=read,activity:read_all', completeAs: U | null = u) {
     const { url } = (await api(u).post(`/v1/imports/${provider}/connect`).expect(200)).body as { url: string };
     const state = new URL(url).searchParams.get('state')!;
     const res = await anon().get(`/v1/imports/${provider}/callback?state=${encodeURIComponent(state)}&${query}`);
-    return { url, state, res };
+    const code = res.status === 200 ? completeCode(res.text) : null;
+    const done = code && completeAs ? await api(completeAs).post(`/v1/imports/${provider}/complete`, { code }) : null;
+    return { url, state, res, code, done };
   }
 
   // ---------- Tes ----------
@@ -254,9 +264,10 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
       activities: [stravaActivity(1001, start, 6), stravaActivity(1002, new Date(Date.now() - 30 * HOUR), 20, 'Ride')],
       streams: { '1001': stravaStreams(6) },
     });
-    const { res } = await oauth(ani, 'strava');
+    const { res, done } = await oauth(ani, 'strava');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Berhasil terhubung');
+    expect(res.text).toContain('Satu langkah lagi');
+    expect(done!.status).toBe(200);
     expect(t.imports.jobs).toEqual([{ kind: 'strava-sync', userId: ani.id }]);
     await t.imports.drain();
 
@@ -332,6 +343,41 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     expect(status.strava).toMatchObject({ enabled: true, connected: true, webhook: true });
   });
 
+  it('OAuth: tautan otorisasi milik orang lain tidak bisa menautkan akun penyedia korban (login CSRF)', async () => {
+    const penyerang = await user('Penyerang');
+    const korban = await user('Korban');
+    stravaRoutes();
+    const authz = new URL((await oauth(penyerang, 'strava', undefined, null)).url);
+    // Strava selalu menampilkan layar persetujuan (tidak redirect diam-diam).
+    expect(authz.searchParams.get('approval_prompt')).toBe('force');
+
+    // Korban membuka tautan penyerang: callback tidak menautkan apa pun, hanya memberi kode ke browser korban.
+    const viaVictim = await oauth(penyerang, 'strava', undefined, korban);
+    expect(viaVictim.res.status).toBe(200);
+    expect(viaVictim.done!.status).toBe(403);
+    expect(viaVictim.done!.body.error).toBe('wrong_account');
+    expect((await t.pool.query(`SELECT 1 FROM import_connections WHERE provider = 'strava'`)).rowCount).toBe(0);
+    // Kode sudah hangus setelah percobaan dari akun lain, jadi penyerang pun tidak bisa memakainya.
+    expect((await api(penyerang).post('/v1/imports/strava/complete', { code: viaVictim.code }).expect(410)).body.error).toBe('link_expired');
+
+    // Tanpa complete, callback saja tidak menautkan.
+    const noComplete = await oauth(penyerang, 'strava', undefined, null);
+    expect(noComplete.res.status).toBe(200);
+    expect((await t.pool.query(`SELECT 1 FROM import_connections`)).rowCount).toBe(0);
+    // Penyedia salah dan kode palsu ditolak.
+    await api(penyerang).post('/v1/imports/garmin/complete', { code: noComplete.code }).expect(410);
+    await api(penyerang).post('/v1/imports/strava/complete', { code: 'x'.repeat(40) }).expect(410);
+    await anon().post('/v1/imports/strava/complete', { code: 'x'.repeat(40) }).expect(401);
+
+    // Pemilik sah menautkan; akun Strava yang sama tidak bisa direbut akun lain (tidak dipindahkan diam-diam).
+    expect((await oauth(korban, 'strava')).done!.status).toBe(200);
+    const steal = await oauth(penyerang, 'strava');
+    expect(steal.done!.status).toBe(409);
+    expect(steal.done!.body.error).toBe('linked_elsewhere');
+    const { rows } = await t.pool.query<{ user_id: string }>(`SELECT user_id FROM import_connections WHERE provider = 'strava'`);
+    expect(rows.map((r) => r.user_id)).toEqual([korban.id]);
+  });
+
   it('webhook: kunci/langganan salah ditolak, pengguna tak dikenal diabaikan, callbackURL di luar Garmin ditolak (SSRF)', async () => {
     const ani = await user('Ani');
     garminRoutes({ pull: [garminDetail('garmin-user-1', 777, new Date(Date.now() - 4 * HOUR), 5)] });
@@ -377,7 +423,8 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     await anon().get('/v1/imports/strava/webhook?hub.mode=subscribe&hub.challenge=abc&hub.verify_token=salah').expect(403);
     expect((await anon().get('/v1/imports/strava/webhook?hub.mode=subscribe&hub.challenge=abc&hub.verify_token=vtoken').expect(200)).body).toEqual({ 'hub.challenge': 'abc' });
     const ev = { object_type: 'activity', object_id: 31337, aspect_type: 'create', owner_id: 9001, subscription_id: 777 };
-    await anon().post('/v1/imports/strava/webhook', { ...ev, subscription_id: 1 }).expect(403);
+    // Langganan salah: jawaban sama dengan event yang diabaikan (bukan 403), jadi tidak bisa ditebak.
+    expect((await anon().post('/v1/imports/strava/webhook', { ...ev, subscription_id: 1 }).expect(200)).body).toEqual({ accepted: false });
     await anon().post('/v1/imports/strava/webhook', { ...ev, object_id: 'x' }).expect(400);
     expect((await anon().post('/v1/imports/strava/webhook', { ...ev, owner_id: 1 }).expect(200)).body).toEqual({ accepted: false });
 
@@ -388,9 +435,24 @@ describe.skipIf(!hasTestInfra)('Modul 2.3 Impor data lari (e2e)', () => {
     await t.imports.drain();
     const s = await t.pool.query<{ id: string }>(`SELECT id FROM runs WHERE user_id = $1 AND source = 'strava'`, [ani.id]);
     expect(s.rows).toHaveLength(1);
+    // Event delete palsu (aktivitas masih ada di Strava): lari tidak dihapus.
     await anon().post('/v1/imports/strava/webhook', { ...ev, aspect_type: 'delete' }).expect(200);
     await t.imports.drain();
+    expect((await t.pool.query(`SELECT 1 FROM runs WHERE id = $1`, [s.rows[0]!.id])).rows).toHaveLength(1);
+    // Sungguh dihapus di Strava (404): salinannya ikut dihapus.
+    stravaRoutes({ athleteId: 9001, activities: [] });
+    await anon().post('/v1/imports/strava/webhook', { ...ev, aspect_type: 'delete', event_time: 2 }).expect(200);
+    await t.imports.drain();
     expect((await t.pool.query(`SELECT 1 FROM runs WHERE id = $1`, [s.rows[0]!.id])).rows).toHaveLength(0);
+
+    // Aktivitas acak (404 dari Strava) = dilewati tanpa diulang; event per pengguna dibatasi per jam.
+    const before = t.providerHttp.calls.length;
+    await anon().post('/v1/imports/strava/webhook', { ...ev, object_id: 99999 }).expect(200);
+    await t.imports.drain();
+    expect(t.providerHttp.calls.slice(before).filter((c) => c.url.includes('/activities/99999'))).toHaveLength(1);
+    await t.redis.set(`strava:events:${ani.id}:${Math.floor(Date.now() / 3_600_000)}`, '60');
+    expect((await anon().post('/v1/imports/strava/webhook', { ...ev, object_id: 99998 }).expect(200)).body).toEqual({ accepted: false });
+    await t.redis.del(`strava:events:${ani.id}:${Math.floor(Date.now() / 3_600_000)}`);
 
     // Event "deauthorize" palsu: token masih diterima Strava → koneksi tetap.
     await anon().post('/v1/imports/strava/webhook', { object_type: 'athlete', object_id: 9001, aspect_type: 'update', owner_id: 9001, subscription_id: 777, updates: { authorized: 'false' } }).expect(200);

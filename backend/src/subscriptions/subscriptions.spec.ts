@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { isEntitled, kindOfProduct, shortState } from './config.js';
-import { verifyGoogleOidc } from './oidc.js';
+import { PubSubOidcVerifier, verifyGoogleOidc } from './oidc.js';
 import { PlayApiError } from './play-api.js';
 import type { Env } from '../config/env.js';
 
@@ -85,5 +85,22 @@ describe('konfigurasi langganan', () => {
   it('galat API Google: 400/404/410 = token tidak sah', () => {
     expect(new PlayApiError(410).invalidToken).toBe(true);
     expect(new PlayApiError(500).invalidToken).toBe(false);
+  });
+});
+
+describe('PubSubOidcVerifier', () => {
+  it('kid tak dikenal memuat ulang sertifikat paling sering sekali per menit', async () => {
+    const calls: boolean[] = [];
+    class Counting extends PubSubOidcVerifier {
+      protected override async loadCerts(force: boolean) {
+        calls.push(force);
+        return CERTS;
+      }
+    }
+    const v = new Counting({ PLAY_RTDN_AUDIENCE: AUD, PLAY_RTDN_SERVICE_ACCOUNT_EMAIL: EMAIL } as unknown as Env);
+    const fake = (kid: string) =>
+      `Bearer ${Buffer.from(JSON.stringify({ alg: 'RS256', kid })).toString('base64url')}.${Buffer.from('{}').toString('base64url')}.${'a'.repeat(40)}`;
+    for (let i = 0; i < 5; i++) await expect(v.verify(fake(`acak-${i}`))).rejects.toThrow();
+    expect(calls.filter(Boolean)).toHaveLength(1);
   });
 });

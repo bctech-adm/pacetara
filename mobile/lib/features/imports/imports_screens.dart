@@ -31,7 +31,12 @@ String importSummary(Map<String, int> counts) {
 
 /// Layar "Impor data lari": Health Connect (di HP), Garmin dan Strava (OAuth, hanya jika server mengaktifkannya).
 class ImportsScreen extends ConsumerStatefulWidget {
-  const ImportsScreen({super.key});
+  const ImportsScreen({super.key, this.completeProvider, this.completeCode});
+
+  /// Dari deep link halaman callback OAuth (`pacetara://app/imports?provider=..&complete=..`): kode sekali pakai
+  /// untuk menyelesaikan penautan dengan akun yang sedang login. Server menolak jika akun ini bukan yang memulai.
+  final String? completeProvider;
+  final String? completeCode;
 
   @override
   ConsumerState<ImportsScreen> createState() => _ImportsScreenState();
@@ -42,6 +47,30 @@ class _ImportsScreenState extends ConsumerState<ImportsScreen> with WidgetsBindi
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final provider = widget.completeProvider;
+    final code = widget.completeCode;
+    if (code != null && (provider == 'garmin' || provider == 'strava')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _complete(provider!, code));
+    }
+  }
+
+  Future<void> _complete(String provider, String code) async {
+    try {
+      await ref.read(importsRepositoryProvider).complete(provider, code);
+      if (!mounted) return;
+      showInfo(
+        context,
+        provider == 'garmin'
+            ? 'Akun Garmin terhubung. Lari baru dari Garmin akan masuk otomatis.'
+            : 'Akun Strava terhubung. Lari 30 hari terakhir sedang diimpor sebagai riwayat pribadi.',
+      );
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      ref.invalidate(importStatusProvider);
+    }
+    // Buang kode dari lokasi agar tidak dipakai ulang saat layar dibangun ulang.
+    if (mounted) context.replace('/imports');
   }
 
   @override

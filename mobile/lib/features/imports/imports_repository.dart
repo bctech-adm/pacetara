@@ -65,6 +65,10 @@ class ImportsRepository {
         return url;
       });
 
+  /// Menyelesaikan penautan OAuth dengan kode sekali pakai dari halaman callback (dikirim di body, bukan URL).
+  Future<void> complete(String provider, String code) =>
+      _call(() => _dio.post<void>('/v1/imports/$provider/complete', data: {'code': code}));
+
   /// `provider` = garmin | strava | health-connect. Mengembalikan jumlah lari yang dihapus.
   Future<int> disconnect(String provider, {required bool deleteRuns}) => _call(() async {
         final res = await _dio.delete<Map<String, dynamic>>('/v1/imports/$provider', queryParameters: {'deleteRuns': '$deleteRuns'});

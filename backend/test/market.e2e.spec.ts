@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TokenService } from '../src/auth/token.service.js';
 import { FieldCrypto } from '../src/crypto/field-crypto.js';
 import { MarketOrderSync } from '../src/market/market-orders.js';
+import { MAX_ACTIVE_LISTINGS } from '../src/market/market.service.js';
 import { PaymentsService } from '../src/payments/payments.service.js';
 import { createTestApp, FakeXendit, freshIp, hasTestInfra, resetData, type TestApp } from './helpers.js';
 
@@ -238,7 +239,10 @@ describe.skipIf(!hasTestInfra)('Modul 3.2 Marketplace (e2e)', () => {
     expect(t.xendit.invoices.get(o1.body.invoiceUrl.split('/').at(-1))!.status).toBe('EXPIRED');
 
     const o2 = await api(buyer).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(201);
-    const o3 = await api(buyer).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(201);
+    // Satu pesanan menunggu per listing per pembeli (stok tidak bisa ditahan berlapis).
+    expect((await api(buyer).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(409)).body.error).toBe('order_pending');
+    const buyer2 = await user('Pembeli Dua');
+    const o3 = await api(buyer2).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(201);
     await xenditPay(o3.body.invoiceUrl);
     await api(seller).post(`/v1/market/orders/${o3.body.id}/ship`).expect(200);
     await t.pool.query(`UPDATE market_orders SET created_at = now() - interval '3 hours' WHERE id = $1`, [o2.body.id]);
@@ -247,7 +251,7 @@ describe.skipIf(!hasTestInfra)('Modul 3.2 Marketplace (e2e)', () => {
     const r = await t.app.get(MarketOrderSync).maintenance();
     expect(r).toMatchObject({ expiredOrders: 1, autoCompleted: 1 });
     expect((await api(buyer).get(`/v1/market/orders/${o2.body.id}`)).body.status).toBe('expired');
-    expect((await api(buyer).get(`/v1/market/orders/${o3.body.id}`)).body.status).toBe('completed');
+    expect((await api(buyer2).get(`/v1/market/orders/${o3.body.id}`)).body.status).toBe('completed');
     expect((await api(buyer).get(`/v1/market/listings/${listingId}`)).body.stock).toBe(2);
   });
 
@@ -294,12 +298,46 @@ describe.skipIf(!hasTestInfra)('Modul 3.2 Marketplace (e2e)', () => {
     expect((await api(b).post('/v1/market/listings/search', {})).body.items).toHaveLength(0);
     expect((await api(s).get(`/v1/market/listings/${l.body.id}`)).body.hidden).toBe(true);
     expect((await api(s).del(`/v1/market/listings/${l.body.id}`).expect(409)).body.error).toBe('content_held');
+    expect((await api(s).patch(`/v1/market/listings/${l.body.id}`, { title: 'Judul baru yang bersih' }).expect(409)).body.error).toBe('content_held');
+    expect((await api(s).post(`/v1/market/listings/${l.body.id}/renew`).expect(409)).body.error).toBe('content_held');
 
     const detail = await api(adm).get(`/v1/admin/reports/listing/${l.body.id}`).expect(200);
     expect(detail.body.target).toMatchObject({ title: 'Sepatu lari bekas', seller: { id: s.id }, photos: 2 });
     await api(adm).post(`/v1/admin/reports/listing/${l.body.id}/resolve`, { action: 'remove' }).expect(204);
     expect(t.storage.objects.size).toBe(0);
     await api(s).get(`/v1/market/listings/${l.body.id}`).expect(404);
+  });
+
+  it('cabut Level 2 menghentikan split; renew listing kedaluwarsa dihitung ke batas; batal berulang dibatasi', async () => {
+    const { seller, listingId } = await liveSeller(5);
+    const buyer = await user('Pembeli');
+    const adm = await admin();
+
+    // Siklus batal → pesan ulang dibatasi per hari.
+    for (let i = 0; i < 5; i++) {
+      const o = await api(buyer).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(201);
+      await api(buyer).post(`/v1/market/orders/${o.body.id}/cancel`).expect(200);
+    }
+    expect((await api(buyer).post(`/v1/market/listings/${listingId}/orders`, { qty: 1 }).expect(429)).body.error).toBe('too_many_cancelled');
+
+    // Renew listing kedaluwarsa tidak bisa melewati batas listing aktif.
+    await t.pool.query(`UPDATE market_listings SET status = 'expired' WHERE id = $1`, [listingId]);
+    await t.pool.query(
+      `INSERT INTO market_listings (seller_id, model, title, description, category, condition, price, city, status, active_until, created_at, affiliate_url)
+       SELECT $1, 'affiliate', 'Isi ' || g, '', 'shoes', 'used', 100000, 'Bandung', 'active', now() + interval '10 days', now() - interval '3 days', 'https://www.tokopedia.com/x'
+         FROM generate_series(1, ${MAX_ACTIVE_LISTINGS}) g`,
+      [seller.id],
+    );
+    expect((await api(seller).post(`/v1/market/listings/${listingId}/renew`).expect(409)).body.error).toBe('listing_limit');
+    await t.pool.query(`DELETE FROM market_listings WHERE seller_id = $1 AND id <> $2`, [seller.id, listingId]);
+    await api(seller).post(`/v1/market/listings/${listingId}/renew`).expect(200);
+    expect((await api(buyer).get(`/v1/market/listings/${listingId}`)).status).toBe(200);
+
+    // Level 2 dicabut: akun penjual ditangguhkan, listing split berhenti tayang dan tidak bisa diperpanjang.
+    await api(adm).post(`/v1/admin/kyc/users/${seller.id}/revoke`, { reason: 'Memakai KTP orang lain' }).expect(204);
+    expect((await api(seller).get('/v1/market/seller')).body.status).toBe('suspended');
+    await api(buyer).get(`/v1/market/listings/${listingId}`).expect(404);
+    expect((await api(seller).post(`/v1/market/listings/${listingId}/renew`)).status).toBe(403);
   });
 
   it('hapus akun: ditolak selama ada pesanan berjalan; setelah selesai listing dihapus, pesanan tetap tanpa tautan akun', async () => {

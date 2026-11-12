@@ -46,7 +46,8 @@ export class StravaClient {
       client_id: this.clientId,
       redirect_uri: p.redirectUri,
       response_type: 'code',
-      approval_prompt: 'auto',
+      // Selalu tampilkan layar persetujuan Strava (tanpa redirect diam-diam).
+      approval_prompt: 'force',
       scope: STRAVA.scope,
       state: p.state,
     });

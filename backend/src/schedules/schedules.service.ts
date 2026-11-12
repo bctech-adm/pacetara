@@ -22,6 +22,8 @@ import {
 } from './attendance.js';
 
 export const TIMEZONES = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura'] as const;
+/** Admin bisa mengoreksi absensi manual sampai sekian hari setelah sesi mulai. */
+export const MANUAL_ATTENDANCE_DAYS = 7;
 export type Timezone = (typeof TIMEZONES)[number];
 
 /** Sesi dari jadwal rutin dibentuk sampai 28 hari ke depan (job worker + saat jadwal dibuat/daftar dibuka). */
@@ -127,6 +129,8 @@ export class SchedulesService {
   async createSchedule(userId: string, communityId: string, input: SessionFields & { weekday: number; startTime: string }) {
     const id = await withTx(this.pool, async (db) => {
       requireStaff(await communityAccess(db, communityId, userId, true));
+      // FOR SHARE di communityAccess tidak saling menghalangi: kunci per komunitas agar hitungan batas tidak bisa didahului.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`schedules:${communityId}`]);
       const { rows: n } = await db.query<{ n: string }>('SELECT count(*) AS n FROM community_schedules WHERE community_id = $1 AND active', [communityId]);
       if (Number(n[0]!.n) >= MAX_ACTIVE_SCHEDULES) {
         throw new ApiError(409, 'too_many_schedules', `Maksimal ${MAX_ACTIVE_SCHEDULES} jadwal rutin aktif per komunitas`);
@@ -253,6 +257,8 @@ export class SchedulesService {
     if (input.startsAt.getTime() > Date.now() + 366 * 86_400_000) throw new ApiError(400, 'session_too_far', 'Sesi maksimal setahun ke depan');
     const id = await withTx(this.pool, async (db) => {
       requireStaff(await communityAccess(db, communityId, userId, true));
+      // FOR SHARE di communityAccess tidak saling menghalangi: kunci per komunitas agar hitungan batas tidak bisa didahului.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`sessions:${communityId}`]);
       const { rows: n } = await db.query<{ n: string }>(
         `SELECT count(*) AS n FROM community_sessions WHERE community_id = $1 AND schedule_id IS NULL AND starts_at > now() AND cancelled_at IS NULL`,
         [communityId],
@@ -395,6 +401,11 @@ export class SchedulesService {
       const { row, access } = await this.sessionAccess(db, adminId, sessionId, true);
       requirePro(requireStaff(access), 'attendance');
       if (row.starts_at.getTime() - Date.now() > CHECKIN_OPENS_BEFORE_MS) throw new ApiError(409, 'checkin_not_open', 'Absensi belum dibuka');
+      // Koreksi manual diberi waktu lebih panjang dari jendela QR/GPS (anggota lupa absen), tetapi tetap ditutup
+      // agar rekap kehadiran dan statistik lama tidak bisa diubah kapan saja.
+      if (Date.now() - row.starts_at.getTime() > MANUAL_ATTENDANCE_DAYS * 86_400_000) {
+        throw new ApiError(409, 'checkin_closed', `Absensi manual hanya bisa diubah sampai ${MANUAL_ATTENDANCE_DAYS} hari setelah sesi`);
+      }
       if (!present) {
         await db.query('DELETE FROM session_attendance WHERE session_id = $1 AND user_id = $2', [sessionId, targetId]);
         return;

@@ -436,6 +436,45 @@ describe.skipIf(!hasTestInfra)('Modul 2.6 Fitur komunitas lanjutan (e2e)', () =>
       expect((await api(me).post('/v1/chat/direct', { userId: ani.id })).status).toBe(403);
       expect((await t.pool.query('SELECT count(*)::int AS n FROM buddy_requests')).rows[0].n).toBe(0);
     });
+
+    it('sapaan ditolak tidak bisa direset dengan menghapus; batas harian tidak kembali; push sekali per orang per hari', async () => {
+      const me = await user('Penyapa');
+      const ani = await user('Ani');
+      const budi = await user('Budi');
+      for (const u of [me, ani, budi]) await api(u).put('/v1/buddies/profile', profile()).expect(200);
+
+      await api(me).post('/v1/buddies/requests', { userId: ani.id }).expect(200);
+      const inbox = await api(ani).get('/v1/buddies/requests').expect(200);
+      await api(ani).post(`/v1/buddies/requests/${inbox.body.incoming[0].id}/decline`).expect(200);
+      // Pengirim "menghapus" lalu menyapa lagi: baris ditolak tetap, tidak ada sapaan/push baru.
+      await api(me).del(`/v1/buddies/connections/${ani.id}`).expect(204);
+      expect((await api(me).post('/v1/buddies/requests', { userId: ani.id }).expect(200)).body.connection).toBe('sent');
+      expect(t.push.to(ani.id).map((j) => j.data.type)).toEqual(['buddy_request']);
+      expect((await t.pool.query(`SELECT status FROM buddy_requests WHERE from_user = $1`, [me.id])).rows).toEqual([{ status: 'declined' }]);
+
+      // Batalkan sapaan yang masih menunggu lalu sapa lagi: tidak ada push kedua dalam 24 jam.
+      await api(me).post('/v1/buddies/requests', { userId: budi.id }).expect(200);
+      await api(me).del(`/v1/buddies/connections/${budi.id}`).expect(204);
+      await api(me).post('/v1/buddies/requests', { userId: budi.id }).expect(200);
+      expect(t.push.to(budi.id).map((j) => j.data.type)).toEqual(['buddy_request']);
+
+      // Kuota harian dihitung dari pencacah, bukan dari baris yang masih ada.
+      expect(await t.redis.get(`buddy:requests:${me.id}:${new Date().toISOString().slice(0, 10)}`)).toBe('3');
+      await t.redis.set(`buddy:requests:${me.id}:${new Date().toISOString().slice(0, 10)}`, '10');
+      await api(me).del(`/v1/buddies/connections/${budi.id}`).expect(204);
+      expect((await api(me).post('/v1/buddies/requests', { userId: budi.id })).status).toBe(429);
+
+      // Sesama pengguna Cari teman boleh melihat profil, tetapi mengikuti (membuka postingan pengikut) butuh sapaan diterima.
+      const cici = await user('Cici');
+      await api(cici).put('/v1/buddies/profile', profile()).expect(200);
+      await api(me).get(`/v1/feed/users/${cici.id}`).expect(200);
+      expect((await api(me).post(`/v1/feed/users/${cici.id}/follow`).expect(403)).body.error).toBe('follow_not_allowed');
+      await api(cici).post('/v1/buddies/requests', { userId: me.id }).expect(200);
+      expect((await api(me).post(`/v1/feed/users/${cici.id}/follow`)).status).toBe(403);
+      const fromCici = (await api(me).get('/v1/buddies/requests').expect(200)).body.incoming.find((r: { user: { id: string } }) => r.user.id === cici.id);
+      await api(me).post(`/v1/buddies/requests/${fromCici.id}/accept`).expect(200);
+      expect((await api(me).post(`/v1/feed/users/${cici.id}/follow`)).status).toBeLessThan(300);
+    });
   });
 
   // ---------- Kas + jersey ----------

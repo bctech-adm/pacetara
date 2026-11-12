@@ -51,6 +51,8 @@ describe('Midtrans', () => {
     expect(mapMidtransStatus({ transaction_status: 'settlement' })).toBe('paid');
     expect(mapMidtransStatus({ transaction_status: 'capture', fraud_status: 'accept' })).toBe('paid');
     expect(mapMidtransStatus({ transaction_status: 'capture', fraud_status: 'challenge' })).toBe('pending');
+    // Gagal-tertutup: capture tanpa fraud_status tidak dianggap lunas.
+    expect(mapMidtransStatus({ transaction_status: 'capture' })).toBe('pending');
     expect(mapMidtransStatus({ transaction_status: 'pending' })).toBe('pending');
     expect(mapMidtransStatus({ transaction_status: 'expire' })).toBe('expired');
     expect(mapMidtransStatus({ transaction_status: 'deny' })).toBe('failed');

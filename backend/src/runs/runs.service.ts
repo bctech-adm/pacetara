@@ -315,12 +315,14 @@ export class RunsService {
 
   /** Lari milik [userId] yang boleh dijadikan postingan feed (bukan privat, bukan impor Strava). */
   async shareableRun(userId: string, runId: string): Promise<{ visibility: RunVisibility }> {
-    const { rows } = await this.pool.query<{ user_id: string; visibility: RunVisibility; source: string }>(
-      'SELECT user_id, visibility, source FROM runs WHERE id = $1',
+    const { rows } = await this.pool.query<{ user_id: string; visibility: RunVisibility; source: string; started_at: Date }>(
+      'SELECT user_id, visibility, source, started_at FROM runs WHERE id = $1',
       [runId],
     );
     const r = rows[0];
     if (!r || r.user_id !== userId) throw notFound();
+    // Batas riwayat paket berlaku juga lewat feed: lari di luar riwayat tidak bisa dibagikan (kartunya memuat ringkasan + rute).
+    await this.assertWithinHistory(userId, r);
     if (r.source === 'strava') throw new ApiError(409, 'run_not_shareable', 'Lari dari Strava hanya untuk riwayat pribadi dan tidak bisa dibagikan ke feed');
     if (r.visibility === 'private') {
       throw new ApiError(409, 'run_not_shareable', 'Lari ini hanya untuk kamu. Ubah visibilitasnya dulu jika ingin membagikannya');
@@ -383,7 +385,7 @@ export class RunsService {
     throw notFound();
   }
 
-  private async assertWithinHistory(userId: string, r: RunRow) {
+  private async assertWithinHistory(userId: string, r: Pick<RunRow, 'started_at'>) {
     const days = RUN_HISTORY_DAYS[await this.plan(userId)];
     if (days !== null && r.started_at.getTime() < Date.now() - days * 86_400_000) {
       throw new ApiError(403, 'limit_reached', `Riwayat lari paket gratis hanya ${days} hari terakhir. Upgrade ke Premium untuk melihat semua riwayat`, {

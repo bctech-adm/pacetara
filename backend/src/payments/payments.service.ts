@@ -132,7 +132,9 @@ export class PaymentsService {
       const p = rows[0];
       if (!p) return null;
       // Nominal harus sama persis dengan yang kita buat; selain itu jangan terapkan apa pun.
-      if (s.gross_amount !== undefined && Math.round(Number(s.gross_amount)) !== Number(p.amount)) {
+      // Gagal-tertutup: lunas tanpa nominal dari Midtrans juga tidak diterapkan.
+      const grossMissing = s.gross_amount === undefined || !Number.isFinite(Number(s.gross_amount));
+      if ((grossMissing && next === 'paid') || (!grossMissing && Math.round(Number(s.gross_amount)) !== Number(p.amount))) {
         this.logger.warn(`Nominal pembayaran ${p.id} tidak cocok; diabaikan`);
         return null;
       }

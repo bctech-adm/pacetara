@@ -204,6 +204,16 @@ describe.skipIf(!hasTestInfra)('Modul 3.3 Banner sponsor (e2e)', () => {
     await t.pool.query(`UPDATE sponsor_banners SET created_at = now() - interval '3 days' WHERE id = $1`, [d.body.id]);
     expect(await t.app.get(BannersService).cleanup()).toBe(1);
     expect(t.storage.objects.size).toBe(0);
+
+    // Tautan bayar masih berlaku (24 jam): tidak bisa dibatalkan sendiri, dan tidak dibersihkan worker.
+    const e = await createBanner(sponsor, {}).expect(201);
+    await api(sponsor).post(`/v1/sponsor/banners/${e.body.id}/pay`).expect(200);
+    expect((await api(sponsor).del(`/v1/sponsor/banners/${e.body.id}`).expect(409)).body.error).toBe('payment_in_progress');
+    await t.pool.query(`UPDATE sponsor_banners SET created_at = now() - interval '3 days' WHERE id = $1`, [e.body.id]);
+    expect(await t.app.get(BannersService).cleanup()).toBe(0);
+    // Tautan kedaluwarsa: dibersihkan.
+    await t.pool.query(`UPDATE payments SET created_at = now() - interval '25 hours' WHERE ref_id = $1`, [e.body.id]);
+    expect(await t.app.get(BannersService).cleanup()).toBe(1);
   });
 
   it('disetujui setelah tanggal mulai: periode digeser ke hari ini; hapus akun sponsor', async () => {

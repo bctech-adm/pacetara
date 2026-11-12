@@ -84,6 +84,10 @@ export function validateTargetUrl(raw: string): string | null {
  * (beranda, daftar event, detail event) untuk kota pengguna; Premium tidak melihat banner (PRD: Premium tanpa iklan).
  * Statistik tayangan/klik unik per pengguna per hari, disimpan agregat.
  */
+/** Masih ada tautan Snap (24 jam) yang bisa dibayar untuk banner ini. */
+const PAYABLE = `EXISTS (SELECT 1 FROM payments p WHERE p.purpose = 'banner' AND p.ref_id = {ref} AND p.status = 'pending'
+                       AND p.created_at > now() - interval '24 hours')`;
+
 @Injectable()
 export class BannersService {
   private readonly logger = new Logger('Banners');
@@ -183,6 +187,12 @@ export class BannersService {
       );
       if (!rows[0]) throw bannerNotFound();
       if (rows[0].status !== 'pending_payment') throw new ApiError(409, 'banner_not_cancellable', 'Banner yang sudah dibayar tidak bisa dibatalkan sendiri. Hubungi tim PaceTara');
+      // Tautan Snap berlaku 24 jam dan tidak bisa ditarik kembali dengan pasti: selama masih bisa dibayar, banner
+      // tidak dibatalkan agar sponsor tidak tertagih untuk banner yang sudah hilang.
+      const { rows: payable } = await db.query(`SELECT ${PAYABLE.replace('{ref}', '$1')} AS payable`, [bannerId]);
+      if (payable[0]?.payable) {
+        throw new ApiError(409, 'payment_in_progress', 'Tautan pembayaran banner ini masih aktif (berlaku 24 jam sejak dibuat). Jika tidak dibayar, banner batal otomatis');
+      }
       await db.query(`UPDATE sponsor_banners SET status = 'cancelled', image_key = NULL WHERE id = $1`, [bannerId]);
       return rows[0].image_key;
     });
@@ -320,11 +330,13 @@ export class BannersService {
     }
   }
 
-  /** Job worker: banner menunggu pembayaran > 2 hari dibatalkan (gambar dihapus). */
+  /** Job worker: banner menunggu pembayaran > 2 hari dibatalkan (gambar dihapus), kecuali tautan bayarnya masih berlaku. */
   async cleanup(): Promise<number> {
     const { rows } = await this.pool.query<{ image_key: string | null }>(
       `WITH old AS (
-         SELECT id, image_key FROM sponsor_banners WHERE status = 'pending_payment' AND created_at < now() - interval '2 days' FOR UPDATE
+         SELECT id, image_key FROM sponsor_banners b
+          WHERE status = 'pending_payment' AND created_at < now() - interval '2 days' AND NOT ${PAYABLE.replace('{ref}', 'b.id')}
+            FOR UPDATE
        )
        UPDATE sponsor_banners b SET status = 'cancelled', image_key = NULL FROM old WHERE b.id = old.id RETURNING old.image_key`,
     );

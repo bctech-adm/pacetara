@@ -214,13 +214,16 @@ export class BuddiesService {
         }
         return { id: ex.id, notify: null };
       }
-      const { rows: n } = await db.query<{ n: string }>(
-        `SELECT count(*) AS n FROM buddy_requests WHERE from_user = $1 AND created_at > now() - interval '24 hours'`,
-        [userId],
-      );
-      if (Number(n[0]!.n) >= BUDDY_REQUESTS_PER_DAY) throw new ApiError(429, 'request_rate_limited', `Maksimal ${BUDDY_REQUESTS_PER_DAY} sapaan per hari`);
+      // Batas harian dihitung dari pencacah terpisah (bukan dari baris yang masih ada), agar menghapus sapaan
+      // lalu menyapa ulang tidak mengembalikan kuota. Pemanggilan diserialkan oleh advisory lock di atas.
+      const dayKey = `buddy:requests:${userId}:${new Date().toISOString().slice(0, 10)}`;
+      const used = Number((await this.redis.get(dayKey)) ?? 0);
+      if (used >= BUDDY_REQUESTS_PER_DAY) throw new ApiError(429, 'request_rate_limited', `Maksimal ${BUDDY_REQUESTS_PER_DAY} sapaan per hari`);
       const { rows } = await db.query<{ id: string }>(`INSERT INTO buddy_requests (from_user, to_user) VALUES ($1, $2) RETURNING id`, [userId, targetId]);
-      return { id: rows[0]!.id, notify: 'request' as const };
+      await this.redis.multi().incr(dayKey).expire(dayKey, 86_400).exec();
+      // Push sapaan ke orang yang sama paling banyak sekali per 24 jam (sapa → batal → sapa tidak membanjiri).
+      const fresh = await this.redis.set(`buddy:request-push:${userId}:${targetId}`, '1', 'EX', 86_400, 'NX');
+      return { id: rows[0]!.id, notify: fresh ? ('request' as const) : null };
     });
     if (outcome.notify) {
       const l = await this.notifications.labels(userId);
@@ -264,9 +267,17 @@ export class BuddiesService {
     return this.connection(userId, r.from);
   }
 
-  /** Hapus teman / batalkan sapaan (ke arah mana pun). */
+  /**
+   * Hapus teman / batalkan sapaan (ke arah mana pun). Sapaan yang DITOLAK tetap tersimpan jika yang menghapus
+   * adalah pengirimnya (jawaban tetap sukses, pengirim tidak tahu ditolak): ia tidak bisa menyapa ulang (#225).
+   * Penerima tetap bisa menghapusnya.
+   */
   async removeConnection(userId: string, otherId: string): Promise<void> {
-    await this.pool.query('DELETE FROM buddy_requests WHERE (from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1)', [userId, otherId]);
+    await this.pool.query(
+      `DELETE FROM buddy_requests WHERE ((from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1))
+          AND NOT (status = 'declined' AND from_user = $1)`,
+      [userId, otherId],
+    );
   }
 
   async requests(userId: string) {

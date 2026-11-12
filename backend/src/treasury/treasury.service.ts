@@ -194,6 +194,8 @@ export class TreasuryService {
     if (input.orderDeadline.getTime() <= Date.now()) throw new ApiError(400, 'deadline_in_past', 'Batas waktu pesan harus di masa depan');
     await withTx(this.pool, async (db) => {
       await this.writer(db, communityId, userId, 'jersey');
+      // FOR SHARE di communityAccess tidak saling menghalangi: kunci per komunitas agar hitungan batas tidak bisa didahului.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`jersey-items:${communityId}`]);
       const { rows } = await db.query<{ n: string }>(
         'SELECT count(*) AS n FROM jersey_items WHERE community_id = $1 AND closed_at IS NULL AND order_deadline > now()',
         [communityId],

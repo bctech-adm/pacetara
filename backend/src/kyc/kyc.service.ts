@@ -86,7 +86,18 @@ export class KycService {
       // Prasyarat dicek sebelum mesin dijalankan (CPU berat): Level 1, belum Level 2, tidak ada tinjauan, kuota.
       await withTx(this.pool, async (db) => this.precheck(db, userId));
 
-      const analysis = await this.engine.analyze(ktp, selfie);
+      let analysis: Awaited<ReturnType<KycEngine['analyze']>>;
+      try {
+        analysis = await this.engine.analyze(ktp, selfie);
+      } catch (err) {
+        // Analisis yang gagal di mesin (berkas rusak, galat, waktu habis) tetap dihitung ke kuota harian, agar
+        // berkas yang sengaja dirusak tidak bisa dikirim tanpa batas. Antrean penuh (kyc_busy) tidak dihitung.
+        const code = err instanceof ApiError ? (err.getResponse() as { error?: string }).error : undefined;
+        if (code !== 'kyc_busy') {
+          await this.insertAttempt(this.pool, userId, 'retry', ['engine_error'], { face: null, real: null, live: null, ocr: 0, name: null });
+        }
+        throw err;
+      }
       const d = decide({ nik: input.nik, name: input.name }, analysis, this.thresholds);
       const scores = {
         face: analysis.faceSimilarity,
@@ -225,6 +236,13 @@ export class KycService {
       if (!rows[0] || rows[0].verification_level < 2) throw new ApiError(409, 'not_verified', 'Akun ini bukan Level 2');
       // Trigger users_compute_level menghitung ulang Level 0/1 dari email + HP saat level diturunkan.
       await db.query('UPDATE users SET verification_level = 1, nik_hmac = NULL, kyc_verified_at = NULL WHERE id = $1', [userId]);
+      // Split payment hanya untuk Level 2: akun penjual ditangguhkan agar listing split langsung berhenti tayang
+      // dan tidak bisa dibeli/diperpanjang. Pesanan yang sudah berjalan tetap diselesaikan seperti biasa.
+      await db.query(
+        `UPDATE market_seller_accounts SET status = 'suspended', suspended_reason = 'Status Terverifikasi (Level 2) dicabut'
+          WHERE user_id = $1 AND status <> 'suspended'`,
+        [userId],
+      );
       await db.query(
         `UPDATE kyc_attempts SET status = 'revoked', review_note = $3, reviewed_by = $2, reviewed_at = now()
           WHERE id = (SELECT id FROM kyc_attempts WHERE user_id = $1 AND status = 'approved' ORDER BY created_at DESC LIMIT 1)`,

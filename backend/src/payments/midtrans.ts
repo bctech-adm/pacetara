@@ -60,7 +60,8 @@ export function mapMidtransStatus(s: MidtransStatus): 'pending' | 'paid' | 'fail
     case 'settlement':
       return 'paid';
     case 'capture':
-      return s.fraud_status === 'accept' || s.fraud_status === undefined ? 'paid' : 'pending';
+      // Gagal-tertutup: tanpa fraud_status `accept` (termasuk tidak ada) tetap menunggu.
+      return s.fraud_status === 'accept' ? 'paid' : 'pending';
     case 'deny':
     case 'cancel':
     case 'failure':

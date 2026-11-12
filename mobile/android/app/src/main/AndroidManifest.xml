@@ -61,7 +61,7 @@
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
-            <!-- Kembali dari halaman "Berhasil terhubung" (OAuth Garmin/Strava di browser). Tidak membawa data. -->
+            <!-- Kembali dari halaman callback OAuth Garmin/Strava: hanya kode sekali pakai (disaring di MainActivity). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

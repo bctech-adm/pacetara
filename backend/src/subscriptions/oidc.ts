@@ -67,6 +67,9 @@ export interface OidcVerifier {
 @Injectable()
 export class PubSubOidcVerifier implements OidcVerifier {
   private certs?: { keys: Record<string, string>; until: number };
+  /** Muat ulang paksa (kid tak dikenal) paling sering sekali per menit: kid acak dari siapa pun tidak memicu fetch beruntun. */
+  private lastForcedAt = 0;
+  private static readonly FORCED_RELOAD_MS = 60_000;
 
   constructor(@Inject(ENV) private readonly env: Env) {}
 
@@ -76,8 +79,11 @@ export class PubSubOidcVerifier implements OidcVerifier {
     try {
       let certs = await this.loadCerts(false);
       const kid = kidOf(m[1]!);
-      // Kunci Google berotasi: kid baru → muat ulang sertifikat sekali.
-      if (kid && !certs[kid]) certs = await this.loadCerts(true);
+      // Kunci Google berotasi: kid baru → muat ulang sertifikat, dibatasi sekali per menit.
+      if (kid && !certs[kid] && Date.now() - this.lastForcedAt >= PubSubOidcVerifier.FORCED_RELOAD_MS) {
+        this.lastForcedAt = Date.now();
+        certs = await this.loadCerts(true);
+      }
       verifyGoogleOidc(m[1]!, certs, { audience: this.env.PLAY_RTDN_AUDIENCE, email: this.env.PLAY_RTDN_SERVICE_ACCOUNT_EMAIL });
     } catch {
       throw unauthorized();

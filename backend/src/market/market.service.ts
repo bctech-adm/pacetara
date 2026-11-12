@@ -31,6 +31,8 @@ export interface ListingInput {
 
 /** Listing aktif maksimum per penjual dan listing baru per 24 jam. */
 export const MAX_ACTIVE_LISTINGS = 20;
+/** Pesanan yang dibatalkan pembeli per 24 jam sebelum tidak bisa memesan lagi (anti penahanan stok). */
+const MAX_CANCELLED_PER_DAY = 5;
 export const LISTINGS_PER_DAY = 10;
 /** "Hubungi penjual" baru per 24 jam (anti-spam chat ke orang asing). */
 export const CONTACTS_PER_DAY = 20;
@@ -63,7 +65,8 @@ interface ListingRow {
 /** Listing tampil: aktif, belum lewat masa tayang, tidak diturunkan/disembunyikan, penjual aktif; split hanya dari akun penjual live. */
 const VISIBLE = `l.status = 'active' AND l.removed_at IS NULL AND l.hidden_at IS NULL AND (l.active_until IS NULL OR l.active_until > now())
   AND u.status = 'active'
-  AND (l.model <> 'split' OR EXISTS (SELECT 1 FROM market_seller_accounts sa WHERE sa.user_id = l.seller_id AND sa.status = 'live'))`;
+  AND (l.model <> 'split' OR (u.verification_level >= 2
+    AND EXISTS (SELECT 1 FROM market_seller_accounts sa WHERE sa.user_id = l.seller_id AND sa.status = 'live')))`;
 
 const LISTING_COLS = `l.id, l.seller_id, l.model, l.title, l.description, l.category, l.condition, l.price, l.city, l.affiliate_url, l.stock,
   l.status, l.active_until, l.boosted_until, l.clicks, l.hidden_at, l.created_at, u.display_name AS seller_name, u.verification_level AS seller_level,
@@ -238,7 +241,7 @@ export class MarketService {
     return this.detail(userId, listingId);
   }
 
-  private async assertCanList(db: Queryable, userId: string, model: ListingModel) {
+  private async assertCanList(db: Queryable, userId: string, model: ListingModel, opts: { countToday?: boolean; countActive?: boolean } = {}) {
     await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`market-list:${userId}`]);
     await this.assertPolicy(db, userId);
     if (model === 'split') {
@@ -257,13 +260,17 @@ export class MarketService {
          FROM market_listings WHERE seller_id = $1`,
       [userId],
     );
-    if (Number(n[0]!.active) >= MAX_ACTIVE_LISTINGS) throw new ApiError(409, 'listing_limit', `Maksimal ${MAX_ACTIVE_LISTINGS} listing aktif`);
-    if (Number(n[0]!.today) >= LISTINGS_PER_DAY) throw new ApiError(429, 'listing_rate_limited', `Maksimal ${LISTINGS_PER_DAY} listing baru per hari`);
+    if (opts.countActive !== false && Number(n[0]!.active) >= MAX_ACTIVE_LISTINGS) {
+      throw new ApiError(409, 'listing_limit', `Maksimal ${MAX_ACTIVE_LISTINGS} listing aktif`);
+    }
+    if (opts.countToday !== false && Number(n[0]!.today) >= LISTINGS_PER_DAY) throw new ApiError(429, 'listing_rate_limited', `Maksimal ${LISTINGS_PER_DAY} listing baru per hari`);
   }
 
   async update(userId: string, listingId: string, patch: { title?: string; description?: string; price?: number; city?: string; stock?: number; status?: 'sold' | 'closed' }) {
     await withTx(this.pool, async (db) => {
       const l = await this.ownListingForUpdate(db, userId, listingId);
+      // Isi yang dilaporkan dibekukan sampai ditinjau, agar bukti tidak bisa diganti sebelum admin melihatnya.
+      if (l.held_at) throw new ApiError(409, 'content_held', 'Listing sedang ditinjau karena dilaporkan dan belum bisa diubah');
       if (patch.stock !== undefined && l.model !== 'split') throw new ApiError(400, 'stock_not_applicable', 'Stok hanya untuk listing pembayaran di aplikasi');
       if (patch.status && !['active', 'pending_payment'].includes(l.status)) throw new ApiError(409, 'listing_closed', 'Listing ini sudah tidak tayang');
       const sets: string[] = [];
@@ -289,6 +296,13 @@ export class MarketService {
       const l = await this.ownListingForUpdate(db, userId, listingId);
       if (l.model === 'listing_fee') throw new ApiError(409, 'payment_required', 'Listing berbayar diperpanjang lewat dasbor web');
       if (!['active', 'expired'].includes(l.status)) throw new ApiError(409, 'listing_closed', 'Listing ini sudah tidak tayang');
+      if (l.held_at) throw new ApiError(409, 'content_held', 'Listing sedang ditinjau karena dilaporkan dan belum bisa diperpanjang');
+      if (l.status === 'expired') {
+        // Kembali tayang = dihitung lagi ke batas listing aktif (dan syarat Level 2/akun live untuk split).
+        await this.assertCanList(db, userId, l.model, { countToday: false });
+      } else if (l.model === 'split') {
+        await this.assertCanList(db, userId, l.model, { countToday: false, countActive: false });
+      }
       await this.assertPolicy(db, userId);
       await db.query(`UPDATE market_listings SET status = 'active', active_until = now() + make_interval(days => $2) WHERE id = $1`, [
         listingId,
@@ -446,8 +460,21 @@ export class MarketService {
       if (l.seller_id === userId) throw new ApiError(400, 'invalid_target', 'Tidak bisa membeli barang sendiri');
       if (l.model !== 'split' || l.acct_status !== 'live' || !l.acct_id) throw new ApiError(409, 'not_purchasable', 'Barang ini tidak dijual lewat pembayaran di aplikasi');
       if ((l.stock ?? 0) < qty) throw new ApiError(409, 'out_of_stock', 'Stok tidak cukup');
-      const { rows: pend } = await db.query<{ n: string }>(`SELECT count(*) AS n FROM market_orders WHERE buyer_id = $1 AND status = 'pending'`, [userId]);
+      // Kunci per pembeli: hitungan di bawah tidak bisa dilewati dengan permintaan bersamaan ke listing berbeda.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`market-buyer:${userId}`]);
+      const { rows: pend } = await db.query<{ n: string; here: string; cancelled: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'pending') AS n,
+                count(*) FILTER (WHERE status = 'pending' AND listing_id = $2) AS here,
+                count(*) FILTER (WHERE status = 'cancelled' AND created_at > now() - interval '24 hours') AS cancelled
+           FROM market_orders WHERE buyer_id = $1`,
+        [userId, listingId],
+      );
       if (Number(pend[0]!.n) >= 5) throw new ApiError(429, 'too_many_pending', 'Selesaikan atau batalkan pesanan yang menunggu pembayaran dulu');
+      // Satu pesanan menunggu per listing, dan siklus batal lalu pesan ulang dibatasi: stok penjual tidak bisa ditahan terus.
+      if (Number(pend[0]!.here) >= 1) throw new ApiError(409, 'order_pending', 'Kamu masih punya pesanan menunggu pembayaran untuk barang ini');
+      if (Number(pend[0]!.cancelled) >= MAX_CANCELLED_PER_DAY) {
+        throw new ApiError(429, 'too_many_cancelled', 'Terlalu banyak pesanan dibatalkan hari ini. Coba lagi besok');
+      }
       // Stok dipesan saat pesanan dibuat dan dikembalikan jika kedaluwarsa/dibatalkan.
       await db.query('UPDATE market_listings SET stock = stock - $2 WHERE id = $1', [listingId, qty]);
       const amount = Number(l.price) * qty;
@@ -754,8 +781,8 @@ export class MarketService {
   }
 
   private async ownListingForUpdate(db: Queryable, userId: string, listingId: string) {
-    const { rows } = await db.query<{ model: ListingModel; status: string }>(
-      'SELECT model, status FROM market_listings WHERE id = $1 AND seller_id = $2 AND removed_at IS NULL FOR UPDATE',
+    const { rows } = await db.query<{ model: ListingModel; status: string; held_at: Date | null }>(
+      'SELECT model, status, held_at FROM market_listings WHERE id = $1 AND seller_id = $2 AND removed_at IS NULL FOR UPDATE',
       [listingId, userId],
     );
     if (!rows[0]) throw listingNotFound();

@@ -122,18 +122,29 @@ export class FeedService {
       }
     }
 
+    // Kuota dipesan dulu (INCR atomik) lalu dikembalikan bila gagal, agar permintaan bersamaan tidak melewati batas.
     const dayKey = `feed:posts:${userId}`;
-    if (Number((await this.redis.get(dayKey)) ?? 0) >= POSTS_PER_DAY) {
+    const n = await this.redis.incr(dayKey);
+    if (n === 1) await this.redis.expire(dayKey, 86_400);
+    const release = () => this.redis.decr(dayKey).catch(() => undefined);
+    if (n > POSTS_PER_DAY) {
+      await release();
       throw new ApiError(429, 'post_rate_limited', `Maksimal ${POSTS_PER_DAY} postingan per hari`);
     }
 
     // Foto diproses dulu (jenis dicek dari isi, EXIF/GPS terbuang) sebelum apa pun disimpan.
     const images: Buffer[] = [];
-    for (const f of files) images.push(await processImage(f, { size: 1600 }));
-
     const id = randomUUID();
-    const keys = images.map(() => `feed/${userId}/${id}/${randomUUID()}.webp`);
-    for (let i = 0; i < images.length; i++) await this.storage.put(keys[i]!, images[i]!, 'image/webp');
+    let keys: string[] = [];
+    try {
+      for (const f of files) images.push(await processImage(f, { size: 1600 }));
+      keys = images.map(() => `feed/${userId}/${id}/${randomUUID()}.webp`);
+      for (let i = 0; i < images.length; i++) await this.storage.put(keys[i]!, images[i]!, 'image/webp');
+    } catch (err) {
+      await this.deleteObjects(keys);
+      await release();
+      throw err;
+    }
     try {
       await withTx(this.pool, async (db) => {
         await db.query(
@@ -146,11 +157,10 @@ export class FeedService {
       });
     } catch (err) {
       await this.deleteObjects(keys);
+      await release();
       if ((err as { code?: string }).code === '23505') throw new ApiError(409, 'run_already_posted', 'Lari ini sudah pernah dibagikan ke feed');
       throw err;
     }
-    const n = await this.redis.incr(dayKey);
-    if (n === 1) await this.redis.expire(dayKey, 86_400);
     return this.get(userId, id);
   }
 
@@ -304,17 +314,24 @@ export class FeedService {
    * Profil feed pengguna lain terlihat jika: diri sendiri, satu komunitas, salah satu mengikuti yang lain,
    * atau ia aktif di feed publik (punya postingan publik atau komentar di postingan publik).
    * Blokir ke arah mana pun = tidak terlihat. Dipakai juga untuk foto profil (UsersService.avatarFile).
+   *
+   * `forFollow`: mengikuti (tanpa persetujuan) membuka postingan `followers`, jadi syaratnya lebih ketat: sesama
+   * pemilik profil Cari teman dan sapaan yang belum diterima TIDAK cukup; harus sapaan yang diterima.
    */
-  async canSeeProfile(viewerId: string, userId: string): Promise<boolean> {
+  async canSeeProfile(viewerId: string, userId: string, opts: { forFollow?: boolean } = {}): Promise<boolean> {
     if (viewerId === userId) return true;
+    const buddyClause = opts.forFollow
+      ? `OR EXISTS (SELECT 1 FROM buddy_requests br WHERE br.status = 'accepted'
+                      AND ((br.from_user = $1 AND br.to_user = u.id) OR (br.from_user = u.id AND br.to_user = $1)))`
+      : `OR EXISTS (SELECT 1 FROM buddy_requests br WHERE (br.from_user = $1 AND br.to_user = u.id) OR (br.from_user = u.id AND br.to_user = $1))
+                OR (EXISTS (SELECT 1 FROM buddy_profiles bp WHERE bp.user_id = u.id AND bp.enabled)
+                    AND EXISTS (SELECT 1 FROM buddy_profiles bq WHERE bq.user_id = $1 AND bq.enabled))`;
     const { rows } = await this.pool.query<{ ok: boolean }>(
       `SELECT (u.status = 'active' AND ${notBlocked('u.id')} AND (
                 ${sharesCommunity('u.id')}
                 OR EXISTS (SELECT 1 FROM feed_follows f WHERE (f.follower_id = $1 AND f.followee_id = u.id) OR (f.follower_id = u.id AND f.followee_id = $1))
                 -- Cari teman lari (modul 2.6): saling sapa, atau keduanya punya profil pencarian aktif (opt-in).
-                OR EXISTS (SELECT 1 FROM buddy_requests br WHERE (br.from_user = $1 AND br.to_user = u.id) OR (br.from_user = u.id AND br.to_user = $1))
-                OR (EXISTS (SELECT 1 FROM buddy_profiles bp WHERE bp.user_id = u.id AND bp.enabled)
-                    AND EXISTS (SELECT 1 FROM buddy_profiles bq WHERE bq.user_id = $1 AND bq.enabled))
+                ${buddyClause}
                 OR EXISTS (SELECT 1 FROM feed_posts p WHERE p.user_id = u.id AND p.visibility = 'public' AND p.removed_at IS NULL AND p.hidden_at IS NULL)
                 OR EXISTS (SELECT 1 FROM feed_comments c JOIN feed_posts p ON p.id = c.post_id
                             WHERE c.user_id = u.id AND c.removed_at IS NULL AND c.hidden_at IS NULL
@@ -364,7 +381,13 @@ export class FeedService {
 
   async follow(userId: string, targetId: string) {
     if (userId === targetId) throw new ApiError(400, 'cannot_follow_self', 'Tidak bisa mengikuti diri sendiri');
-    if (!(await this.canSeeProfile(userId, targetId))) throw userNotFound();
+    if (!(await this.canSeeProfile(userId, targetId, { forFollow: true }))) {
+      // Profil terlihat tetapi belum boleh diikuti (mis. hanya sesama pengguna Cari teman): 403, bukan 404.
+      if (await this.canSeeProfile(userId, targetId)) {
+        throw new ApiError(403, 'follow_not_allowed', 'Sapa dulu lewat Cari teman lari dan tunggu diterima sebelum mengikuti');
+      }
+      throw userNotFound();
+    }
     const { rowCount } = await this.pool.query('INSERT INTO feed_follows (follower_id, followee_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
       userId,
       targetId,

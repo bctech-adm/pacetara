@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TokenService } from '../src/auth/token.service.js';
 import { FieldCrypto } from '../src/crypto/field-crypto.js';
+import { ApiError } from '../src/common/http.js';
 import { expireKycReviews } from '../src/kyc/kyc-expiry.js';
 import { createTestApp, FakeKycEngine, freshIp, hasTestInfra, resetData, type TestApp } from './helpers.js';
 
@@ -144,6 +145,17 @@ describe.skipIf(!hasTestInfra)('Modul 3.1 Verifikasi Level 2 (e2e)', () => {
     expect((await get(u, '/v1/kyc')).body.attemptsLeft).toBe(0);
     const limited = await submit(u).expect(429);
     expect(limited.body.error).toBe('kyc_limit');
+  });
+
+  it('analisis gagal di mesin tetap dihitung ke kuota; antrean penuh tidak', async () => {
+    const u = await user();
+    t.kyc.fail = new ApiError(503, 'kyc_busy', 'Sedang banyak verifikasi');
+    expect((await submit(u).expect(503)).body.error).toBe('kyc_busy');
+    expect(await attempts(u.id)).toHaveLength(0);
+    t.kyc.fail = new ApiError(503, 'kyc_engine_error', 'Verifikasi gagal diproses');
+    expect((await submit(u).expect(503)).body.error).toBe('kyc_engine_error');
+    expect((await attempts(u.id)).map((a: { status: string; reasons: string[] }) => [a.status, a.reasons])).toEqual([['retry', ['engine_error']]]);
+    expect((await get(u, '/v1/kyc')).body.attemptsLeft).toBe(4);
   });
 
   it('ragu = antrean tinjauan; admin melihat nama (tercatat) lalu menyetujui', async () => {

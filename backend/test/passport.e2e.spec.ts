@@ -100,13 +100,13 @@ describe.skipIf(!hasTestInfra)('Modul 2.2 Riwayat dan paspor lari (e2e)', () => 
   };
 
   /** Lari langsung ke database (waktu persis, tanpa lencana/notifikasi). */
-  async function insertRun(u: U, startedAt: Date, distanceM: number, opts: { source?: string; pace?: number } = {}) {
+  async function insertRun(u: U, startedAt: Date, distanceM: number, opts: { source?: string; pace?: number; visibility?: string } = {}) {
     const pace = opts.pace ?? 360;
     const moving = Math.round((distanceM / 1000) * pace);
     await t.pool.query(
       `INSERT INTO runs (user_id, client_run_id, source, title, visibility, started_at, ended_at, distance_m, moving_time_s, elapsed_time_s, avg_pace_s_per_km)
-       VALUES ($1, $2, $3, 'Lari', 'private', $4, $4::timestamptz + make_interval(secs => $5), $6, $5, $5, $7)`,
-      [u.id, randomUUID(), opts.source ?? 'app', startedAt, moving, distanceM, pace],
+       VALUES ($1, $2, $3, 'Lari', $8, $4, $4::timestamptz + make_interval(secs => $5), $6, $5, $5, $7)`,
+      [u.id, randomUUID(), opts.source ?? 'app', startedAt, moving, distanceM, pace, opts.visibility ?? 'private'],
     );
   }
 
@@ -318,13 +318,22 @@ describe.skipIf(!hasTestInfra)('Modul 2.2 Riwayat dan paspor lari (e2e)', () => 
     await insertRun(ani, new Date(Date.now() - DAY), 21_500, { source: 'strava' });
     const mine = (await api(ani).get('/v1/passport/me').expect(200)).body.badges.items;
     expect(mine.find((x: { code: string }) => x.code === 'first_hm')).toMatchObject({ earned: true, privateOnly: true });
-    const seen = (await api(citra).get(`/v1/passport/users/${ani.id}`).expect(200)).body.badges.items.map((x: { code: string }) => x.code);
-    expect(seen.sort()).toEqual(['first_5k', 'first_run']);
-    // Setelah lari app 21 km, lencana HM tidak lagi privat.
-    await insertRun(ani, new Date(Date.now() - 3600_000), 21_200);
+    // Semua lari Ani sejauh ini "hanya saya" atau Strava: anggota komunitas tidak melihat lencana apa pun darinya.
+    const seenBody = (await api(citra).get(`/v1/passport/users/${ani.id}`).expect(200)).body.badges;
+    expect(seenBody.items.map((x: { code: string }) => x.code)).toEqual([]);
+    expect(seenBody.currentStreakWeeks).toBe(0);
+    // Lari app 21 km "hanya saya": lencana HM tetap tidak terlihat orang lain (waktu lari privat tidak bocor).
+    await insertRun(ani, new Date(Date.now() - 2 * 3600_000), 21_200);
     await api(ani).get('/v1/passport/me').expect(200);
-    const seen2 = (await api(citra).get(`/v1/passport/users/${ani.id}`).expect(200)).body.badges.items.map((x: { code: string }) => x.code);
-    expect(seen2).toContain('first_hm');
+    const seenPriv = (await api(citra).get(`/v1/passport/users/${ani.id}`).expect(200)).body.badges.items.map((x: { code: string }) => x.code);
+    expect(seenPriv).not.toContain('first_hm');
+    // Setelah lari app 21 km untuk komunitas, lencana HM terlihat, hanya dengan tanggal (tanpa jam lari).
+    await insertRun(ani, new Date(Date.now() - 3600_000), 21_200, { visibility: 'community' });
+    await api(ani).get('/v1/passport/me').expect(200);
+    const seen2 = (await api(citra).get(`/v1/passport/users/${ani.id}`).expect(200)).body.badges.items;
+    const hm = seen2.find((x: { code: string }) => x.code === 'first_hm');
+    expect(hm).toBeTruthy();
+    expect(new Date(hm.earnedAt).getTime() % 86_400_000).toBe(17 * 3_600_000); // 00:00 WIB
   });
 
   it('hak akses paspor: sesama anggota komunitas (bawaan), privat, blokir, orang luar = 404', async () => {

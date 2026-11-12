@@ -229,7 +229,7 @@ export function decide(entered: { nik: string; name: string }, a: KycAnalysis, t
 }
 
 /** Pesan untuk pengguna per alasan (aplikasi juga punya terjemahannya sendiri). */
-export const REASON_TEXT: Record<RetryReason | ReviewReason | 'nik_in_use' | 'underage', string> = {
+export const REASON_TEXT: Record<RetryReason | ReviewReason | 'nik_in_use' | 'underage' | 'engine_error', string> = {
   selfie_no_face: 'Wajah tidak terlihat di selfie. Ambil ulang dengan wajah menghadap kamera dan cahaya cukup.',
   selfie_multiple_faces: 'Ada lebih dari satu wajah di selfie. Pastikan hanya kamu yang terlihat.',
   ktp_no_face: 'Foto wajah di KTP tidak terbaca. Foto ulang KTP dari dekat, tanpa pantulan cahaya.',
@@ -242,4 +242,5 @@ export const REASON_TEXT: Record<RetryReason | ReviewReason | 'nik_in_use' | 'un
   ocr_low_confidence: 'Tulisan di foto KTP kurang jelas.',
   nik_in_use: 'NIK ini sudah dipakai akun lain. Hubungi tim PaceTara jika ini keliru.',
   underage: 'Verifikasi Level 2 hanya untuk pemilik KTP berusia 17 tahun ke atas.',
+  engine_error: 'Foto tidak bisa diproses. Ambil ulang foto KTP dan selfie dengan kamera HP.',
 };

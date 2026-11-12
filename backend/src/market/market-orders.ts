@@ -59,7 +59,8 @@ export class MarketOrderSync {
       const o = rows[0];
       if (!o) return null;
       if ((status === 'PAID' || status === 'SETTLED') && ['pending', 'cancelled', 'expired'].includes(o.status)) {
-        if (inv.amount !== undefined && Math.round(inv.amount) !== Number(o.amount)) {
+        // Gagal-tertutup: invoice lunas tanpa nominal juga tidak diterapkan.
+        if (typeof inv.amount !== 'number' || Math.round(inv.amount) !== Number(o.amount)) {
           this.logger.warn(`Nominal invoice pesanan ${o.id} tidak cocok; diabaikan`);
           return null;
         }

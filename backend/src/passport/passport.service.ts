@@ -121,10 +121,22 @@ export class PassportService {
   // ---------- Medali ----------
 
   async addMedal(userId: string, input: MedalInput, file: Buffer) {
+    // Kuota dipesan dulu (INCR atomik) lalu dikembalikan bila gagal, agar permintaan bersamaan tidak melewati batas.
     const dayKey = `medal:day:${userId}`;
-    if (Number((await this.redis.get(dayKey)) ?? 0) >= MEDAL_UPLOADS_PER_DAY) {
-      throw new ApiError(429, 'medal_rate_limited', `Maksimal ${MEDAL_UPLOADS_PER_DAY} unggahan medali per hari`);
+    const used = await this.redis.incr(dayKey);
+    if (used === 1) await this.redis.expire(dayKey, 86_400);
+    try {
+      if (used > MEDAL_UPLOADS_PER_DAY) {
+        throw new ApiError(429, 'medal_rate_limited', `Maksimal ${MEDAL_UPLOADS_PER_DAY} unggahan medali per hari`);
+      }
+      return await this.storeMedal(userId, input, file);
+    } catch (err) {
+      await this.redis.decr(dayKey).catch(() => undefined);
+      throw err;
     }
+  }
+
+  private async storeMedal(userId: string, input: MedalInput, file: Buffer) {
     const event = input.eventId ? await this.joinedEvent(this.pool, userId, input.eventId) : null;
     const eventDate = event?.event_date ?? input.eventDate ?? null;
     if (eventDate && !event) await this.assertPastDate(eventDate);
@@ -150,8 +162,6 @@ export class PassportService {
       await this.storage.delete(key).catch(() => undefined);
       throw err;
     }
-    const n = await this.redis.incr(dayKey);
-    if (n === 1) await this.redis.expire(dayKey, 86_400);
     const { rows } = await this.pool.query<MedalRow>(`SELECT ${MEDAL_COLS} FROM passport_medals WHERE id = $1`, [id]);
     return this.medalJson(rows[0]!);
   }

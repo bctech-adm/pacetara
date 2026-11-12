@@ -143,6 +143,8 @@ export class FakeKycEngine {
   /** Ukuran gambar yang diterima, untuk memastikan berkas sampai ke mesin. */
   sizes: number[] = [];
   next: KycAnalysis = FakeKycEngine.good('3174011205900001', 'BUDI SANTOSO');
+  /** Jika diisi, analisis berikutnya melempar galat ini (sekali). */
+  fail: ApiError | null = null;
   static good(nik: string, name: string): KycAnalysis {
     return { ocr: { nik, name, confidence: 85 }, ktpFaces: 1, selfieFaces: 1, faceSimilarity: 0.72, selfieReal: 0.9, selfieLive: 0.95 };
   }
@@ -150,6 +152,11 @@ export class FakeKycEngine {
     if (!this.enabled) throw new ApiError(503, 'not_configured', 'Verifikasi KTP belum tersedia');
     this.calls++;
     this.sizes.push(ktp.length, selfie.length);
+    if (this.fail) {
+      const err = this.fail;
+      this.fail = null;
+      throw err;
+    }
     return structuredClone(this.next);
   }
 }

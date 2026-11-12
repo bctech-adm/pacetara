@@ -32,6 +32,7 @@ const HealthConnectBody = z
   .refine((b) => b.endedAt.getTime() - b.startedAt.getTime() <= 24 * 3600 * 1000, { message: 'Lari maksimal 24 jam', path: ['endedAt'] })
   .refine((b) => b.endedAt.getTime() <= Date.now() + 10 * 60 * 1000, { message: 'Waktu lari di masa depan', path: ['endedAt'] });
 
+const CompleteBody = z.object({ code: z.string().min(20).max(100).regex(/^[A-Za-z0-9_-]+$/) }).strict();
 const CheckBody = z.object({ ids: z.array(z.string().min(1).max(100)).max(200) }).strict();
 const DisconnectQuery = z.object({ deleteRuns: z.enum(['true', 'false']).default('false') });
 
@@ -85,6 +86,13 @@ export class ImportsController {
   @HttpCode(200)
   connect(@CurrentUser() u: AuthUser, @Param('provider') p: string) {
     return this.imports.connect(u.id, oauthProvider(p));
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post(':provider/complete')
+  @HttpCode(200)
+  complete(@CurrentUser() u: AuthUser, @Param('provider') p: string, @Body(new ZodPipe(CompleteBody)) b: z.infer<typeof CompleteBody>) {
+    return this.imports.complete(u.id, oauthProvider(p), b.code);
   }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -146,16 +154,22 @@ export class ImportWebhooksController {
   }
 }
 
-/** Halaman hasil OAuth. Pesan statis dari server (tanpa input pengguna), tanpa JavaScript. */
+/**
+ * Halaman hasil OAuth. Pesan statis dari server (tanpa input pengguna), tanpa JavaScript. Jika berhasil, tombol
+ * membawa kode sekali pakai (acak, bukan data pribadi) ke aplikasi di HP ini untuk menyelesaikan penautan.
+ */
 function callbackPage(o: CallbackOutcome): string {
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  const back = o.complete
+    ? `pacetara://app/imports?provider=${o.complete.provider}&complete=${encodeURIComponent(o.complete.code)}`
+    : 'pacetara://app/imports';
   return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><title>${esc(o.title)} · PaceTara</title>
 <style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color:#1b1b1b}
 h1{font-size:1.4rem}a.btn{display:inline-block;margin-top:1rem;padding:.7rem 1.2rem;border-radius:.6rem;background:#e85d04;color:#fff;text-decoration:none}</style>
 </head><body><h1>${esc(o.title)}</h1><p>${esc(o.message)}</p>
-<a class="btn" href="pacetara://app/imports">Kembali ke PaceTara</a>
-<p><small>Jika tombol tidak berfungsi, tutup halaman ini dan buka aplikasi PaceTara.</small></p>
+<a class="btn" href="${esc(back)}">${o.complete ? 'Selesaikan di PaceTara' : 'Kembali ke PaceTara'}</a>
+<p><small>${o.complete ? 'Jika tombol tidak berfungsi, ulangi dari halaman Impor di aplikasi PaceTara.' : 'Jika tombol tidak berfungsi, tutup halaman ini dan buka aplikasi PaceTara.'}</small></p>
 </body></html>`;
 }
