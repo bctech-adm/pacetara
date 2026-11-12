@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 
 /// Galat dari API dengan kode mesin yang stabil (`error`) dan pesan siap tampil (`message`).
 class ApiError implements Exception {
-  const ApiError(this.status, this.code, this.message, {this.fields = const {}});
+  const ApiError(this.status, this.code, this.message, {this.fields = const {}, this.limitKind});
 
   final int status;
   final String code;
@@ -10,6 +10,10 @@ class ApiError implements Exception {
 
   /// Galat validasi per field (`invalid_input`), nama field → pesan.
   final Map<String, String> fields;
+
+  /// Jenis batas paket untuk `limit_reached` (`limit.kind`, mis. user_join, medals, community_members), dipakai
+  /// dialog upgrade untuk membuka layar langganan yang relevan.
+  final String? limitKind;
 
   factory ApiError.from(Object error) {
     if (error is ApiError) return error;
@@ -31,6 +35,7 @@ class ApiError implements Exception {
           data['error'] as String? ?? 'unknown',
           message is String ? message : (fields.values.isNotEmpty ? fields.values.first : 'Terjadi kesalahan'),
           fields: fields,
+          limitKind: (data['limit'] is Map<String, dynamic>) ? (data['limit'] as Map<String, dynamic>)['kind'] as String? : null,
         );
       }
       if (error.type == DioExceptionType.connectionTimeout ||

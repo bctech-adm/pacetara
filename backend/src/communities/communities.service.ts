@@ -154,7 +154,7 @@ export class CommunitiesService {
   }
 
   async members(userId: string, communityId: string, status: 'active' | 'pending' | 'banned') {
-    await this.lockCommunityRead(communityId);
+    const plan = await this.lockCommunityRead(communityId);
     const me = await this.membership(this.pool, communityId, userId);
     if (me?.status !== 'active') throw new ApiError(403, 'not_member', 'Hanya anggota yang bisa melihat daftar anggota');
     if (status !== 'active' && me.role === 'member') throw new ApiError(403, 'not_admin', 'Hanya admin');
@@ -168,9 +168,10 @@ export class CommunitiesService {
       avatar_key: string | null;
       avatar_updated_at: Date | null;
       city: string | null;
+      user_plan: UserPlan;
     }>(
       `SELECT m.user_id, m.role, m.status, m.joined_at, m.requested_at,
-              u.display_name, u.avatar_key, u.avatar_updated_at, u.city
+              u.display_name, u.avatar_key, u.avatar_updated_at, u.city, u.plan AS user_plan
          FROM community_members m JOIN users u ON u.id = m.user_id
         WHERE m.community_id = $1 AND m.status = $2
         ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
@@ -186,6 +187,11 @@ export class CommunitiesService {
       status: r.status,
       joinedAt: r.joined_at?.toISOString() ?? null,
       requestedAt: r.requested_at.toISOString(),
+      // Lencana: Premium milik pengguna; Pro melekat pada komunitas dan tampil di avatar admin/pemiliknya (PRD Lencana).
+      badges: [
+        ...(r.user_plan === 'premium' ? ['premium'] : []),
+        ...(isPaidCommunity(plan) && r.status === 'active' && r.role !== 'member' ? ['pro'] : []),
+      ],
     }));
   }
 
@@ -832,9 +838,10 @@ export class CommunitiesService {
   }
 
   /** Komunitas ada dan tidak diturunkan (tanpa kunci baris). */
-  private async lockCommunityRead(communityId: string) {
-    const { rowCount } = await this.pool.query('SELECT 1 FROM communities WHERE id = $1 AND removed_at IS NULL', [communityId]);
-    if (!rowCount) throw notFound();
+  private async lockCommunityRead(communityId: string): Promise<CommunityPlan> {
+    const { rows } = await this.pool.query<{ plan: CommunityPlan }>('SELECT plan FROM communities WHERE id = $1 AND removed_at IS NULL', [communityId]);
+    if (!rows[0]) throw notFound();
+    return rows[0].plan;
   }
 
   /** Admin/pemilik aktif dari komunitas yang tidak diturunkan (yang diturunkan dianggap tidak ada). */

@@ -21,11 +21,15 @@ import { BadgesService } from '../passport/badges.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { FcmSender, type PushJob, PushQueue, sendPushJob } from '../notifications/push.js';
 import { StorageService } from '../storage/storage.service.js';
-import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES } from './queues.js';
+import { PubSubOidcVerifier } from '../subscriptions/oidc.js';
+import { PlayApi } from '../subscriptions/play-api.js';
+import { type SubscriptionJob, SubscriptionQueue } from '../subscriptions/subscription-queue.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
+import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES, SUBSCRIPTION_JOB } from './queues.js';
 
 /**
  * Tugas latar. Modul berikutnya menambah prosesor: kedaluwarsa gambar chat (1.6),
- * arsip event (1.7), notifikasi (1.9), impor Garmin/Strava (2.3), scraping event (2.4).
+ * arsip event (1.7), notifikasi (1.9), impor Garmin/Strava (2.3), scraping event (2.4), langganan Play (2.5).
  */
 @Module({
   imports: [CoreModule],
@@ -47,6 +51,11 @@ import { IMPORT_JOB, MAINTENANCE_JOBS, PUSH_JOB, QUEUES } from './queues.js';
     EventSubmissionsService,
     ScrapeHttp,
     EventScraper,
+    // Langganan (modul 2.5): sinkron RTDN dan rekonsiliasi berkala.
+    PlayApi,
+    PubSubOidcVerifier,
+    SubscriptionQueue,
+    SubscriptionsService,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
@@ -55,6 +64,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
   private worker?: Worker;
   private pushWorker?: Worker;
   private importWorker?: Worker;
+  private subscriptionWorker?: Worker;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -63,6 +73,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     private readonly crypto: FieldCrypto,
     private readonly imports: ImportsService,
     private readonly scraper: EventScraper,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   async onModuleInit() {
@@ -100,6 +111,14 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       await this.queue.removeJobScheduler('event-scrape');
     }
 
+    // Langganan (modul 2.5): paket yang lewat masa berlaku diturunkan, langganan bermasalah/mendekati habis disinkronkan
+    // ke Google, refund yang terlewat dicek. Selalu dijadwalkan karena pemberian paket manual juga berakhir.
+    await this.queue.upsertJobScheduler(
+      'subscription-reconcile',
+      { every: 30 * 60_000 },
+      { name: MAINTENANCE_JOBS.subscriptionReconcile, opts: { removeOnComplete: 10, removeOnFail: 50, attempts: 1 } },
+    );
+
     this.worker = new Worker(QUEUES.maintenance, (job) => this.process(job), { connection, concurrency: 2 });
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.name ?? '?'} gagal: ${err.message}`));
 
@@ -120,6 +139,13 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
       { connection, concurrency: 2 },
     );
     // Hanya jenis job dan pesan galat (tanpa token/isi); pesan ProviderHttpError hanya berisi host + status.
+    // Sinkron langganan dari RTDN (modul 2.5). Pesan galat hanya status HTTP Google (tanpa token).
+    this.subscriptionWorker = new Worker(
+      QUEUES.subscriptions,
+      (job: Job<SubscriptionJob>) => (job.name === SUBSCRIPTION_JOB ? this.subscriptions.processJob(job.data) : Promise.reject(new Error(`Job tidak dikenal: ${job.name}`))),
+      { connection, concurrency: 2 },
+    );
+    this.subscriptionWorker.on('failed', (job, err) => this.logger.warn(`Sinkron langganan gagal (percobaan ${job?.attemptsMade ?? '?'}): ${err.message}`));
     this.importWorker.on('failed', (job, err) => this.logger.warn(`Impor ${job?.data?.kind ?? '?'} gagal (percobaan ${job?.attemptsMade ?? '?'}): ${err.message}`));
   }
 
@@ -133,6 +159,8 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
         return Promise.all([archivePastEvents(this.pool), expireStaleSubmissions(this.pool)]).then(([archived, expiredSubmissions]) => ({ archived, expiredSubmissions }));
       case MAINTENANCE_JOBS.eventScrape:
         return this.scraper.runAll().then((stats) => ({ stats }));
+      case MAINTENANCE_JOBS.subscriptionReconcile:
+        return this.subscriptions.reconcile();
       default:
         return Promise.reject(new Error(`Job tidak dikenal: ${job.name}`));
     }
@@ -142,6 +170,7 @@ export class WorkerModule implements OnModuleInit, OnApplicationShutdown {
     await this.worker?.close();
     await this.pushWorker?.close();
     await this.importWorker?.close();
+    await this.subscriptionWorker?.close();
     await this.queue?.close();
   }
 }

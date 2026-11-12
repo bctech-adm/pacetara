@@ -2,10 +2,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
+import '../subscriptions/upgrade.dart';
 import 'models.dart';
 
 class CommunityLogo extends ConsumerWidget {
@@ -81,7 +83,8 @@ class CommunityTile extends StatelessWidget {
 
 /// Menjalankan aksi; jika server menolak karena batas paket, tampilkan dialog batas
 /// (ajakan upgrade internal, PRD 2.5), selain itu snackbar galat. Mengembalikan true jika berhasil.
-Future<bool> runCommunityAction(BuildContext context, Future<void> Function() action, {String? success}) async {
+/// [ownedCommunityId]: komunitas milik pengguna yang relevan, agar batas komunitas mengarah ke Komunitas Pro-nya.
+Future<bool> runCommunityAction(BuildContext context, Future<void> Function() action, {String? success, String? ownedCommunityId}) async {
   try {
     await action();
     if (success != null && context.mounted) showInfo(context, success);
@@ -90,7 +93,7 @@ Future<bool> runCommunityAction(BuildContext context, Future<void> Function() ac
     if (!context.mounted) return false;
     final err = ApiError.from(e);
     if (err.code == 'limit_reached') {
-      await showLimitDialog(context, err.message);
+      await showLimitDialog(context, err.message, kind: err.limitKind, ownedCommunityId: ownedCommunityId);
     } else {
       showError(context, err);
     }
@@ -98,22 +101,27 @@ Future<bool> runCommunityAction(BuildContext context, Future<void> Function() ac
   }
 }
 
-Future<void> showLimitDialog(BuildContext context, String message) {
+/// Dialog batas paket dengan tombol ke layar langganan yang relevan (Premium atau Komunitas Pro). Harga dan
+/// pembelian ada di layar langganan; dialog ini tidak mengubah apa pun.
+Future<void> showLimitDialog(BuildContext context, String message, {String? kind, String? ownedCommunityId}) {
+  final route = upgradeRoute(kind, ownedCommunityId: ownedCommunityId);
   return showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialog) => AlertDialog(
       icon: const Icon(Icons.workspace_premium_outlined),
       title: const Text('Batas paket gratis'),
       content: Text(message),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
-        FilledButton(
-          onPressed: () {
-            Navigator.pop(context);
-            showInfo(context, 'Langganan Premium dan Komunitas Pro segera hadir');
-          },
-          child: const Text('Lihat paket'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(dialog), child: Text(route == null ? 'Mengerti' : 'Tutup')),
+        if (route != null)
+          FilledButton(
+            key: const Key('limit-upgrade'),
+            onPressed: () {
+              Navigator.pop(dialog);
+              context.push(route);
+            },
+            child: Text(upgradeLabel(kind)),
+          ),
       ],
     ),
   );

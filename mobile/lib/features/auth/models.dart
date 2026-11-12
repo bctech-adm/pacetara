@@ -36,6 +36,9 @@ class MyProfile {
 
   bool get isLevel1 => verificationLevel >= 1;
 
+  /// Paket diubah hanya oleh server (modul 2.5); lencana Premium tampil di avatar dan profil.
+  bool get isPremium => badges.contains('premium');
+
   factory MyProfile.fromJson(Map<String, dynamic> j) => MyProfile(
         id: j['id'] as String,
         displayName: j['displayName'] as String,
@@ -56,15 +59,19 @@ class MyProfile {
 
 /// Konfigurasi layar daftar dari `GET /v1/auth/config`.
 class AuthConfig {
-  const AuthConfig({required this.privacyVersion, required this.privacyUrl, required this.googleEnabled});
+  const AuthConfig({required this.privacyVersion, required this.privacyUrl, required this.googleEnabled, this.subscriptionsEnabled = false});
   final String privacyVersion;
   final String privacyUrl;
   final bool googleEnabled;
+
+  /// Langganan Google Play dikonfigurasi di server (modul 2.5).
+  final bool subscriptionsEnabled;
 
   factory AuthConfig.fromJson(Map<String, dynamic> j) => AuthConfig(
         privacyVersion: j['privacyVersion'] as String,
         privacyUrl: j['privacyUrl'] as String,
         googleEnabled: j['googleEnabled'] as bool? ?? false,
+        subscriptionsEnabled: j['subscriptions'] as bool? ?? false,
       );
 }
 

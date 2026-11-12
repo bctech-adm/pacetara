@@ -8,6 +8,7 @@ import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../auth/models.dart';
 import '../runs/runs_repository.dart';
+import '../subscriptions/upgrade.dart';
 import '../update/update_service.dart';
 
 class Avatar extends ConsumerWidget {
@@ -100,6 +101,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: Stack(
             children: [
               Avatar(profile: profile, radius: 48),
+              if (profile.isPremium) const Positioned(left: 0, bottom: 4, child: PremiumBadge()),
               Positioned(
                 right: 0,
                 bottom: 0,
@@ -188,6 +190,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: Text(profile.phoneVerified ? 'Nomor HP terverifikasi' : 'Nomor HP belum terverifikasi'),
         ),
         const Divider(),
+        ListTile(
+          key: const Key('subscription-tile'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.workspace_premium_outlined),
+          title: const Text('Langganan'),
+          subtitle: Text(profile.isPremium ? 'Premium aktif' : 'Gratis · lihat Premium dan Komunitas Pro'),
+          onTap: () => context.push('/subscription'),
+        ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.history),
@@ -287,7 +297,9 @@ class _DeleteAccountDialogState extends ConsumerState<DeleteAccountDialog> {
           children: [
             const Text(
               'Email, nomor HP, foto, dan profil kamu akan dihapus permanen dan tidak bisa dikembalikan. '
-              'Di chat komunitas, nama kamu akan tampil sebagai "Pengguna dihapus".',
+              'Di chat komunitas, nama kamu akan tampil sebagai "Pengguna dihapus". '
+              'Langganan Google Play yang masih berjalan dihentikan perpanjangannya (tanpa refund otomatis); '
+              'periksa juga di Google Play → Pembayaran & langganan.',
             ),
             const SizedBox(height: 16),
             TextField(

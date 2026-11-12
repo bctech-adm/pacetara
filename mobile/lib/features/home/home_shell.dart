@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth_controller.dart';
 import '../chat/chat_screens.dart';
 import '../chat/inbox.dart';
 import '../communities/screens/my_communities_screen.dart';
@@ -14,6 +15,7 @@ import '../runs/recorder.dart';
 import '../runs/screens/record_screen.dart';
 import '../runs/runs_repository.dart';
 import '../runs/screens/runs_list_screen.dart';
+import '../subscriptions/billing.dart';
 
 final homeTabProvider = NotifierProvider<_HomeTab, int>(_HomeTab.new);
 
@@ -43,6 +45,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (n > 0) {
         ref.invalidate(pendingUploadsProvider);
         ref.invalidate(myRunsProvider);
+      }
+    });
+    // Langganan (modul 2.5): pembelian yang belum sempat diverifikasi server dikirim ulang sekali per sesi.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final config = await ref.read(authConfigProvider.future);
+        if (config.subscriptionsEnabled) await ref.read(billingProvider).restore();
+      } catch (_) {
+        // Tanpa jaringan: dicoba lagi saat layar langganan dibuka.
       }
     });
     // Dibuka Health Connect untuk menjelaskan pemakaian izin (wajib menurut Health Connect): tampilkan penjelasan.

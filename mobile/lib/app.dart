@@ -25,6 +25,7 @@ import 'features/runs/screens/run_detail_screen.dart';
 import 'features/runs/screens/runs_list_screen.dart';
 import 'features/runs/screens/save_run_screen.dart';
 import 'features/safety/safety_screens.dart';
+import 'features/subscriptions/subscription_screens.dart';
 
 const _publicRoutes = {'/login', '/register', '/forgot-password'};
 
@@ -85,6 +86,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/imports', builder: (_, _) => const ImportsScreen()),
       GoRoute(path: '/imports/health-connect', builder: (_, _) => const HealthConnectImportScreen()),
       GoRoute(path: '/imports/health-connect/about', builder: (_, _) => const HealthConnectAboutScreen()),
+      GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionScreen()),
+      GoRoute(path: '/subscription/community/:id', builder: (_, state) => CommunitySubscriptionScreen(communityId: state.pathParameters['id']!)),
       GoRoute(path: '/passport', builder: (_, _) => const PassportScreen()),
       GoRoute(path: '/passport/medals/new', builder: (_, _) => const AddMedalScreen()),
       GoRoute(path: '/passport/results/new', builder: (_, _) => const AddResultScreen()),

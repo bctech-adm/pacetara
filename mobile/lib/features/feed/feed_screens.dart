@@ -15,6 +15,7 @@ import '../moderation/moderation.dart';
 import '../notifications/notifications_screens.dart';
 import '../runs/runs_repository.dart';
 import '../runs/track.dart';
+import '../subscriptions/upgrade.dart';
 import 'feed_repository.dart';
 import 'share_card.dart';
 
@@ -244,7 +245,7 @@ class _PostCardState extends ConsumerState<PostCard> {
               onTap: () => context.push('/feed/users/${p.author.id}'),
               child: UserAvatar(name: p.author.displayName, url: p.author.avatarUrl),
             ),
-            title: Text(p.author.displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: NameWithBadges(name: p.author.displayName, badges: p.author.badges, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Row(children: [
               Text(formatListTime(p.createdAt, DateTime.now())),
               const SizedBox(width: 6),
@@ -729,7 +730,7 @@ class FeedProfileScreen extends ConsumerWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.displayName, style: Theme.of(context).textTheme.titleLarge),
+                  NameWithBadges(name: p.displayName, badges: p.badges, style: Theme.of(context).textTheme.titleLarge),
                   Text('${p.followers} pengikut · ${p.following} mengikuti${p.followsMe ? ' · mengikutimu' : ''}'),
                   if (!p.isMe) ...[
                     const SizedBox(height: 8),

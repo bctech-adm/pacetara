@@ -79,7 +79,7 @@ class _RunStatsCardState extends ConsumerState<RunStatsCard> {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(err.message, textAlign: TextAlign.center),
                       if (err.code == 'limit_reached')
-                        TextButton(onPressed: () => showLimitDialog(context, err.message), child: const Text('Lihat Premium')),
+                        TextButton(onPressed: () => context.push('/subscription'), child: const Text('Lihat Premium')),
                     ]),
                   ),
                 );
@@ -287,7 +287,7 @@ class PassportScreen extends ConsumerWidget {
     );
     if (!context.mounted || choice == null) return;
     if (choice == 'medal' && !p.canAddMedal) {
-      await showLimitDialog(context, 'Rak medali paket gratis maksimal ${p.medalLimit} medali. Upgrade ke Premium untuk menambah tanpa batas');
+      await showLimitDialog(context, 'Rak medali paket gratis maksimal ${p.medalLimit} medali. Upgrade ke Premium untuk menambah tanpa batas', kind: 'medals');
       return;
     }
     final added = await context.push<bool>(choice == 'medal' ? '/passport/medals/new' : '/passport/results/new');
@@ -539,7 +539,7 @@ class _AddMedalScreenState extends ConsumerState<AddMedalScreen> {
     } catch (e) {
       if (!mounted) return;
       final err = ApiError.from(e);
-      err.code == 'limit_reached' ? await showLimitDialog(context, err.message) : showError(context, err);
+      err.code == 'limit_reached' ? await showLimitDialog(context, err.message, kind: err.limitKind) : showError(context, err);
     }
   }
 

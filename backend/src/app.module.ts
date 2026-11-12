@@ -49,6 +49,11 @@ import { ReportsService } from './moderation/reports.service.js';
 import { RunsController } from './runs/runs.controller.js';
 import { RunsService } from './runs/runs.service.js';
 import { StorageService } from './storage/storage.service.js';
+import { PubSubOidcVerifier } from './subscriptions/oidc.js';
+import { PlayApi } from './subscriptions/play-api.js';
+import { SubscriptionQueue } from './subscriptions/subscription-queue.js';
+import { AdminSubscriptionsController, PlayRtdnController, SubscriptionsController } from './subscriptions/subscriptions.controller.js';
+import { SubscriptionsService } from './subscriptions/subscriptions.service.js';
 import { UsersController } from './users/users.controller.js';
 import { UsersRepository } from './users/users.repository.js';
 import { UsersService } from './users/users.service.js';
@@ -60,7 +65,7 @@ import { UsersService } from './users/users.service.js';
     // Storage Redis untuk throttler dipasang saat API berjalan >1 replika.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController],
+  controllers: [HealthController, AuthController, UsersController, CommunitiesController, AppUpdateController, RunsController, LiveController, ChatController, ReportsController, AppealController, AdminAuthController, AdminController, EventsController, AdminEventsController, NotificationsController, InvitationsController, SafetyController, FeedController, PassportController, ImportsController, ImportWebhooksController, EventSubmissionsController, AdminEventQueueController, SubscriptionsController, PlayRtdnController, AdminSubscriptionsController],
   providers: [
     // Urutan penting: batas laju dulu, lalu autentikasi.
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
@@ -94,6 +99,10 @@ import { UsersService } from './users/users.service.js';
     ImportWriter,
     ImportQueue,
     ImportsService,
+    PlayApi,
+    PubSubOidcVerifier,
+    SubscriptionQueue,
+    SubscriptionsService,
     ReportsService,
     ModerationService,
     AdminAuthService,

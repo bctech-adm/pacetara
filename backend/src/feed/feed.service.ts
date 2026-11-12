@@ -50,7 +50,7 @@ const VISIBLE = `p.removed_at IS NULL AND a.status = 'active'
   )`;
 
 const POST_COLS = `p.id, p.user_id, p.kind, p.body_enc, p.visibility, p.run_id, p.created_at, p.created_at::text AS ts, p.held_at, p.hidden_at,
-  a.display_name, a.avatar_key, a.avatar_updated_at,
+  a.display_name, a.avatar_key, a.avatar_updated_at, a.plan AS author_plan,
   (SELECT count(*) FROM feed_likes l JOIN users lu ON lu.id = l.user_id AND lu.status = 'active' WHERE l.post_id = p.id) AS like_count,
   (SELECT count(*) FROM feed_comments c JOIN users cu ON cu.id = c.user_id AND cu.status = 'active'
      WHERE c.post_id = p.id AND c.removed_at IS NULL AND c.hidden_at IS NULL) AS comment_count,
@@ -70,6 +70,7 @@ interface PostRow {
   display_name: string;
   avatar_key: string | null;
   avatar_updated_at: Date | null;
+  author_plan?: string;
   like_count: string;
   comment_count: string;
   liked: boolean;
@@ -329,12 +330,13 @@ export class FeedService {
       avatar_key: string | null;
       avatar_updated_at: Date | null;
       verification_level: number;
+      plan: string;
       followers: string;
       following: string;
       i_follow: boolean;
       follows_me: boolean;
     }>(
-      `SELECT u.id, u.display_name, u.avatar_key, u.avatar_updated_at, u.verification_level,
+      `SELECT u.id, u.display_name, u.avatar_key, u.avatar_updated_at, u.verification_level, u.plan,
               (SELECT count(*) FROM feed_follows f JOIN users x ON x.id = f.follower_id AND x.status = 'active' WHERE f.followee_id = u.id) AS followers,
               (SELECT count(*) FROM feed_follows f JOIN users x ON x.id = f.followee_id AND x.status = 'active' WHERE f.follower_id = u.id) AS following,
               EXISTS (SELECT 1 FROM feed_follows f WHERE f.follower_id = $1 AND f.followee_id = u.id) AS i_follow,
@@ -347,7 +349,7 @@ export class FeedService {
       id: u.id,
       displayName: u.display_name,
       avatarUrl: avatarPath(u),
-      badges: u.verification_level >= 2 ? ['verified'] : [],
+      badges: [...(u.plan === 'premium' ? ['premium'] : []), ...(u.verification_level >= 2 ? ['verified'] : [])],
       isMe: viewerId === userId,
       followers: Number(u.followers),
       following: Number(u.following),
@@ -516,7 +518,8 @@ export class FeedService {
         text: r.body_enc ? this.crypto.decryptString(r.body_enc, postBodyAad(r.id)) : null,
         visibility: r.visibility,
         createdAt: r.created_at.toISOString(),
-        author: { id: r.user_id, displayName: r.display_name, avatarUrl: avatarPath({ id: r.user_id, avatar_key: r.avatar_key, avatar_updated_at: r.avatar_updated_at }) },
+        // Lencana Premium di avatar (PRD Lencana).
+        author: { id: r.user_id, displayName: r.display_name, avatarUrl: avatarPath({ id: r.user_id, avatar_key: r.avatar_key, avatar_updated_at: r.avatar_updated_at }), badges: r.author_plan === 'premium' ? ['premium'] : [] },
         isMine,
         likeCount: Number(r.like_count),
         commentCount: Number(r.comment_count),

@@ -6,7 +6,8 @@ const TAG_LEN = 16;
 
 /** Konteks blind index. Konteks berbeda menghasilkan index berbeda untuk nilai yang sama. */
 /** garmin_user / strava_athlete: id pengguna di penyedia impor (modul 2.3), untuk mencocokkan webhook. */
-export type BlindIndexContext = 'email' | 'phone' | 'nik' | 'garmin_user' | 'strava_athlete';
+/** play_account: obfuscatedExternalAccountId Google Play (modul 2.5), opaque, mengikat pembelian ke akun + komunitas. */
+export type BlindIndexContext = 'email' | 'phone' | 'nik' | 'garmin_user' | 'strava_athlete' | 'play_account';
 
 /**
  * Enkripsi kolom sensitif di level aplikasi (AES-256-GCM) dan blind index (HMAC-SHA256)
@@ -92,4 +93,5 @@ const normalizers: Record<BlindIndexContext, (v: string) => string> = {
   nik: normalizeNik,
   garmin_user: (v) => v.trim(),
   strava_athlete: (v) => v.trim(),
+  play_account: (v) => v,
 };

@@ -36,13 +36,20 @@ List<PostVisibility> allowedForRun(RunVisibility run) =>
     run == RunVisibility.public ? PostVisibility.values : const [PostVisibility.community];
 
 class FeedAuthor {
-  const FeedAuthor({required this.id, required this.displayName, required this.avatarUrl});
+  const FeedAuthor({required this.id, required this.displayName, required this.avatarUrl, this.badges = const []});
   final String id;
   final String displayName;
   final String? avatarUrl;
 
-  factory FeedAuthor.fromJson(Map<String, dynamic> j) =>
-      FeedAuthor(id: j['id'] as String, displayName: j['displayName'] as String, avatarUrl: j['avatarUrl'] as String?);
+  /// Lencana di avatar (mis. premium).
+  final List<String> badges;
+
+  factory FeedAuthor.fromJson(Map<String, dynamic> j) => FeedAuthor(
+        id: j['id'] as String,
+        displayName: j['displayName'] as String,
+        avatarUrl: j['avatarUrl'] as String?,
+        badges: (j['badges'] as List<dynamic>? ?? const []).whereType<String>().toList(),
+      );
 }
 
 /// Kartu hasil lari di feed. Rute selalu versi publik (setelah zona privasi), sudah diringkas server.
@@ -171,10 +178,12 @@ class FeedProfile {
     required this.following,
     required this.iFollow,
     required this.followsMe,
+    this.badges = const [],
   });
   final String id;
   final String displayName;
   final String? avatarUrl;
+  final List<String> badges;
   final bool isMe;
   final int followers;
   final int following;
@@ -185,6 +194,7 @@ class FeedProfile {
         id: j['id'] as String,
         displayName: j['displayName'] as String,
         avatarUrl: j['avatarUrl'] as String?,
+        badges: (j['badges'] as List<dynamic>? ?? const []).whereType<String>().toList(),
         isMe: j['isMe'] as bool? ?? false,
         followers: (j['followers'] as num?)?.toInt() ?? 0,
         following: (j['following'] as num?)?.toInt() ?? 0,

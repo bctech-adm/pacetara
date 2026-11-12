@@ -9,6 +9,7 @@ import '../../chat/chat_screens.dart';
 import '../../moderation/moderation.dart';
 import '../../notifications/notifications_screens.dart';
 import '../../live/live_widgets.dart';
+import '../../subscriptions/upgrade.dart';
 import '../communities_repository.dart';
 import '../models.dart';
 import '../widgets.dart';
@@ -230,6 +231,16 @@ class _AdminPanel extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ListTile(title: Text('Admin', style: Theme.of(context).textTheme.titleMedium)),
+            // Langganan Komunitas Pro hanya bisa dibeli pemilik (diperiksa juga di server).
+            if (c.myRole == Role.owner)
+              ListTile(
+                key: const Key('community-subscription'),
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: Text(c.isPro ? 'Langganan Komunitas Pro' : 'Upgrade ke Komunitas Pro'),
+                subtitle: Text(c.isPro ? 'Lihat status dan kelola langganan' : 'Anggota hingga 30 atau tanpa batas, multi-admin, lencana Pro'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/subscription/community/${c.id}'),
+              ),
             if (pending != null && pending.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -254,7 +265,7 @@ class _AdminPanel extends ConsumerWidget {
                         final seeHistory = await _askSeeHistory(context, m.displayName, detail.newMembersSeeHistory ?? false);
                         if (seeHistory == null || !context.mounted) return;
                         if (await runCommunityAction(context, () => repo.approve(c.id, m.userId, seeHistory: seeHistory),
-                            success: '${m.displayName} bergabung')) {
+                            success: '${m.displayName} bergabung', ownedCommunityId: c.myRole == Role.owner ? c.id : null)) {
                           refreshCommunity(ref, c.id);
                         }
                       },
@@ -375,7 +386,7 @@ class _MembersSection extends ConsumerWidget {
             for (final m in list)
               ListTile(
                 leading: CommunityLogo(name: m.displayName, logoUrl: m.avatarUrl, size: 40),
-                title: Text(m.displayName + (m.userId == me ? ' (kamu)' : '')),
+                title: NameWithBadges(name: m.displayName + (m.userId == me ? ' (kamu)' : ''), badges: m.badges, proBadge: const ProBadge()),
                 onTap: m.userId == me ? null : () => openDirectChat(context, ref, m.userId),
                 subtitle: Text([roleLabel(m.role), if (m.city != null) m.city!].join(' · ')),
                 trailing: c.isStaff && m.userId != me && m.role != Role.owner
@@ -404,7 +415,7 @@ class _MembersSection extends ConsumerWidget {
 
     Future<void> act(BuildContext sheet, Future<void> Function() fn, String success) async {
       Navigator.pop(sheet);
-      if (await runCommunityAction(context, fn, success: success)) refreshCommunity(ref, c.id);
+      if (await runCommunityAction(context, fn, success: success, ownedCommunityId: isOwner ? c.id : null)) refreshCommunity(ref, c.id);
     }
 
     showModalBottomSheet<void>(

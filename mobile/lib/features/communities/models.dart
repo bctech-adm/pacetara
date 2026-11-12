@@ -106,8 +106,11 @@ class CommunityDetail {
 }
 
 class Member {
-  const Member({required this.userId, required this.displayName, required this.avatarUrl, required this.city, required this.role});
+  const Member({required this.userId, required this.displayName, required this.avatarUrl, required this.city, required this.role, this.badges = const []});
   final String userId;
+
+  /// premium (paket akun) dan pro (admin/pemilik komunitas Pro).
+  final List<String> badges;
   final String displayName;
   final String? avatarUrl;
   final String? city;
@@ -119,6 +122,7 @@ class Member {
         avatarUrl: j['avatarUrl'] as String?,
         city: j['city'] as String?,
         role: _role(j['role']) ?? Role.member,
+        badges: (j['badges'] as List<dynamic>? ?? const []).whereType<String>().toList(),
       );
 }
 

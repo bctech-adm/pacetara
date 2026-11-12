@@ -18,6 +18,7 @@ import { RunsService } from '../runs/runs.service.js';
 import { SafetyService } from '../safety/safety.service.js';
 import { processImage } from '../storage/image.js';
 import { StorageService } from '../storage/storage.service.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { avatarPath, type MyProfile, UsersRepository } from './users.repository.js';
 
 export const DELETED_USER_NAME = 'Pengguna dihapus';
@@ -50,6 +51,7 @@ export class UsersService {
     private readonly feed: FeedService,
     private readonly passport: PassportService,
     private readonly imports: ImportsService,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   async me(userId: string): Promise<MyProfile> {
@@ -118,7 +120,7 @@ export class UsersService {
       displayName: row.display_name,
       avatarUrl: avatarPath(row),
       city: row.city,
-      badges: row.verification_level >= 2 ? ['verified'] : [],
+      badges: [...(row.plan === 'premium' ? ['premium'] : []), ...(row.verification_level >= 2 ? ['verified'] : [])],
     };
   }
 
@@ -145,6 +147,7 @@ export class UsersService {
     }
 
     let importTokens: Awaited<ReturnType<ImportsService['onAccountDeletion']>> = [];
+    let playSubs: Awaited<ReturnType<SubscriptionsService['onAccountDeletion']>> = [];
     const logos = await withTx(this.pool, async (db) => {
       // Komunitas: ditolak jika masih memiliki komunitas beranggota; selain itu keluar dari semua komunitas.
       const communityLogos = await this.communities.onAccountDeletion(db, userId);
@@ -155,6 +158,9 @@ export class UsersService {
       const medalPhotos = await this.passport.onAccountDeletion(db, userId);
       // Impor (modul 2.3): koneksi Garmin/Strava (token) dan catatan impor dihapus; izin dicabut setelah commit.
       importTokens = await this.imports.onAccountDeletion(db, userId);
+      // Langganan (modul 2.5): catatan akuntansi tetap tanpa tautan ke akun; pemberian manual dihapus. Perpanjangan
+      // otomatis di Google Play dihentikan setelah commit.
+      playSubs = await this.subscriptions.onAccountDeletion(db, userId);
       // Lari, rute, dan foto lari adalah data pribadi: dihapus seluruhnya (termasuk lari hasil impor).
       const runPhotos = await this.runs.onAccountDeletion(db, userId);
       // Chat: pesan di chat pribadi dihapus; di chat komunitas nama menjadi "Pengguna dihapus".
@@ -185,6 +191,7 @@ export class UsersService {
     });
     // Cabut izin di Garmin/Strava (best effort; token sudah terhapus dari database).
     await this.imports.revokeAll(importTokens).catch(() => this.logger.warn('Gagal mencabut izin impor akun terhapus'));
+    await this.subscriptions.cancelAll(playSubs).catch(() => this.logger.warn('Gagal menghentikan langganan akun terhapus'));
     // Status lari langsung (Redis) ikut dihapus.
     await this.live.onAccountDeletion(userId).catch(() => this.logger.warn('Gagal menghapus status lari akun terhapus'));
     for (const key of logos) await this.storage.delete(key).catch(() => undefined);

@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { type AuthUser, CurrentUser, Public, ZodPipe } from '../common/http.js';
 import { ENV, type Env } from '../config/env.js';
+import { playEnabled } from '../subscriptions/config.js';
 import { garminEnabled, stravaEnabled } from '../imports/config.js';
 import { normalizePhoneId } from '../crypto/field-crypto.js';
 import { AuthService } from './auth.service.js';
@@ -77,6 +78,8 @@ export class AuthController {
       emailEnabled: this.mailer.enabled,
       // Modul 2.3: aplikasi menyembunyikan tombol penyedia yang belum dikonfigurasi.
       imports: { garmin: garminEnabled(this.env), strava: stravaEnabled(this.env) },
+      // Modul 2.5: tanpa konfigurasi Play, aplikasi menampilkan "Langganan belum tersedia".
+      subscriptions: playEnabled(this.env),
     };
   }
 

@@ -85,11 +85,14 @@ class _RunsListScreenState extends ConsumerState<RunsListScreen> {
                 if (h.hiddenOlder > 0)
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      '${h.hiddenOlder} lari lebih lama dari ${h.historyDays} hari disembunyikan pada paket gratis. '
-                      'Datanya tetap tersimpan; upgrade ke Premium untuk melihat semua.',
-                      textAlign: TextAlign.center,
-                    ),
+                    child: Column(children: [
+                      Text(
+                        '${h.hiddenOlder} lari lebih lama dari ${h.historyDays} hari disembunyikan pada paket gratis. '
+                        'Datanya tetap tersimpan; upgrade ke Premium untuk melihat semua.',
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton(onPressed: () => context.push('/subscription'), child: const Text('Lihat Premium')),
+                    ]),
                   ),
               ],
             ),

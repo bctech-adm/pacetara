@@ -91,6 +91,24 @@ export const envSchema = z.object({
   /** Jeda minimal antar permintaan ke host yang sama (ms); Crawl-delay robots.txt yang lebih besar menang. */
   EVENT_SCRAPE_DELAY_MS: z.coerce.number().int().min(1000).max(60_000).default(5000),
 
+  /**
+   * Langganan Google Play (modul 2.5). Aktif hanya jika nama paket + akun layanan diisi (pola #117); tanpa itu
+   * endpoint langganan menjawab 503 not_configured dan aplikasi menampilkan "Langganan belum tersedia".
+   */
+  GOOGLE_PLAY_PACKAGE_NAME: z.union([z.literal(''), z.string().regex(/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/, 'Nama paket Android tidak valid')]).default(''),
+  /** Akun layanan Google Cloud (JSON di-base64) yang diberi izin di Play Console (lihat README). */
+  PLAY_SERVICE_ACCOUNT_B64: z.string().default(''),
+  /** Product ID langganan di Play Console. Harga diatur di Play Console, tidak di kode. */
+  PLAY_PRODUCT_PREMIUM: z.string().regex(/^[a-z0-9][a-z0-9._]{0,98}$/).default('pacetara_premium'),
+  PLAY_PRODUCT_PRO: z.string().regex(/^[a-z0-9][a-z0-9._]{0,98}$/).default('pacetara_community_pro'),
+  PLAY_PRODUCT_PRO_UNLIMITED: z.string().regex(/^[a-z0-9][a-z0-9._]{0,98}$/).default('pacetara_community_pro_unlimited'),
+  /**
+   * Real-time Developer Notifications lewat Pub/Sub push. Token OIDC dari Pub/Sub wajib ber-`aud` ini dan
+   * ber-`email` akun layanan push ini. Keduanya kosong = endpoint RTDN menjawab 503 (rekonsiliasi berkala tetap jalan).
+   */
+  PLAY_RTDN_AUDIENCE: z.string().max(500).default(''),
+  PLAY_RTDN_SERVICE_ACCOUNT_EMAIL: z.union([z.literal(''), z.string().email()]).default(''),
+
   /** Manifest APK terbaru (dibuat CI di GitHub Releases) dan awalan URL APK yang diizinkan. */
   APP_UPDATE_MANIFEST_URL: z
     .string()
@@ -111,6 +129,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const keys = [parsed.data.DATA_ENCRYPTION_KEY, parsed.data.BLIND_INDEX_KEY, parsed.data.JWT_SECRET];
   if (new Set(keys).size !== keys.length) {
     throw new Error('DATA_ENCRYPTION_KEY, BLIND_INDEX_KEY, dan JWT_SECRET harus berbeda satu sama lain');
+  }
+  const products = [parsed.data.PLAY_PRODUCT_PREMIUM, parsed.data.PLAY_PRODUCT_PRO, parsed.data.PLAY_PRODUCT_PRO_UNLIMITED];
+  if (new Set(products).size !== products.length) {
+    throw new Error('PLAY_PRODUCT_PREMIUM, PLAY_PRODUCT_PRO, dan PLAY_PRODUCT_PRO_UNLIMITED harus berbeda');
   }
   return parsed.data;
 }

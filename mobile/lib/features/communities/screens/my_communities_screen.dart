@@ -103,7 +103,7 @@ class MyCommunitiesScreen extends ConsumerWidget {
                 Navigator.pop(sheet);
                 final mine = ref.read(myCommunitiesProvider).value;
                 if (mine != null && mine.ownedFree.reached) {
-                  showLimitDialog(context, 'Akun gratis hanya bisa membuat 1 komunitas. Upgrade komunitasmu ke Pro untuk membuat komunitas lain');
+                  showLimitDialog(context, 'Akun gratis hanya bisa membuat 1 komunitas. Upgrade komunitasmu ke Pro untuk membuat komunitas lain', kind: 'owned_communities');
                   return;
                 }
                 context.push('/communities/new');

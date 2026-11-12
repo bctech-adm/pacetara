@@ -29,6 +29,8 @@ set_var S3_SECRET_KEY "$(rand_hex)"
 # Hanya dipakai jika Garmin dikonfigurasi (modul 2.3); diisi acak agar siap pakai.
 set_var GARMIN_PUSH_KEY "$(rand_hex)"
 set_var STRAVA_WEBHOOK_VERIFY_TOKEN "$(rand_hex)"
+# Langganan Google Play (modul 2.5) tidak punya rahasia acak: GOOGLE_PLAY_PACKAGE_NAME, PLAY_SERVICE_ACCOUNT_B64,
+# dan PLAY_RTDN_* diisi manual dari Play Console / Google Cloud (README). Kosong = langganan mati.
 
 if [ "${1:-}" = "--local" ]; then
   set_var API_DOMAIN api.localhost

@@ -145,8 +145,11 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-/** [envOverrides] untuk mengaktifkan fitur opsional (mis. GARMIN_*, STRAVA_*). */
-export async function createTestApp(envOverrides: Record<string, string> = {}): Promise<TestApp> {
+/**
+ * [envOverrides] untuk mengaktifkan fitur opsional (mis. GARMIN_*, STRAVA_*). [providers] mengganti provider lain
+ * (mis. klien Google Play dan verifier OIDC palsu di tes langganan).
+ */
+export async function createTestApp(envOverrides: Record<string, string> = {}, providers: { token: unknown; value: unknown }[] = []): Promise<TestApp> {
   const key = () => randomBytes(32).toString('base64');
   const env = loadEnv({
     NODE_ENV: 'test',
@@ -172,7 +175,7 @@ export async function createTestApp(envOverrides: Record<string, string> = {}): 
   const providerHttp = new FakeProviderHttp();
   const imports = new FakeImportQueue();
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ENV)
     .useValue(env)
     .overrideProvider(Mailer)
@@ -188,8 +191,9 @@ export async function createTestApp(envOverrides: Record<string, string> = {}): 
     .overrideProvider(ProviderHttp)
     .useValue(providerHttp)
     .overrideProvider(ImportQueue)
-    .useValue(imports)
-    .compile();
+    .useValue(imports);
+  for (const p of providers) builder = builder.overrideProvider(p.token).useValue(p.value);
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   configureApp(app, env);

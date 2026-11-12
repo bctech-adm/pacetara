@@ -32,6 +32,9 @@ dependencies:
   share_plus: ^13.3.1
   # Health Connect (modul 2.3). Butuh minSdk 26 dan MainActivity FlutterFragmentActivity.
   health: ^13.3.2
+  # Google Play Billing (modul 2.5). Paket resmi; status langganan tetap diputuskan server.
+  in_app_purchase: ^3.2.3
+  in_app_purchase_android: ^0.4.0
 
 dev_dependencies:
   flutter_test:
