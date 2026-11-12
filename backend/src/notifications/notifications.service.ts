@@ -82,11 +82,13 @@ export class NotificationsService implements OnModuleInit {
     try {
       const ids = [...new Set(recipients)].filter((id) => id !== n.actorId);
       if (ids.length === 0) return;
+      // Penerima yang memblokir pelaku tidak menerima apa pun darinya (chat komunitas, ajakan, pengikut, dsb.).
       const { rows } = await this.pool.query<{ id: string; push_off: boolean }>(
         `SELECT u.id, COALESCE($2 = ANY(p.disabled), false) AS push_off
            FROM users u LEFT JOIN notification_prefs p ON p.user_id = u.id
-          WHERE u.id = ANY($1::uuid[]) AND u.status = 'active'`,
-        [ids, n.category],
+          WHERE u.id = ANY($1::uuid[]) AND u.status = 'active'
+            AND ($3::uuid IS NULL OR NOT EXISTS (SELECT 1 FROM feed_blocks b WHERE b.blocker_id = u.id AND b.blocked_id = $3::uuid))`,
+        [ids, n.category, n.actorId ?? null],
       );
       if (rows.length === 0) return;
       if (n.inbox) {

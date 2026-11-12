@@ -203,6 +203,14 @@ void main() {
     expect(last.describe(showSender: false), 'halo');
     final mine = LastMessage.fromJson({'kind': 'image', 'deleted': false, 'isMine': true, 'createdAt': '2026-11-10T06:00:00Z'});
     expect(mine.describe(showSender: true), 'Kamu: Gambar');
+    // Pesan dari pengguna yang diblokir: tanpa isi.
+    final blocked = LastMessage.fromJson({'kind': 'text', 'preview': null, 'deleted': false, 'blocked': true, 'isMine': false, 'senderName': 'Budi', 'createdAt': '2026-11-10T06:00:00Z'});
+    expect(blocked.describe(showSender: true), 'Budi: Pesan dari pengguna yang kamu blokir');
+    final conv = ConversationSummary.fromJson({
+      'id': 'c1', 'kind': 'direct', 'title': 'Budi', 'unread': 0,
+      'otherUser': {'id': 'u2', 'active': true, 'blockedByMe': true},
+    });
+    expect(conv.otherUserBlockedByMe, isTrue);
 
     expect(newClientId(), matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
   });
@@ -220,6 +228,9 @@ void main() {
 
     await tester.pumpWidget(wrap(ChatMessage.fromJson({...msgJson(1), 'deleted': true, 'text': null})));
     expect(find.text('Pesan dihapus'), findsOneWidget);
+
+    await tester.pumpWidget(wrap(ChatMessage.fromJson({...msgJson(1), 'blocked': true, 'text': null})));
+    expect(find.text('Pesan dari pengguna yang kamu blokir'), findsOneWidget);
 
     await tester.pumpWidget(wrap(ChatMessage.fromJson(msgJson(2, kind: 'image', extra: {'imageExpired': true}))));
     expect(find.text('Gambar sudah kedaluwarsa'), findsOneWidget);

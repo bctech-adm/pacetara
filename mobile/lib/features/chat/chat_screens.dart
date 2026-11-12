@@ -14,6 +14,7 @@ import '../../core/widgets/common.dart';
 import '../auth/auth_controller.dart';
 import '../communities/widgets.dart';
 import '../events/events_repository.dart';
+import '../feed/feed_repository.dart';
 import '../moderation/moderation.dart';
 import 'chat_repository.dart';
 import 'chat_room.dart';
@@ -240,12 +241,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _messageActions(ChatMessage m) async {
     if (m.isPending || m.deleted) return;
     if (!m.isMine) {
-      // Pesan orang lain: laporkan.
-      await showReportSheet(context, ref, target: ReportTarget.message, targetId: m.id, title: 'Laporkan pesan ${m.senderName}');
+      // Pesan orang lain: laporkan pesan atau blokir pengirimnya.
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Laporkan pesan'), onTap: () => Navigator.pop(context, 'report')),
+            if (!m.blocked)
+              ListTile(leading: const Icon(Icons.block), title: Text('Blokir ${m.senderName}'), onTap: () => Navigator.pop(context, 'block')),
+          ]),
+        ),
+      );
+      if (!mounted) return;
+      if (action == 'report') {
+        await showReportSheet(context, ref, target: ReportTarget.message, targetId: m.id, title: 'Laporkan pesan ${m.senderName}');
+      } else if (action == 'block') {
+        await _setBlock(m.senderId, m.senderName, block: true);
+      }
       return;
     }
     final ok = await confirm(context, title: 'Hapus pesan?', message: 'Pesan dihapus untuk semua orang di percakapan ini.', action: 'Hapus', destructive: true);
     if (ok && mounted) await _guard(() => _room.delete(m));
+  }
+
+  /// Blokir berlaku untuk seluruh aplikasi (feed, cari teman, chat): chat pribadi tertutup ke dua arah,
+  /// pesannya di chat komunitas dilipat, dan tidak ada notifikasi darinya.
+  Future<void> _setBlock(String userId, String name, {required bool block}) async {
+    final ok = await confirm(
+      context,
+      title: block ? 'Blokir $name?' : 'Buka blokir $name?',
+      message: block
+          ? 'Kalian tidak bisa saling mengirim pesan pribadi, pesannya di chat komunitas disembunyikan untukmu, dan kamu tidak menerima notifikasi darinya. Ia tidak diberi tahu.'
+          : 'Kalian bisa saling mengirim pesan lagi.',
+      action: block ? 'Blokir' : 'Buka blokir',
+      destructive: block,
+    );
+    if (!ok || !mounted) return;
+    await _guard(() async {
+      await ref.read(feedRepositoryProvider).setBlock(userId, block: block);
+      ref.invalidate(conversationProvider(widget.convId));
+      ref.invalidate(inboxProvider);
+      ref.invalidate(chatRoomProvider(widget.convId));
+    });
   }
 
   @override
@@ -264,8 +301,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           if (conv != null && conv.kind == ConversationKind.direct && conv.otherUserId != null && conv.otherUserActive)
             PopupMenuButton<String>(
-              onSelected: (_) => showReportSheet(context, ref, target: ReportTarget.user, targetId: conv.otherUserId!, title: 'Laporkan ${conv.title}'),
-              itemBuilder: (_) => const [PopupMenuItem(value: 'report', child: Text('Laporkan pengguna'))],
+              onSelected: (v) => v == 'report'
+                  ? showReportSheet(context, ref, target: ReportTarget.user, targetId: conv.otherUserId!, title: 'Laporkan ${conv.title}')
+                  : _setBlock(conv.otherUserId!, conv.title, block: v == 'block'),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'report', child: Text('Laporkan pengguna')),
+                conv.otherUserBlockedByMe
+                    ? const PopupMenuItem(value: 'unblock', child: Text('Buka blokir'))
+                    : const PopupMenuItem(value: 'block', child: Text('Blokir pengguna')),
+              ],
             ),
         ],
       ),
@@ -303,6 +347,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         if (conv != null && conv.kind == ConversationKind.direct && !conv.otherUserActive)
           const Padding(padding: EdgeInsets.all(12), child: Text('Akun ini sudah dihapus. Kamu tidak bisa membalas.'))
+        else if (conv != null && conv.kind == ConversationKind.direct && conv.otherUserBlockedByMe)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              const Expanded(child: Text('Kamu memblokir pengguna ini.')),
+              TextButton(onPressed: () => _setBlock(conv.otherUserId!, conv.title, block: false), child: const Text('Buka blokir')),
+            ]),
+          )
         else
           SafeArea(
             top: false,
@@ -361,6 +413,8 @@ class MessageBubble extends StatelessWidget {
     final muted = TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7));
     if (m.deleted) {
       content = Text(m.removedByAdmin ? 'Pesan diturunkan karena melanggar aturan' : 'Pesan dihapus', style: muted);
+    } else if (m.blocked) {
+      content = Text('Pesan dari pengguna yang kamu blokir', style: muted);
     } else if (m.hidden) {
       content = Text('Pesan disembunyikan sambil ditinjau', style: muted);
     } else {

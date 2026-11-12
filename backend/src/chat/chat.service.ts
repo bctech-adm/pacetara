@@ -343,8 +343,16 @@ export class ChatService implements OnModuleInit {
    * Riwayat lama tetap bisa dibaca walau sudah tidak satu komunitas, tetapi tidak bisa mengirim lagi.
    */
   private async assertCanDirect(userId: string, otherId: string) {
-    const { rows } = await this.pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [otherId]);
+    const { rows } = await this.pool.query<{ status: string; blocked: boolean }>(
+      `SELECT status, EXISTS (SELECT 1 FROM feed_blocks b
+                               WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2)) AS blocked
+         FROM users u WHERE u.id = $1`,
+      [otherId, userId],
+    );
     if (rows[0]?.status !== 'active') throw new ApiError(404, 'user_not_found', 'Pengguna tidak ditemukan');
+    // Blokir (ke arah mana pun) menutup chat pribadi: tidak bisa memulai atau mengirim. Riwayat tetap bisa dibaca.
+    // Pesannya sama untuk kedua arah agar yang diblokir tidak diberi tahu secara eksplisit.
+    if (rows[0].blocked) throw new ApiError(403, 'cannot_message', 'Pesan tidak bisa dikirim ke pengguna ini');
     // Modul 2.6: sapa Cari teman lari yang sudah DITERIMA juga membuka chat pribadi (tanpa blokir feed).
     // Modul 3.2: pembeli yang menekan "Hubungi penjual" pada listing (dan penjual itu) juga boleh chat pribadi.
     if (
@@ -490,6 +498,19 @@ export class ChatService implements OnModuleInit {
       if (r.kind === 'event' && !r.deleted_at) shared.set(r.id, JSON.parse(this.decrypt(r)) as SharedEvent);
     }
     const cards = await this.events.cards([...new Set([...shared.values()].map((e) => e.eventId))]);
+    // Di chat komunitas, pesan dari pengguna yang saya blokir tidak ditampilkan isinya (chat pribadi tetap terbaca
+    // sebagai bukti, tetapi tidak bisa dikirimi lagi).
+    const blockedIds = new Set<string>();
+    const others = rows.filter((r) => r.sender_id !== viewerId).map((r) => r.id);
+    if (others.length) {
+      const { rows: bl } = await this.pool.query<{ id: string }>(
+        `SELECT m.id FROM chat_messages m JOIN conversations c ON c.id = m.conversation_id AND c.kind = 'community'
+           JOIN feed_blocks b ON b.blocker_id = $1 AND b.blocked_id = m.sender_id
+          WHERE m.id = ANY($2::uuid[])`,
+        [viewerId, others],
+      );
+      for (const b of bl) blockedIds.add(b.id);
+    }
     return rows.map((r) => {
       const base = {
         id: r.id,
@@ -503,6 +524,7 @@ export class ChatService implements OnModuleInit {
         ...(r.removed_by_admin ? { removedByAdmin: true } : {}),
       };
       if (r.deleted_at) return base;
+      if (blockedIds.has(r.id)) return { ...base, blocked: true };
       // Disembunyikan otomatis karena banyak laporan: pengirim tetap melihat isinya, orang lain tidak.
       if (r.hidden_at && r.sender_id !== viewerId) return { ...base, hidden: true };
       switch (r.kind) {
@@ -548,6 +570,8 @@ export class ChatService implements OnModuleInit {
       other_avatar_key: string | null;
       other_avatar_updated_at: Date | null;
       other_status: string | null;
+      lm_blocked: boolean;
+      blocked_by_me: boolean;
       unread: string;
       lm_id: string | null;
       lm_kind: MessageKind | null;
@@ -563,9 +587,12 @@ export class ChatService implements OnModuleInit {
               o.avatar_updated_at AS other_avatar_updated_at, o.status AS other_status,
               (SELECT count(*) FROM chat_messages x
                 WHERE x.conversation_id = c.id AND x.seq > COALESCE(r.last_read_seq, 0) AND x.sender_id <> $1
+                  AND NOT EXISTS (SELECT 1 FROM feed_blocks xb WHERE xb.blocker_id = $1 AND xb.blocked_id = x.sender_id)
                   AND x.deleted_at IS NULL AND (mem.history_from IS NULL OR x.created_at >= mem.history_from)) AS unread,
               lm.id AS lm_id, lm.kind AS lm_kind, lm.body_enc AS lm_body, lm.deleted_at AS lm_deleted,
               (lm.hidden_at IS NOT NULL AND lm.sender_id <> $1) AS lm_hidden,
+              (c.kind = 'community' AND EXISTS (SELECT 1 FROM feed_blocks lb WHERE lb.blocker_id = $1 AND lb.blocked_id = lm.sender_id)) AS lm_blocked,
+              (c.kind = 'direct' AND EXISTS (SELECT 1 FROM feed_blocks ob WHERE ob.blocker_id = $1 AND ob.blocked_id = o.id)) AS blocked_by_me,
               lm.created_at AS lm_created, lm.sender_id AS lm_sender, lu.display_name AS lm_sender_name
          FROM conversations c
          LEFT JOIN community_members mem ON c.kind = 'community' AND mem.community_id = c.community_id AND mem.user_id = $1
@@ -585,7 +612,7 @@ export class ChatService implements OnModuleInit {
     return rows.map((r) => {
       let preview: string | null = null;
       const lmId = r.lm_id;
-      const showBody = lmId !== null && !r.lm_deleted && !r.lm_hidden;
+      const showBody = lmId !== null && !r.lm_deleted && !r.lm_hidden && !r.lm_blocked;
       if (showBody && r.lm_kind === 'text') preview = this.decrypt({ id: lmId!, body_enc: r.lm_body }).slice(0, PREVIEW_CHARS);
       if (showBody && r.lm_kind === 'run_invite') {
         preview = (JSON.parse(this.decrypt({ id: lmId!, body_enc: r.lm_body })) as RunInvite).title.slice(0, PREVIEW_CHARS);
@@ -604,7 +631,7 @@ export class ChatService implements OnModuleInit {
               ? `/v1/communities/${r.community_id}/logo?v=${r.logo_updated_at?.getTime() ?? 0}`
               : null
             : avatarPath({ id: r.other_id!, avatar_key: r.other_avatar_key, avatar_updated_at: r.other_avatar_updated_at }),
-        otherUser: r.kind === 'direct' ? { id: r.other_id!, active: r.other_status === 'active' } : null,
+        otherUser: r.kind === 'direct' ? { id: r.other_id!, active: r.other_status === 'active', blockedByMe: Boolean(r.blocked_by_me) } : null,
         unread: Number(r.unread),
         lastMessage: r.lm_id
           ? {
@@ -612,6 +639,7 @@ export class ChatService implements OnModuleInit {
               preview,
               deleted: Boolean(r.lm_deleted),
               hidden: Boolean(r.lm_hidden),
+              ...(r.lm_blocked ? { blocked: true } : {}),
               isMine: r.lm_sender === userId,
               senderName: r.lm_sender_name,
               createdAt: r.lm_created!.toISOString(),

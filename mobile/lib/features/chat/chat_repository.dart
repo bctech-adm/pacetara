@@ -15,10 +15,14 @@ class LastMessage {
     required this.senderName,
     required this.createdAt,
     this.hidden = false,
+    this.blocked = false,
   });
   final String kind;
   final String? preview;
   final bool deleted;
+
+  /// Dari pengguna yang kamu blokir (chat komunitas): isi tidak dikirim server.
+  final bool blocked;
 
   /// Disembunyikan sambil ditinjau (banyak laporan).
   final bool hidden;
@@ -31,6 +35,7 @@ class LastMessage {
         preview: j['preview'] as String?,
         deleted: j['deleted'] as bool? ?? false,
         hidden: j['hidden'] as bool? ?? false,
+        blocked: j['blocked'] as bool? ?? false,
         isMine: j['isMine'] as bool? ?? false,
         senderName: j['senderName'] as String?,
         createdAt: DateTime.parse(j['createdAt'] as String),
@@ -40,7 +45,9 @@ class LastMessage {
   String describe({required bool showSender}) {
     final body = deleted
         ? 'Pesan dihapus'
-        : hidden
+        : blocked
+            ? 'Pesan dari pengguna yang kamu blokir'
+            : hidden
             ? 'Pesan disembunyikan'
             : switch (kind) {
             'image' => 'Gambar',
@@ -64,6 +71,7 @@ class ConversationSummary {
     required this.otherUserActive,
     required this.unread,
     required this.lastMessage,
+    this.otherUserBlockedByMe = false,
   });
 
   final String id;
@@ -73,6 +81,9 @@ class ConversationSummary {
   final String? communityId;
   final String? otherUserId;
   final bool otherUserActive;
+
+  /// Chat pribadi: kamu memblokir pengguna ini (tidak bisa saling mengirim pesan sampai blokir dibuka).
+  final bool otherUserBlockedByMe;
   final int unread;
   final LastMessage? lastMessage;
 
@@ -87,6 +98,7 @@ class ConversationSummary {
       communityId: j['communityId'] as String?,
       otherUserId: other?['id'] as String?,
       otherUserActive: other?['active'] as bool? ?? true,
+      otherUserBlockedByMe: other?['blockedByMe'] as bool? ?? false,
       unread: (j['unread'] as num?)?.toInt() ?? 0,
       lastMessage: last == null ? null : LastMessage.fromJson(last),
     );
@@ -172,6 +184,7 @@ class ChatMessage {
     this.deleted = false,
     this.removedByAdmin = false,
     this.hidden = false,
+    this.blocked = false,
     this.text,
     this.imageUrl,
     this.imageExpired = false,
@@ -199,6 +212,9 @@ class ChatMessage {
 
   /// Disembunyikan otomatis sambil ditinjau (banyak laporan); pengirim tetap melihat isinya.
   final bool hidden;
+
+  /// Dari pengguna yang kamu blokir (chat komunitas): isi tidak dikirim server.
+  final bool blocked;
   final String? text;
   final String? imageUrl;
   final bool imageExpired;
@@ -228,6 +244,7 @@ class ChatMessage {
       deleted: j['deleted'] as bool? ?? false,
       removedByAdmin: j['removedByAdmin'] as bool? ?? false,
       hidden: j['hidden'] as bool? ?? false,
+      blocked: j['blocked'] as bool? ?? false,
       text: j['text'] as String?,
       imageUrl: j['imageUrl'] as String?,
       imageExpired: j['imageExpired'] as bool? ?? false,

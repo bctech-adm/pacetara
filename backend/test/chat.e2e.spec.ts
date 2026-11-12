@@ -215,6 +215,44 @@ describe.skipIf(!hasTestInfra)('Modul 1.6 Chat (e2e)', () => {
     await request(t.http).post(`/v1/chat/conversations/${dm.body.id}/read`).set(stranger.auth).send({ seq: '1' }).expect(404);
   });
 
+  it('blokir: chat pribadi tertutup ke dua arah, pesan komunitas dari yang diblokir dilipat, tanpa push darinya', async () => {
+    const a = await user('Ani');
+    const b = await user('Budi');
+    const c = await user('Citra');
+    const cid = await community(a, { members: [b, c] });
+    const dm = await request(t.http).post('/v1/chat/direct').set(a.auth).send({ userId: b.id }).expect(200);
+    await sendText(b, dm.body.id, 'Halo Ani').expect(201);
+
+    // Ani memblokir Budi: keduanya tidak bisa mengirim; riwayat tetap terbaca.
+    await request(t.http).post(`/v1/feed/users/${b.id}/block`).set(a.auth).expect(204);
+    expect((await sendText(b, dm.body.id, 'Masih bisa?').expect(403)).body.error).toBe('cannot_message');
+    expect((await sendText(a, dm.body.id, 'Tidak').expect(403)).body.error).toBe('cannot_message');
+    expect((await request(t.http).post('/v1/chat/direct').set(b.auth).send({ userId: a.id }).expect(403)).body.error).toBe('cannot_message');
+    const hist = await request(t.http).get(`/v1/chat/conversations/${dm.body.id}/messages`).set(a.auth).expect(200);
+    expect(hist.body.items[0].text).toBe('Halo Ani');
+    const list = (await request(t.http).get('/v1/chat/conversations').set(a.auth).expect(200)).body;
+    expect(list.find((x: { kind: string }) => x.kind === 'direct').otherUser).toMatchObject({ id: b.id, blockedByMe: true });
+
+    // Chat komunitas: Ani tidak melihat isi pesan Budi dan tidak mendapat push/unread darinya; Citra tetap.
+    const conv = await communityConv(a, cid);
+    await communityConv(c, cid);
+    const before = t.push.to(a.id).length;
+    const m = await sendText(b, conv, 'Pesan di grup').expect(201);
+    expect(t.push.to(a.id).length).toBe(before);
+    expect(t.push.to(c.id).some((j) => j.data?.conversationId === conv)).toBe(true);
+    const forAni = (await request(t.http).get(`/v1/chat/messages/${m.body.id}`).set(a.auth).expect(200)).body;
+    expect(forAni).toMatchObject({ blocked: true });
+    expect(forAni.text).toBeUndefined();
+    expect((await request(t.http).get(`/v1/chat/messages/${m.body.id}`).set(c.auth).expect(200)).body.text).toBe('Pesan di grup');
+    const aniConv = (await request(t.http).get('/v1/chat/conversations').set(a.auth).expect(200)).body.find((x: { id: string }) => x.id === conv);
+    expect(aniConv.unread).toBe(0);
+    expect(aniConv.lastMessage).toMatchObject({ preview: null, blocked: true });
+
+    // Buka blokir: chat pribadi terbuka lagi.
+    await request(t.http).delete(`/v1/feed/users/${b.id}/block`).set(a.auth).expect(204);
+    await sendText(b, dm.body.id, 'Damai').expect(201);
+  });
+
   it('hapus pesan sendiri; pesan yang sedang dilaporkan ditahan', async () => {
     const owner = await user();
     const member = await user();
