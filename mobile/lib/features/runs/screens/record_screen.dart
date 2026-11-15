@@ -226,7 +226,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                       // Pemilih karakter mengambang di atas peta; disembunyikan saat merekam agar tidak tersentuh.
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
-                        transitionBuilder: (c, a) => SizeTransition(sizeFactor: a, axisAlignment: -1, child: FadeTransition(opacity: a, child: c)),
+                        transitionBuilder: (c, a) => SizeTransition(sizeFactor: a, alignment: Alignment.topCenter, child: FadeTransition(opacity: a, child: c)),
                         child: idleLike
                             ? const Padding(padding: EdgeInsets.only(top: 12), child: CharacterPickerCard())
                             : const SizedBox(width: double.infinity),
