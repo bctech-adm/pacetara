@@ -243,9 +243,10 @@ class CharacterPickerCard extends ConsumerWidget {
     final current = ref.watch(runnerCharacterProvider);
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.surface.withValues(alpha: 0.95),
-      elevation: 3,
-      borderRadius: BorderRadius.circular(14),
+      color: scheme.surface.withValues(alpha: 0.96),
+      elevation: 4,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(20),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.all(4),

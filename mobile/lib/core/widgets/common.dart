@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api/api_error.dart';
+import 'motion.dart';
 
 void showError(BuildContext context, Object error) {
   final message = ApiError.from(error).message;
@@ -47,13 +48,21 @@ class _AsyncButtonState extends State<AsyncButton> {
   @override
   Widget build(BuildContext context) {
     final child = _busy
-        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+        ? SizedBox(
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(strokeWidth: 2.4, strokeCap: StrokeCap.round, color: widget.outlined ? null : Colors.white),
+          )
         : Text(widget.label);
     final onPressed = _busy || widget.onPressed == null ? null : _run;
-    final style = ButtonStyle(minimumSize: WidgetStateProperty.all(const Size.fromHeight(48)));
-    return widget.outlined
-        ? OutlinedButton(style: style, onPressed: onPressed, child: child)
-        : FilledButton(style: style, onPressed: onPressed, child: child);
+    final style = ButtonStyle(minimumSize: WidgetStateProperty.all(const Size.fromHeight(54)));
+    final animated = AnimatedSwitcher(duration: const Duration(milliseconds: 200), child: child);
+    return Pressable(
+      enabled: onPressed != null,
+      child: widget.outlined
+          ? OutlinedButton(style: style, onPressed: onPressed, child: animated)
+          : FilledButton(style: style, onPressed: onPressed, child: animated),
+    );
   }
 }
 
@@ -190,23 +199,43 @@ String? validateNewPassword(String? v) {
   return null;
 }
 
-/// Kerangka layar formulir: lebar terbatas di tablet, bisa digulir di ponsel kecil.
+/// Kerangka layar formulir: lebar terbatas di tablet, bisa digulir di ponsel kecil. Isi muncul bertahap.
 class FormPage extends StatelessWidget {
-  const FormPage({super.key, required this.title, required this.children, this.showBack = true});
+  const FormPage({super.key, required this.title, required this.children, this.showBack = true, this.subtitle});
 
   final String title;
+  final String? subtitle;
   final List<Widget> children;
   final bool showBack;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(title), automaticallyImplyLeading: showBack),
+      appBar: AppBar(automaticallyImplyLeading: showBack, toolbarHeight: showBack ? kToolbarHeight : 16),
       body: SafeArea(
+        top: false,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: ListView(padding: const EdgeInsets.all(24), children: children),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+              children: [
+                FadeSlideIn(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(title, style: theme.textTheme.headlineMedium),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 6),
+                        Text(subtitle!, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      ],
+                    ]),
+                  ),
+                ),
+                for (var i = 0; i < children.length; i++) FadeSlideIn(index: i + 1, child: children[i]),
+              ],
+            ),
           ),
         ),
       ),

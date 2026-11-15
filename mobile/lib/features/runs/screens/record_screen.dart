@@ -4,7 +4,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/motion.dart';
 import '../../auth/auth_controller.dart';
 import '../../live/live_share.dart';
 import '../../live/live_widgets.dart';
@@ -160,26 +162,14 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     final runnerAt = lastPoint != null
         ? LatLng(lastPoint.lat, lastPoint.lng)
         : (s.status == RecorderStatus.idle ? ref.watch(idlePositionProvider).value : null);
+    final active = s.status == RecorderStatus.recording || s.status == RecorderStatus.paused;
+    final idleLike = s.status == RecorderStatus.idle || s.status == RecorderStatus.finished;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(switch (s.status) {
-          RecorderStatus.recording => 'Merekam lari',
-          RecorderStatus.paused => 'Dijeda',
-          _ => 'Lari',
-        }),
-        actions: [
-          if (s.status == RecorderStatus.idle || s.status == RecorderStatus.finished)
-            IconButton(key: const Key('open-history'), tooltip: 'Riwayat lari', icon: const Icon(Icons.history), onPressed: () => context.push('/runs')),
-          // Mode aman (PRD 1.10): tersedia selama lari berlangsung.
-          if (s.status == RecorderStatus.recording || s.status == RecorderStatus.paused)
-            SosButton(locate: _sosLocation, userName: ref.watch(authControllerProvider).value?.displayName ?? 'Pengguna PaceTara'),
-        ],
-      ),
       body: Column(
         children: [
           Expanded(
-            child: Stack(children: [
+            child: Stack(clipBehavior: Clip.none, children: [
               Positioned.fill(
                 child: RouteMap(
                   segments: segments,
@@ -192,75 +182,171 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                   onLocate: _locate,
                 ),
               ),
-              // Pemilih karakter mengambang di atas peta; disembunyikan saat merekam agar tidak tersentuh.
-              if (s.status == RecorderStatus.idle || s.status == RecorderStatus.finished)
-                const Positioned(left: 12, top: 12, right: 12, child: Align(alignment: Alignment.topLeft, child: CharacterPickerCard())),
+              // Bayangan lembut di atas peta agar header terbaca di atas tile terang.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: 140,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [theme.scaffoldBackgroundColor.withValues(alpha: 0.9), theme.scaffoldBackgroundColor.withValues(alpha: 0)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Header mengambang: status, riwayat, SOS.
+              Positioned(
+                left: 16,
+                right: 12,
+                top: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Expanded(child: _StatusTitle(status: s.status)),
+                        if (idleLike)
+                          _MapCircleButton(
+                            key: const Key('open-history'),
+                            tooltip: 'Riwayat lari',
+                            icon: Icons.history_rounded,
+                            onPressed: () => context.push('/runs'),
+                          ),
+                        // Mode aman (PRD 1.10): tersedia selama lari berlangsung.
+                        if (active)
+                          SosButton(locate: _sosLocation, userName: ref.watch(authControllerProvider).value?.displayName ?? 'Pengguna PaceTara'),
+                      ]),
+                      // Pemilih karakter mengambang di atas peta; disembunyikan saat merekam agar tidak tersentuh.
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (c, a) => SizeTransition(sizeFactor: a, axisAlignment: -1, child: FadeTransition(opacity: a, child: c)),
+                        child: idleLike
+                            ? const Padding(padding: EdgeInsets.only(top: 12), child: CharacterPickerCard())
+                            : const SizedBox(width: double.infinity),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+              // "Bibir" panel: sudut membulat panel statistik yang menumpang di atas peta.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: -1,
+                height: 29,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 16, offset: const Offset(0, -6))],
+                    ),
+                    child: Align(
+                      alignment: const Alignment(0, -0.2),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(color: theme.colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ]),
           ),
           Container(
             color: theme.colorScheme.surface,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: SafeArea(
               top: false,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(children: [
-                    _Stat(label: 'Jarak (km)', value: formatDistanceKm(track?.distanceM ?? 0), big: true),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    _Stat(label: 'Durasi', value: formatDuration(s.activeSeconds)),
-                    _Stat(label: 'Pace kini', value: formatPaceS(track?.currentPaceSPerKm)),
-                    _Stat(label: 'Pace rata-rata', value: formatPaceS(track?.avgPaceSPerKm)),
-                  ]),
-                  const SizedBox(height: 8),
-                  _GpsBadge(accuracy: s.gpsAccuracy, active: s.status == RecorderStatus.recording || s.status == RecorderStatus.paused),
-                  // Status lari: mati secara bawaan, dipilih per komunitas sebelum/saat merekam.
-                  if (s.status != RecorderStatus.finished) const Padding(padding: EdgeInsets.only(top: 8), child: LiveShareChip()),
-                  const SizedBox(height: 16),
-                  switch (s.status) {
-                    RecorderStatus.idle || RecorderStatus.finished => SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-                          onPressed: s.status == RecorderStatus.finished ? () => context.push('/runs/save') : _start,
-                          icon: const Icon(Icons.play_arrow),
-                          label: Text(s.status == RecorderStatus.finished ? 'Simpan lari terakhir' : 'Mulai lari'),
-                        ),
+                  // Jarak besar ala odometer.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      RollingText(
+                        formatDistanceKm(track?.distanceM ?? 0),
+                        style: theme.textTheme.displayLarge?.copyWith(fontSize: 64, height: 1, color: theme.colorScheme.onSurface),
                       ),
-                    RecorderStatus.recording => Row(children: [
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-                            onPressed: rec.pause,
-                            icon: const Icon(Icons.pause),
-                            label: const Text('Jeda'),
+                      const SizedBox(width: 6),
+                      Text('km', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                  Text('Jarak (km)', style: theme.textTheme.labelMedium),
+                  const SizedBox(height: 14),
+                  Row(children: [
+                    _Stat(icon: Icons.timer_outlined, label: 'Durasi', value: formatDuration(s.activeSeconds)),
+                    const SizedBox(width: 8),
+                    _Stat(icon: Icons.speed_rounded, label: 'Pace kini', value: formatPaceS(track?.currentPaceSPerKm)),
+                    const SizedBox(width: 8),
+                    _Stat(icon: Icons.av_timer_rounded, label: 'Pace rata-rata', value: formatPaceS(track?.avgPaceSPerKm)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _GpsBadge(accuracy: s.gpsAccuracy, active: active),
+                      // Status lari: mati secara bawaan, dipilih per komunitas sebelum/saat merekam.
+                      if (s.status != RecorderStatus.finished) const LiveShareChip(),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 320),
+                    switchInCurve: Curves.easeOutBack,
+                    transitionBuilder: (c, a) => ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: c)),
+                    child: switch (s.status) {
+                      RecorderStatus.idle => _RoundAction(
+                          key: const ValueKey('start'),
+                          icon: Icons.play_arrow_rounded,
+                          label: 'Mulai lari',
+                          size: 84,
+                          pulse: true,
+                          onPressed: _start,
+                        ),
+                      RecorderStatus.finished => SizedBox(
+                          key: const ValueKey('save'),
+                          width: double.infinity,
+                          child: _GradientButton(
+                            icon: Icons.save_alt_rounded,
+                            label: 'Simpan lari terakhir',
+                            onPressed: () => context.push('/runs/save'),
                           ),
                         ),
-                      ]),
-                    RecorderStatus.paused => Row(children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-                            onPressed: rec.resume,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Lanjut'),
-                          ),
+                      RecorderStatus.recording => _RoundAction(
+                          key: const ValueKey('pause'),
+                          icon: Icons.pause_rounded,
+                          label: 'Jeda',
+                          size: 76,
+                          dark: true,
+                          onPressed: rec.pause,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-                            onPressed: _finish,
-                            icon: const Icon(Icons.stop),
-                            label: const Text('Selesai'),
-                          ),
+                      RecorderStatus.paused => Row(
+                          key: const ValueKey('paused'),
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _RoundAction(icon: Icons.play_arrow_rounded, label: 'Lanjut', size: 76, onPressed: rec.resume),
+                            _RoundAction(icon: Icons.stop_rounded, label: 'Selesai', size: 76, dark: true, onPressed: _finish),
+                          ],
                         ),
-                      ]),
-                  },
+                    },
+                  ),
                   if (s.status == RecorderStatus.idle) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text('Rekaman tetap berjalan saat layar mati.', style: theme.textTheme.bodySmall),
                   ],
                 ],
@@ -273,21 +359,172 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, this.big = false});
-  final String label;
-  final String value;
-  final bool big;
+/// Judul status di atas peta; saat merekam ada titik merah berkedip.
+class _StatusTitle extends StatelessWidget {
+  const _StatusTitle({required this.status});
+  final RecorderStatus status;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value, style: (big ? t.displayMedium : t.headlineSmall)?.copyWith(fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()])),
-          Text(label, style: t.labelMedium),
+    final text = switch (status) {
+      RecorderStatus.recording => 'Merekam lari',
+      RecorderStatus.paused => 'Dijeda',
+      _ => 'Lari',
+    };
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+      child: Row(key: ValueKey(text), mainAxisSize: MainAxisSize.min, children: [
+        if (status == RecorderStatus.recording) ...[
+          const PulseRings(
+            color: Color(0xFFFF1744),
+            spread: 8,
+            child: SizedBox.square(dimension: 10, child: DecoratedBox(decoration: BoxDecoration(color: Color(0xFFFF1744), shape: BoxShape.circle))),
+          ),
+          const SizedBox(width: 12),
         ],
+        Text(text, style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+class _MapCircleButton extends StatelessWidget {
+  const _MapCircleButton({super.key, required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      child: Material(
+        color: scheme.surface,
+        shape: const CircleBorder(),
+        elevation: 3,
+        shadowColor: Colors.black26,
+        child: IconButton(tooltip: tooltip, icon: Icon(icon), onPressed: onPressed),
+      ),
+    );
+  }
+}
+
+/// Tombol bulat besar (mulai, jeda, lanjut, selesai) dengan label di bawahnya.
+class _RoundAction extends StatelessWidget {
+  const _RoundAction({super.key, required this.icon, required this.label, required this.onPressed, this.size = 76, this.dark = false, this.pulse = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final double size;
+  final bool dark;
+  final bool pulse;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkTheme = theme.brightness == Brightness.dark;
+    final circle = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: dark ? null : Brand.gradient,
+        color: dark ? (isDarkTheme ? const Color(0xFF2E2F38) : const Color(0xFF1B1C22)) : null,
+        boxShadow: [
+          BoxShadow(
+            color: (dark ? Colors.black : Brand.orange).withValues(alpha: dark ? 0.25 : 0.45),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Icon(icon, color: Colors.white, size: size * 0.48),
+    );
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.9,
+        child: GestureDetector(
+          onTap: onPressed,
+          behavior: HitTestBehavior.opaque,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            pulse ? PulseRings(spread: 18, child: circle) : circle,
+            const SizedBox(height: 8),
+            Text(label, style: theme.textTheme.labelLarge),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tombol lebar bergradien.
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({required this.icon, required this.label, required this.onPressed});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: Brand.gradient,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: Brand.orange.withValues(alpha: 0.4), blurRadius: 18, offset: const Offset(0, 8))],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onPressed,
+            child: SizedBox(
+              height: 58,
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, color: Colors.white),
+                const SizedBox(width: 10),
+                Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(color: theme.colorScheme.surfaceContainer, borderRadius: BorderRadius.circular(18)),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures),
+              ),
+            ),
+            Text(label, style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
       ),
     );
   }
@@ -303,16 +540,21 @@ class _GpsBadge extends StatelessWidget {
     if (!active) return const SizedBox.shrink();
     final a = accuracy;
     final (text, color) = a == null
-        ? ('Mencari sinyal GPS…', Colors.orange)
+        ? ('Mencari sinyal GPS…', Brand.warning)
         : a <= 10
-            ? ('GPS kuat (±${a.round()} m)', Colors.green)
+            ? ('GPS kuat (±${a.round()} m)', Brand.success)
             : a <= maxAccuracyM
-                ? ('GPS sedang (±${a.round()} m)', Colors.orange)
+                ? ('GPS sedang (±${a.round()} m)', Brand.warning)
                 : ('GPS lemah (±${a.round()} m), titik diabaikan', Colors.red);
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.gps_fixed, size: 16, color: color),
-      const SizedBox(width: 6),
-      Text(text, style: Theme.of(context).textTheme.labelMedium),
-    ]);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.gps_fixed_rounded, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text(text, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
+      ]),
+    );
   }
 }

@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_error.dart';
 import '../../../core/config.dart';
+import '../../../core/widgets/brand.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/motion.dart';
 import '../../moderation/moderation.dart';
 import '../auth_controller.dart';
 import 'privacy_consent.dart';
@@ -66,54 +68,124 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final googleOn = (config?.googleEnabled ?? false) && AppConfig.googleServerClientId.isNotEmpty;
     final theme = Theme.of(context);
 
-    return FormPage(
-      title: 'Masuk',
-      showBack: false,
-      children: [
-        Icon(Icons.directions_run, size: 64, color: theme.colorScheme.primary),
-        const SizedBox(height: 8),
-        Text('PaceTara', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
-        Text('Komunitas lari Indonesia', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
-        const SizedBox(height: 32),
-        Form(
-          key: _form,
-          child: AutofillGroup(
-            child: Column(
+    final top = MediaQuery.paddingOf(context).top;
+
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // Header gradien dengan logo yang memantul masuk.
+          SizedBox(
+            height: 300 + top,
+            child: BrandBackdrop(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(28, top + 32, 28, 56),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.elasticOut,
+                    builder: (context, v, child) => Transform.scale(scale: 0.5 + 0.5 * v, alignment: Alignment.centerLeft, child: child),
+                    child: const BrandMark(size: 64, onGradient: true),
+                  ),
+                  const Spacer(),
+                  FadeSlideIn(
+                    index: 1,
+                    child: Text('PaceTara', style: theme.textTheme.displaySmall?.copyWith(color: Colors.white)),
+                  ),
+                  const SizedBox(height: 4),
+                  FadeSlideIn(
+                    index: 2,
+                    child: Text(
+                      'Komunitas lari Indonesia',
+                      style: theme.textTheme.titleMedium?.copyWith(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          // Kartu formulir menumpang di bawah header.
+          Transform.translate(
+            offset: const Offset(0, -36),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: FadeSlideIn(
+                  index: 3,
+                  offset: 40,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 32, offset: const Offset(0, 12))],
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Text('Masuk ke akunmu', style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 4),
+                      Text('Lanjutkan lari bareng teman komunitas.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 20),
+                      Form(
+                        key: _form,
+                        child: AutofillGroup(
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                controller: _email,
+                                keyboardType: TextInputType.emailAddress,
+                                autofillHints: const [AutofillHints.email],
+                                validator: validateEmail,
+                                decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.alternate_email_rounded)),
+                              ),
+                              const SizedBox(height: 14),
+                              PasswordField(
+                                controller: _password,
+                                validator: (v) => (v ?? '').isEmpty ? 'Kata sandi wajib diisi' : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(onPressed: () => context.push('/forgot-password'), child: const Text('Lupa kata sandi?')),
+                      ),
+                      AsyncButton(label: 'Masuk', onPressed: _login),
+                      if (googleOn) ...[
+                        const SizedBox(height: 16),
+                        Row(children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text('atau', style: theme.textTheme.labelMedium),
+                          ),
+                          const Expanded(child: Divider()),
+                        ]),
+                        const SizedBox(height: 16),
+                        AsyncButton(label: 'Masuk dengan Google', outlined: true, onPressed: _google),
+                      ],
+                      const SizedBox(height: 4),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          FadeSlideIn(
+            index: 5,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                TextFormField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  validator: validateEmail,
-                  decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 16),
-                PasswordField(
-                  controller: _password,
-                  validator: (v) => (v ?? '').isEmpty ? 'Kata sandi wajib diisi' : null,
-                ),
+                const Text('Belum punya akun?'),
+                TextButton(onPressed: () => context.push('/register'), child: const Text('Daftar')),
               ],
             ),
           ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(onPressed: () => context.push('/forgot-password'), child: const Text('Lupa kata sandi?')),
-        ),
-        AsyncButton(label: 'Masuk', onPressed: _login),
-        if (googleOn) ...[
-          const SizedBox(height: 12),
-          AsyncButton(label: 'Masuk dengan Google', outlined: true, onPressed: _google),
-        ],
-        const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Belum punya akun?'),
-            TextButton(onPressed: () => context.push('/register'), child: const Text('Daftar')),
-          ],
-        ),
-      ],
+          SizedBox(height: MediaQuery.paddingOf(context).bottom + 16),
+        ]),
+      ),
     );
   }
 }

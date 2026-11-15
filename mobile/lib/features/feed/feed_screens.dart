@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/http/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../ads/ads.dart';
 import '../auth/auth_controller.dart';
 import '../chat/chat_screens.dart' show formatListTime;
@@ -45,10 +47,14 @@ class FeedScreen extends StatelessWidget {
             IconButton(tooltip: 'Pengikut dan blokir', icon: const Icon(Icons.people_outline), onPressed: () => context.push('/feed/connections')),
             const NotificationBell(),
           ],
-          bottom: TabBar(tabs: [for (final t in FeedTab.values) Tab(text: feedTabText(t))]),
+          bottom: TabBar(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            tabs: [for (final t in FeedTab.values) Tab(text: feedTabText(t))],
+          ),
         ),
         floatingActionButton: FloatingActionButton.extended(
           key: const Key('new-post'),
+          heroTag: null,
           onPressed: () => context.push('/feed/new'),
           icon: const Icon(Icons.edit_outlined),
           label: const Text('Posting'),
@@ -146,7 +152,12 @@ class _PostListState extends ConsumerState<PostList> {
               return const SizedBox(height: 24);
             }
             final p = _items[i - 1];
-            final card = PostCard(key: ValueKey(p.id), post: p, onChanged: _replace, onRemoved: () => _remove(p.id));
+            // Kartu muncul bertahap; hanya halaman pertama yang diberi jeda berurutan.
+            final card = FadeSlideIn(
+              key: ValueKey(p.id),
+              index: i <= 6 ? i - 1 : 0,
+              child: PostCard(post: p, onChanged: _replace, onRemoved: () => _remove(p.id)),
+            );
             final placement = widget.adPlacement;
             if (placement == null || !AdCadence.feed.after(i - 1)) return card;
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
@@ -244,47 +255,75 @@ class _PostCardState extends ConsumerState<PostCard> {
   Widget build(BuildContext context) {
     final p = widget.post;
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: widget.inDetail ? null : () => context.push('/feed/posts/${p.id}'),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          ListTile(
-            leading: GestureDetector(
-              onTap: () => context.push('/feed/users/${p.author.id}'),
-              child: UserAvatar(name: p.author.displayName, url: p.author.avatarUrl),
-            ),
-            title: NameWithBadges(name: p.author.displayName, badges: p.author.badges, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Row(children: [
-              Text(formatListTime(p.createdAt, DateTime.now())),
-              const SizedBox(width: 6),
-              Icon(_visIcon(p.visibility), size: 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 4, 8),
+            child: Row(children: [
+              GestureDetector(
+                onTap: () => context.push('/feed/users/${p.author.id}'),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Brand.gradient),
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: scheme.surface),
+                    child: UserAvatar(name: p.author.displayName, url: p.author.avatarUrl),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  NameWithBadges(name: p.author.displayName, badges: p.author.badges, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 2),
+                  Row(children: [
+                    Text(formatListTime(p.createdAt, DateTime.now()), style: theme.textTheme.bodySmall),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Container(width: 3, height: 3, decoration: BoxDecoration(color: scheme.onSurfaceVariant, shape: BoxShape.circle)),
+                    ),
+                    Icon(_visIcon(p.visibility), size: 14, color: scheme.onSurfaceVariant),
+                  ]),
+                ]),
+              ),
+              PopupMenuButton<String>(
+                key: Key('post-menu-${p.id}'),
+                icon: const Icon(Icons.more_horiz_rounded),
+                onSelected: _menu,
+                itemBuilder: (_) => p.isMine
+                    ? const [PopupMenuItem(value: 'delete', child: Text('Hapus'))]
+                    : const [
+                        PopupMenuItem(value: 'report', child: Text('Laporkan')),
+                        PopupMenuItem(value: 'block', child: Text('Blokir pengguna')),
+                      ],
+              ),
             ]),
-            trailing: PopupMenuButton<String>(
-              key: Key('post-menu-${p.id}'),
-              onSelected: _menu,
-              itemBuilder: (_) => p.isMine
-                  ? const [PopupMenuItem(value: 'delete', child: Text('Hapus'))]
-                  : const [
-                      PopupMenuItem(value: 'report', child: Text('Laporkan')),
-                      PopupMenuItem(value: 'block', child: Text('Blokir pengguna')),
-                    ],
-            ),
           ),
           if (p.isMine && (p.underReview || p.hidden))
             Container(
-              color: theme.colorScheme.errorContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Text(
                 p.hidden ? 'Disembunyikan dari orang lain sambil ditinjau karena laporan' : 'Sedang ditinjau karena laporan',
-                style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                style: TextStyle(color: scheme.onErrorContainer),
               ),
             ),
           if (p.text != null && p.text!.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(p.text!, maxLines: widget.inDetail ? null : 8, overflow: widget.inDetail ? null : TextOverflow.ellipsis),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                p.text!,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.4),
+                maxLines: widget.inDetail ? null : 8,
+                overflow: widget.inDetail ? null : TextOverflow.ellipsis,
+              ),
             ),
           if (p.run != null) RunCardTile(run: p.run!),
           if (p.runUnavailable)
@@ -292,20 +331,36 @@ class _PostCardState extends ConsumerState<PostCard> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text('Hasil lari ini tidak tersedia lagi', style: theme.textTheme.bodySmall),
             ),
-          if (p.photoUrls.isNotEmpty) _Photos(urls: p.photoUrls),
-          Row(children: [
-            TextButton.icon(
-              key: Key('like-${p.id}'),
-              onPressed: _liking ? null : _toggleLike,
-              icon: Icon(p.likedByMe ? Icons.favorite : Icons.favorite_border, color: p.likedByMe ? theme.colorScheme.primary : null),
-              label: Text('${p.likeCount}'),
+          if (p.photoUrls.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ClipRRect(borderRadius: BorderRadius.circular(16), child: _Photos(urls: p.photoUrls)),
             ),
-            TextButton.icon(
-              onPressed: widget.inDetail ? null : () => context.push('/feed/posts/${p.id}'),
-              icon: const Icon(Icons.mode_comment_outlined),
-              label: Text('${p.commentCount}'),
-            ),
-          ]),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+            child: Row(children: [
+              TextButton.icon(
+                key: Key('like-${p.id}'),
+                onPressed: _liking ? null : _toggleLike,
+                style: TextButton.styleFrom(foregroundColor: p.likedByMe ? Brand.coral : scheme.onSurfaceVariant),
+                icon: TweenAnimationBuilder<double>(
+                  key: ValueKey(p.likedByMe),
+                  tween: Tween(begin: p.likedByMe ? 0.4 : 1, end: 1),
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.elasticOut,
+                  builder: (context, v, child) => Transform.scale(scale: v, child: child),
+                  child: Icon(p.likedByMe ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: p.likedByMe ? Brand.coral : null),
+                ),
+                label: Text('${p.likeCount}'),
+              ),
+              TextButton.icon(
+                onPressed: widget.inDetail ? null : () => context.push('/feed/posts/${p.id}'),
+                style: TextButton.styleFrom(foregroundColor: scheme.onSurfaceVariant),
+                icon: const Icon(Icons.mode_comment_outlined),
+                label: Text('${p.commentCount}'),
+              ),
+            ]),
+          ),
         ]),
       ),
     );
@@ -334,24 +389,46 @@ class RunCardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    Widget stat(String label, String value) => Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: theme.textTheme.labelSmall),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures)),
+            ),
+          ]),
+        );
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(18)),
       child: Row(children: [
-        SizedBox(
-          width: 88,
-          height: 88,
+        Container(
+          width: 92,
+          height: 92,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            gradient: Brand.gradient,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Brand.orange.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 5))],
+          ),
           child: run.route.isEmpty
-              ? Icon(Icons.directions_run, size: 40, color: theme.colorScheme.onPrimaryContainer)
-              : CustomPaint(painter: RouteSketch(run.route, theme.colorScheme.onPrimaryContainer)),
+              ? const Icon(Icons.directions_run_rounded, size: 40, color: Colors.white)
+              : CustomPaint(painter: RouteSketch(run.route, Colors.white)),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(run.title, style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text('${formatDistanceKm(run.distanceM.toDouble())} km', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-            Text('${formatDuration(run.movingTimeS)} · ${formatPaceS(run.avgPaceSPerKm?.toDouble())} /km'),
+            const SizedBox(height: 8),
+            Row(children: [
+              stat('Jarak', '${formatDistanceKm(run.distanceM.toDouble())} km'),
+              stat('Waktu', formatDuration(run.movingTimeS)),
+              stat('Pace', '${formatPaceS(run.avgPaceSPerKm?.toDouble())} /km'),
+            ]),
           ]),
         ),
       ]),

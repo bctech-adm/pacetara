@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/motion.dart';
 import '../../auth/auth_controller.dart';
 import '../../auth/models.dart';
 import '../models.dart';
@@ -37,6 +39,7 @@ class MyCommunitiesScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddSheet(context, ref),
         icon: const Icon(Icons.add),
         label: const Text('Komunitas'),
@@ -52,24 +55,29 @@ class MyCommunitiesScreen extends ConsumerWidget {
           ]),
           data: (data) {
             if (data.items.isEmpty) return _Empty(onExplore: () => context.push('/communities/explore'));
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 96),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: Text(
-                    data.joined.limit == null
-                        ? 'Bergabung di ${data.joined.used} komunitas'
-                        : 'Bergabung di ${data.joined.label()} komunitas (paket gratis)',
-                    style: Theme.of(context).textTheme.labelLarge,
+            final items = <Widget>[
+              const CommunityPlusEntry(),
+              // Banner sponsor slot beranda (modul 3.3); kosong untuk Premium atau bila tidak ada banner.
+              SponsorBanner(slot: 'home', city: profile?.city),
+              const EventsEntry(),
+              SectionHeader(
+                data.joined.limit == null
+                    ? 'Bergabung di ${data.joined.used} komunitas'
+                    : 'Bergabung di ${data.joined.label()} komunitas (paket gratis)',
+              ),
+              for (final c in data.items)
+                Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                  clipBehavior: Clip.antiAlias,
+                  child: Pressable(
+                    scale: 0.98,
+                    child: CommunityTile(community: c, onTap: () => context.push('/communities/${c.id}')),
                   ),
                 ),
-                // Banner sponsor slot beranda (modul 3.3); kosong untuk Premium atau bila tidak ada banner.
-                SponsorBanner(slot: 'home', city: profile?.city),
-                const EventsEntry(),
-                const CommunityPlusEntry(),
-                for (final c in data.items) CommunityTile(community: c, onTap: () => context.push('/communities/${c.id}')),
-              ],
+            ];
+            return ListView(
+              padding: const EdgeInsets.only(top: 4, bottom: 96),
+              children: [for (var i = 0; i < items.length; i++) FadeSlideIn(index: i, child: items[i])],
             );
           },
         ),
@@ -126,79 +134,140 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.only(top: 24, bottom: 96),
       children: [
-        const SizedBox(height: 48),
-        Icon(Icons.groups_outlined, size: 72, color: theme.colorScheme.primary),
-        const SizedBox(height: 16),
-        Text('Belum ada komunitas', textAlign: TextAlign.center, style: theme.textTheme.titleLarge),
-        const SizedBox(height: 8),
-        const Text('Cari komunitas lari di kotamu, gabung pakai kode undangan dari teman, atau buat komunitasmu sendiri.',
-            textAlign: TextAlign.center),
-        const SizedBox(height: 24),
-        FilledButton.icon(onPressed: onExplore, icon: const Icon(Icons.search), label: const Text('Jelajahi komunitas')),
-        const SizedBox(height: 24),
+        EmptyState(
+          icon: Icons.groups_rounded,
+          title: 'Belum ada komunitas',
+          message: 'Cari komunitas lari di kotamu, gabung pakai kode undangan dari teman, atau buat komunitasmu sendiri.',
+          action: FilledButton.icon(onPressed: onExplore, icon: const Icon(Icons.search), label: const Text('Jelajahi komunitas')),
+        ),
         const EventsEntry(),
       ],
     );
   }
 }
 
-/// Jalan pintas ke kalender event (PRD 1.7).
+/// Jalan pintas ke kalender event (PRD 1.7): banner bergradien.
 class EventsEntry extends StatelessWidget {
   const EventsEntry({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      color: theme.colorScheme.secondaryContainer,
-      child: ListTile(
-        key: const Key('events-entry'),
-        leading: Icon(Icons.event, color: theme.colorScheme.onSecondaryContainer),
-        title: const Text('Kalender event lari'),
-        subtitle: const Text('Temukan event dan lihat teman komunitas yang ikut'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.push('/events'),
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Pressable(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: Brand.gradientViolet,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [BoxShadow(color: Brand.violet.withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 8))],
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: const Key('events-entry'),
+              borderRadius: BorderRadius.circular(22),
+              onTap: () => context.push('/events'),
+              child: Stack(children: [
+                Positioned(
+                  right: -18,
+                  bottom: -26,
+                  child: Icon(Icons.emoji_events_rounded, size: 120, color: Colors.white.withValues(alpha: 0.13)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
+                  child: Row(children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
+                      child: const Icon(Icons.event_rounded, color: Colors.white),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Kalender event lari', style: t.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Temukan event dan lihat teman komunitas yang ikut',
+                          style: t.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                        ),
+                      ]),
+                    ),
+                    const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                  ]),
+                ),
+              ]),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Pintasan modul 2.6: cari teman lari, peta spot lari, dan liga komunitas.
+/// Pintasan modul 2.6: cari teman lari, peta spot lari, liga komunitas, dan marketplace.
 class CommunityPlusEntry extends StatelessWidget {
   const CommunityPlusEntry({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Row(children: [
-        Expanded(child: _Shortcut(key: const Key('buddies-entry'), icon: Icons.diversity_3, label: 'Cari teman', onTap: () => context.push('/buddies'))),
-        Expanded(child: _Shortcut(icon: Icons.map_outlined, label: 'Spot lari', onTap: () => context.push('/spots'))),
-        Expanded(child: _Shortcut(icon: Icons.emoji_events_outlined, label: 'Liga', onTap: () => context.push('/league'))),
-        Expanded(child: _Shortcut(key: const Key('market-entry'), icon: Icons.storefront_outlined, label: 'Marketplace', onTap: () => context.push('/market'))),
+        Expanded(
+          child: _Shortcut(
+            key: const Key('buddies-entry'),
+            icon: Icons.diversity_3_rounded,
+            gradient: Brand.gradient,
+            label: 'Cari teman',
+            onTap: () => context.push('/buddies'),
+          ),
+        ),
+        Expanded(child: _Shortcut(icon: Icons.map_rounded, gradient: Brand.gradientTeal, label: 'Spot lari', onTap: () => context.push('/spots'))),
+        Expanded(child: _Shortcut(icon: Icons.emoji_events_rounded, gradient: Brand.gradientGold, label: 'Liga', onTap: () => context.push('/league'))),
+        Expanded(
+          child: _Shortcut(
+            key: const Key('market-entry'),
+            icon: Icons.storefront_rounded,
+            gradient: Brand.gradientRose,
+            label: 'Marketplace',
+            onTap: () => context.push('/market'),
+          ),
+        ),
       ]),
     );
   }
 }
 
 class _Shortcut extends StatelessWidget {
-  const _Shortcut({super.key, required this.icon, required this.label, required this.onTap});
+  const _Shortcut({super.key, required this.icon, required this.label, required this.onTap, required this.gradient});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Gradient gradient;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => Pressable(
+        scale: 0.92,
         child: InkWell(
+          borderRadius: BorderRadius.circular(18),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(children: [Icon(icon), const SizedBox(height: 4), Text(label, style: Theme.of(context).textTheme.labelMedium)]),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Column(children: [
+              GradientIcon(icon: icon, gradient: gradient, size: 54),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ]),
           ),
         ),
       );

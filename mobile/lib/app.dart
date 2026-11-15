@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/theme/app_theme.dart';
+import 'core/widgets/brand.dart';
+import 'core/widgets/motion.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/models.dart';
 import 'features/auth/screens/forgot_password_screen.dart';
@@ -153,8 +156,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-const _brand = Color(0xFFF0590E);
-
 class PaceTaraApp extends ConsumerWidget {
   const PaceTaraApp({super.key});
 
@@ -163,30 +164,68 @@ class PaceTaraApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'PaceTara',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: _brand, useMaterial3: true),
-      darkTheme: ThemeData(colorSchemeSeed: _brand, brightness: Brightness.dark, useMaterial3: true),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       routerConfig: ref.watch(routerProvider),
     );
   }
 }
 
+/// Layar pembuka: logo muncul memantul di atas gradien merek, lalu indikator memuat.
 class _Splash extends ConsumerWidget {
   const _Splash();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider);
+    final text = Theme.of(context).textTheme;
     return Scaffold(
-      body: Center(
-        child: auth.hasError
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Tidak bisa terhubung ke server'),
-                  TextButton(onPressed: () => ref.invalidate(authControllerProvider), child: const Text('Coba lagi')),
-                ],
-              )
-            : const CircularProgressIndicator(),
+      body: BrandBackdrop(
+        child: SafeArea(
+          child: Column(children: [
+            const Spacer(flex: 3),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.elasticOut,
+              builder: (context, v, child) => Transform.scale(scale: 0.4 + 0.6 * v, child: child),
+              child: const BrandMark(size: 96, onGradient: true),
+            ),
+            const SizedBox(height: 24),
+            FadeSlideIn(
+              index: 3,
+              child: Column(children: [
+                Text('PaceTara', style: text.headlineLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('Lari bareng komunitasmu', style: text.bodyLarge?.copyWith(color: Colors.white.withValues(alpha: 0.85))),
+              ]),
+            ),
+            const Spacer(flex: 2),
+            SizedBox(
+              height: 96,
+              child: auth.hasError
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Tidak bisa terhubung ke server', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Brand.orange),
+                          onPressed: () => ref.invalidate(authControllerProvider),
+                          child: const Text('Coba lagi'),
+                        ),
+                      ],
+                    )
+                  : const Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white, strokeCap: StrokeCap.round),
+                      ),
+                    ),
+            ),
+          ]),
+        ),
       ),
     );
   }

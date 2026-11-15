@@ -68,10 +68,11 @@ class CommunityTile extends StatelessWidget {
     };
     return ListTile(
       onTap: onTap,
-      leading: CommunityLogo(name: c.name, logoUrl: c.logoUrl),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      leading: CommunityLogo(name: c.name, logoUrl: c.logoUrl, size: 52),
       title: Row(
         children: [
-          Flexible(child: Text(c.name, overflow: TextOverflow.ellipsis)),
+          Flexible(child: Text(c.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
           if (c.isPro) ...[const SizedBox(width: 6), const ProBadge()],
         ],
       ),
