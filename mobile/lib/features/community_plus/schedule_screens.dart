@@ -8,7 +8,9 @@ import 'package:mobile_scanner/mobile_scanner.dart' show MobileScanner;
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../communities/widgets.dart';
 import '../feed/feed_screens.dart' show UserAvatar;
 import 'community_plus_repository.dart';
@@ -127,9 +129,20 @@ class SessionCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         onTap: () => context.push('/sessions/${s.id}'),
-        leading: Icon(s.scheduleId == null ? Icons.event : Icons.repeat, color: s.cancelled ? theme.disabledColor : theme.colorScheme.primary),
+        leading: s.cancelled
+            ? CircleAvatar(
+                backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                child: Icon(s.scheduleId == null ? Icons.event : Icons.repeat, color: theme.disabledColor),
+              )
+            : GradientIcon(
+                icon: s.scheduleId == null ? Icons.event_rounded : Icons.repeat_rounded,
+                gradient: s.myRsvp == 'going' ? Brand.gradient : Brand.gradientViolet,
+                size: 44,
+              ),
         title: Text(s.title, style: s.cancelled ? const TextStyle(decoration: TextDecoration.lineThrough) : null),
         subtitle: Text([
           s.timeLabel,

@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../communities/widgets.dart';
 import 'community_plus_repository.dart';
 import 'models.dart';
@@ -73,19 +75,44 @@ class CashScreen extends ConsumerWidget {
           child: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
             RecordOnlyBanner(text: b.notice),
             if (!b.proActive) _ProUpsell(communityId: communityId, isOwner: isOwner, feature: 'Kas komunitas'),
-            ListTile(
-              title: const Text('Saldo'),
-              trailing: Text(rupiah(b.balance), key: const Key('cash-balance'), style: Theme.of(context).textTheme.titleLarge),
-              subtitle: Text('Masuk ${rupiah(b.totalIn)} · Keluar ${rupiah(b.totalOut)}'),
+            FadeSlideIn(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: Brand.gradientTeal,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: const Color(0xFF15A3C9).withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 8))],
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Saldo', style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(
+                    rupiah(b.balance),
+                    key: const Key('cash-balance'),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontFeatures: tabularFigures),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Masuk ${rupiah(b.totalIn)} · Keluar ${rupiah(b.totalOut)}',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+                  ),
+                ]),
+              ),
             ),
-            const Divider(),
             if (b.items.isEmpty) const Padding(padding: EdgeInsets.all(32), child: Center(child: Text('Belum ada catatan kas'))),
             for (final e in b.items)
               ListTile(
-                leading: Icon(e.kind == 'in' ? Icons.south_west : Icons.north_east, color: e.kind == 'in' ? Colors.green : Colors.red),
+                leading: CircleAvatar(
+                  backgroundColor: (e.kind == 'in' ? Brand.success : Colors.red).withValues(alpha: 0.12),
+                  child: Icon(e.kind == 'in' ? Icons.south_west_rounded : Icons.north_east_rounded, color: e.kind == 'in' ? Brand.success : Colors.red),
+                ),
                 title: Text(e.description.isEmpty ? cashCategories[e.category] ?? e.category : e.description),
                 subtitle: Text('${e.occurredOn} · ${cashCategories[e.category] ?? e.category}${e.recordedBy == null ? '' : ' · dicatat ${e.recordedBy}'}'),
-                trailing: Text('${e.kind == 'in' ? '+' : '-'}${rupiah(e.amount)}'),
+                trailing: Text(
+                  '${e.kind == 'in' ? '+' : '-'}${rupiah(e.amount)}',
+                  style: TextStyle(fontWeight: FontWeight.w800, color: e.kind == 'in' ? Brand.success : Colors.red),
+                ),
                 onLongPress: !b.canWrite
                     ? null
                     : () async {

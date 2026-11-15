@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/http/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../communities/widgets.dart';
 import '../runs/track.dart';
 import 'passport_repository.dart';
@@ -102,21 +104,36 @@ class RunStatsView extends StatelessWidget {
     final s = stats;
     final scheme = Theme.of(context).colorScheme;
     Widget stat(String label, String value) => Expanded(
-          child: Column(children: [
-            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ]),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(14)),
+            child: Column(children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures)),
+              ),
+              Text(label, style: Theme.of(context).textTheme.labelSmall),
+            ]),
+          ),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SizedBox(
-        height: 140,
-        child: CustomPaint(
-          key: const Key('stats-chart'),
-          painter: StatsBarPainter(
-            values: [for (final b in s.buckets) b.distanceM / 1000],
-            labels: [for (final b in s.buckets) bucketLabel(s.period, b.start)],
-            barColor: scheme.primary,
-            labelColor: scheme.onSurfaceVariant,
+        height: 150,
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(s.period),
+          tween: Tween(begin: reduceMotion(context) ? 1.0 : 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) => CustomPaint(
+            key: const Key('stats-chart'),
+            painter: StatsBarPainter(
+              values: [for (final b in s.buckets) b.distanceM / 1000],
+              labels: [for (final b in s.buckets) bucketLabel(s.period, b.start)],
+              barColor: scheme.primary,
+              labelColor: scheme.onSurfaceVariant,
+              progress: t,
+            ),
           ),
         ),
       ),
@@ -160,11 +177,14 @@ class RunStatsView extends StatelessWidget {
 
 /// Grafik batang sederhana (tanpa dependensi grafik).
 class StatsBarPainter extends CustomPainter {
-  StatsBarPainter({required this.values, required this.labels, required this.barColor, required this.labelColor});
+  StatsBarPainter({required this.values, required this.labels, required this.barColor, required this.labelColor, this.progress = 1});
   final List<double> values;
   final List<String> labels;
   final Color barColor;
   final Color labelColor;
+
+  /// 0..1, tinggi batang saat animasi tumbuh.
+  final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -175,18 +195,23 @@ class StatsBarPainter extends CustomPainter {
     final maxV = values.reduce((a, b) => a > b ? a : b);
     final slot = size.width / values.length;
     final barW = (slot * 0.6).clamp(2.0, 28.0);
-    final paint = Paint()..color = barColor;
+    final paint = Paint()
+      ..shader = const LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Brand.orange, Brand.amber])
+          .createShader(Rect.fromLTWH(0, topPad, size.width, chartH));
     final empty = Paint()..color = labelColor.withValues(alpha: 0.25);
     // Label tiap n batang agar tidak bertumpuk.
     final every = (values.length / 6).ceil().clamp(1, 100);
     for (var i = 0; i < values.length; i++) {
       final x = slot * i + (slot - barW) / 2;
-      final h = maxV <= 0 ? 0.0 : (values[i] / maxV) * chartH;
+      final h = maxV <= 0 ? 0.0 : (values[i] / maxV) * chartH * progress;
       final rect = values[i] <= 0
           ? Rect.fromLTWH(x, topPad + chartH - 2, barW, 2)
           : Rect.fromLTWH(x, topPad + chartH - h, barW, h);
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), values[i] <= 0 ? empty : paint);
-      if (i == values.length - 1 && values[i] > 0) {
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(rect, topLeft: Radius.circular(barW / 2.5), topRight: Radius.circular(barW / 2.5), bottomLeft: const Radius.circular(3), bottomRight: const Radius.circular(3)),
+        values[i] <= 0 ? empty : paint,
+      );
+      if (i == values.length - 1 && values[i] > 0 && progress >= 1) {
         _text(canvas, values[i].toStringAsFixed(1), Offset(x + barW / 2, topPad + chartH - h - 13), 10, barColor);
       }
       if ((values.length - 1 - i) % every == 0 && i < labels.length) {
@@ -201,7 +226,7 @@ class StatsBarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(StatsBarPainter old) => old.values != values || old.barColor != barColor;
+  bool shouldRepaint(StatsBarPainter old) => old.values != values || old.barColor != barColor || old.progress != progress;
 }
 
 // ---------- Paspor ----------
@@ -306,8 +331,12 @@ class PassportView extends ConsumerWidget {
     final earned = p.badges.where((b) => b.earned).length;
     return ListView(padding: const EdgeInsets.only(bottom: 96), children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Text('Lencana${p.isMe ? ' ($earned/${p.badges.length})' : ''}', style: text.titleMedium),
+        padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
+        child: Row(children: [
+          const GradientIcon(icon: Icons.emoji_events_rounded, gradient: Brand.gradientGold, size: 32),
+          const SizedBox(width: 10),
+          Text('Lencana${p.isMe ? ' ($earned/${p.badges.length})' : ''}', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        ]),
       ),
       if (p.streakWeeks > 0)
         Padding(
@@ -323,15 +352,19 @@ class PassportView extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.all(12),
           childAspectRatio: 0.8,
-          children: [for (final b in p.badges) _BadgeTile(badge: b)],
+          children: [for (var i = 0; i < p.badges.length; i++) FadeSlideIn(index: i, child: _BadgeTile(badge: p.badges[i]))],
         ),
       const Divider(),
       Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: Text(
-          'Rak medali${p.isMe && p.medalLimit != null ? ' (${p.medalsUsed}/${p.medalLimit})' : ''}',
-          style: text.titleMedium,
-        ),
+        padding: const EdgeInsets.fromLTRB(20, 8, 16, 4),
+        child: Row(children: [
+          const GradientIcon(icon: Icons.military_tech_rounded, gradient: Brand.gradient, size: 32),
+          const SizedBox(width: 10),
+          Text(
+            'Rak medali${p.isMe && p.medalLimit != null ? ' (${p.medalsUsed}/${p.medalLimit})' : ''}',
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ]),
       ),
       if (p.isMe && p.medalLimit != null && p.medalsUsed > p.medalLimit!)
         Padding(
@@ -352,13 +385,29 @@ class PassportView extends ConsumerWidget {
           children: [for (final m in p.medals) _MedalTile(medal: m, canDelete: p.isMe)],
         ),
       const Divider(),
-      Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 4), child: Text('Hasil resmi', style: text.titleMedium)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 16, 4),
+        child: Row(children: [
+          const GradientIcon(icon: Icons.timer_rounded, gradient: Brand.gradientViolet, size: 32),
+          const SizedBox(width: 10),
+          Text('Hasil resmi', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        ]),
+      ),
       if (p.results.isEmpty)
         Padding(padding: const EdgeInsets.all(16), child: Text(p.isMe ? 'Catat waktu resmi dari event yang kamu ikuti.' : 'Belum ada hasil.'))
       else
         for (final r in p.results)
           ListTile(
-            leading: CircleAvatar(child: Text(categoryText(r.category).split(' ').first, style: const TextStyle(fontSize: 11))),
+            leading: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(gradient: Brand.gradientViolet, borderRadius: BorderRadius.circular(14)),
+              child: Text(
+                categoryText(r.category).split(' ').first,
+                style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w800),
+              ),
+            ),
             title: Text(r.eventName),
             subtitle: Text('${_date(r.eventDate)} · ${categoryText(r.category)}${r.avgPaceSPerKm == null ? '' : ' · ${formatPaceS(r.avgPaceSPerKm!.toDouble())} /km'}'),
             trailing: Text(formatDuration(r.officialTimeS), style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -403,10 +452,16 @@ class _BadgeTile extends StatelessWidget {
           : b.description,
       triggerMode: TooltipTriggerMode.tap,
       child: Column(children: [
-        CircleAvatar(
-          radius: 26,
-          backgroundColor: b.earned ? scheme.primaryContainer : scheme.surfaceContainerHighest,
-          child: Icon(b.earned ? badgeIcon(b.group) : Icons.lock_outline, color: b.earned ? scheme.onPrimaryContainer : scheme.outline),
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: b.earned ? Brand.gradientGold : null,
+            color: b.earned ? null : scheme.surfaceContainerHigh,
+            boxShadow: b.earned ? [BoxShadow(color: Brand.amber.withValues(alpha: 0.45), blurRadius: 12, offset: const Offset(0, 4))] : null,
+          ),
+          child: Icon(b.earned ? badgeIcon(b.group) : Icons.lock_outline, color: b.earned ? Colors.white : scheme.outline),
         ),
         const SizedBox(height: 4),
         Text(
@@ -444,9 +499,9 @@ class _MedalTile extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
             child: ColoredBox(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
               child: bytes.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (_, _) => const Icon(Icons.military_tech_outlined),

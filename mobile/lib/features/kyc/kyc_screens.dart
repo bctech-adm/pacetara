@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../auth/auth_controller.dart';
 import 'kyc_repository.dart';
 
@@ -144,13 +146,16 @@ class _Info extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, size: 48, color: color),
-        const SizedBox(height: 12),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(text),
-      ]);
+  Widget build(BuildContext context) => FadeSlideIn(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Warna khusus (mis. status terverifikasi) memakai gradien hijau-teal; selebihnya gradien merek.
+          GradientIcon(icon: icon, gradient: color != null ? Brand.gradientTeal : Brand.gradient, size: 64),
+          const SizedBox(height: 16),
+          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(text, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45)),
+        ]),
+      );
 }
 
 /// Layar persetujuan terpisah sebelum unggah (PRD 3.1). Versi naskah dikirim ke server dan dicatat per percobaan.

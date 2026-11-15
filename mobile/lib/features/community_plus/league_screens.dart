@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/motion.dart';
+
 import '../../core/api/api_error.dart';
+import '../communities/widgets.dart' show ProBadge;
 import 'community_plus_repository.dart';
 import 'models.dart';
 
@@ -190,21 +194,58 @@ class CommunityPlusTiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final q = '?staff=$isStaff&owner=$isOwner';
-    Widget tile(IconData icon, String title, String subtitle, String route, {bool pro = false, Key? key}) => ListTile(
-          key: key,
-          leading: Icon(icon),
-          title: Text(title),
-          subtitle: Text(pro && !isPro ? '$subtitle · Komunitas Pro' : subtitle),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.push(route),
+    final theme = Theme.of(context);
+    // Petak fitur dua kolom dengan ikon bergradien.
+    Widget tile(IconData icon, Gradient gradient, String title, String subtitle, String route, {bool pro = false, Key? key}) => Pressable(
+          scale: 0.96,
+          child: Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: key,
+              onTap: () => context.push(route),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    GradientIcon(icon: icon, gradient: gradient, size: 40),
+                    const Spacer(),
+                    if (pro && !isPro) const ProBadge(),
+                  ]),
+                  const SizedBox(height: 12),
+                  Text(title, style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(
+                    pro && !isPro ? '$subtitle · Komunitas Pro' : subtitle,
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ]),
+              ),
+            ),
+          ),
         );
+    final tiles = [
+      tile(Icons.event_repeat_rounded, Brand.gradient, 'Jadwal lari', 'RSVP sesi lari bareng dan absensi', '/communities/$communityId/sessions$q',
+          key: const Key('tile-sessions')),
+      tile(Icons.account_balance_wallet_rounded, Brand.gradientTeal, 'Kas komunitas', 'Pencatatan pemasukan dan pengeluaran',
+          '/communities/$communityId/cash$q', pro: true),
+      tile(Icons.checkroom_rounded, Brand.gradientRose, 'Pre-order jersey', 'Catat pesanan jersey anggota', '/communities/$communityId/jersey$q', pro: true),
+      if (isStaff)
+        tile(Icons.insights_rounded, Brand.gradientViolet, 'Statistik komunitas', 'Aktivitas anggota per minggu/bulan',
+            '/communities/$communityId/stats$q', pro: true),
+      tile(Icons.emoji_events_rounded, Brand.gradientGold, 'Liga komunitas', 'Papan peringkat bulanan per kota', '/league', pro: true),
+    ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Text('Kegiatan', style: Theme.of(context).textTheme.titleMedium)),
-      tile(Icons.event_repeat, 'Jadwal lari', 'RSVP sesi lari bareng dan absensi', '/communities/$communityId/sessions$q', key: const Key('tile-sessions')),
-      tile(Icons.account_balance_wallet_outlined, 'Kas komunitas', 'Pencatatan pemasukan dan pengeluaran', '/communities/$communityId/cash$q', pro: true),
-      tile(Icons.checkroom_outlined, 'Pre-order jersey', 'Catat pesanan jersey anggota', '/communities/$communityId/jersey$q', pro: true),
-      if (isStaff) tile(Icons.insights_outlined, 'Statistik komunitas', 'Aktivitas anggota per minggu/bulan', '/communities/$communityId/stats$q', pro: true),
-      tile(Icons.emoji_events_outlined, 'Liga komunitas', 'Papan peringkat bulanan per kota', '/league', pro: true),
+      const SectionHeader('Kegiatan'),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: LayoutBuilder(builder: (context, c) {
+          final w = (c.maxWidth - 10) / 2;
+          return Wrap(spacing: 10, runSpacing: 10, children: [for (final t in tiles) SizedBox(width: w, child: t)]);
+        }),
+      ),
     ]);
   }
 }

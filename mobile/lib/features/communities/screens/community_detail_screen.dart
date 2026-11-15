@@ -13,6 +13,8 @@ import '../../community_plus/league_screens.dart';
 import '../../subscriptions/upgrade.dart';
 import '../communities_repository.dart';
 import '../models.dart';
+import '../../../core/widgets/brand.dart';
+import '../../../core/widgets/motion.dart';
 import '../widgets.dart';
 import 'community_form_screen.dart';
 
@@ -68,31 +70,69 @@ class _DetailBody extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  CommunityLogo(name: c.name, logoUrl: c.logoUrl, size: 72),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            // Kartu sampul bergradien: logo, nama, kota, jumlah anggota.
+            FadeSlideIn(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: BrandBackdrop(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+                    child: Row(
                       children: [
-                        Row(children: [
-                          Flexible(child: Text(c.name, style: theme.textTheme.titleLarge)),
-                          if (c.isPro) ...[const SizedBox(width: 8), const ProBadge()],
-                        ]),
-                        const SizedBox(height: 4),
-                        Text('${c.city} · ${visibilityLabel(c.visibility)}'),
-                        Text('${detail.memberLimit.label()} anggota', key: const Key('member-count')),
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 6))],
+                          ),
+                          child: CommunityLogo(name: c.name, logoUrl: c.logoUrl, size: 72),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Flexible(
+                                  child: Text(c.name, style: theme.textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                                ),
+                                if (c.isPro) ...[const SizedBox(width: 8), const ProBadge()],
+                              ]),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${c.city} · ${visibilityLabel(c.visibility)}',
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(999)),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                  const Icon(Icons.groups_rounded, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${detail.memberLimit.label()} anggota',
+                                    key: const Key('member-count'),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                  ),
+                                ]),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
             if (detail.description.isNotEmpty)
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(detail.description)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Text(detail.description, style: theme.textTheme.bodyLarge?.copyWith(height: 1.45)),
+              ),
             Padding(padding: const EdgeInsets.all(16), child: _PrimaryAction(detail: detail)),
             if (c.isStaff) _AdminPanel(detail: detail),
             if (isMember)

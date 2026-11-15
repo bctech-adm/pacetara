@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../auth/auth_controller.dart';
 import '../auth/screens/privacy_consent.dart';
 import '../runs/runs_repository.dart';
@@ -254,10 +256,19 @@ class _ProviderCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(icon),
+            GradientIcon(icon: icon, gradient: s.connected ? Brand.gradientTeal : Brand.gradient, size: 44),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: Theme.of(context).textTheme.titleMedium)),
-            if (s.connected) const Chip(label: Text('Terhubung')),
+            if (s.connected)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Brand.success.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(999)),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.check_circle_rounded, size: 14, color: Brand.success),
+                  SizedBox(width: 4),
+                  Text('Terhubung', style: TextStyle(color: Brand.success, fontWeight: FontWeight.w700, fontSize: 12)),
+                ]),
+              ),
           ]),
           const SizedBox(height: 8),
           Text(description),

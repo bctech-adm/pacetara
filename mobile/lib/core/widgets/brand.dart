@@ -52,7 +52,8 @@ class BrandBackdrop extends StatelessWidget {
           Positioned(right: -60, top: -40, child: _blob(200, 0.16)),
           Positioned(left: -50, bottom: -70, child: _blob(180, 0.12)),
           Positioned(right: 40, bottom: 20, child: _blob(60, 0.10)),
-          if (child != null) Positioned.fill(child: child!),
+          // Isi tidak diposisikan: tinggi kartu mengikuti isinya (atau batas tetap dari induk), lebar selalu penuh.
+          if (child != null) SizedBox(width: double.infinity, child: child),
         ]),
       ),
     );

@@ -7,7 +7,9 @@ import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import 'billing.dart';
 import 'subscriptions_repository.dart';
 import 'upgrade.dart';
@@ -137,21 +139,74 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> with _P
     final sub = s.premium;
     final isPremium = s.plan == 'premium';
     return [
-      Row(children: [
-        Text('Premium', style: text.headlineSmall),
-        const SizedBox(width: 8),
-        if (isPremium) const PremiumBadge(),
-      ]),
-      const SizedBox(height: 4),
-      Text(isPremium ? 'Paketmu: Premium' : 'Paketmu: Gratis', key: const Key('current-plan')),
-      if (sub != null) Text(subStatusText(sub), style: TextStyle(color: sub.paymentIssue ? Theme.of(context).colorScheme.error : null)),
-      if (s.premiumGrantExpiresAt != null) Text('Premium dari tim PaceTara sampai ${_date(s.premiumGrantExpiresAt!)}'),
-      const SizedBox(height: 12),
-      _ComparisonTable(headers: const ['Gratis', 'Premium'], rows: [for (final r in premiumFeatures) [r.$1, r.$2, r.$3]]),
+      // Kartu Premium bergradien ungu dengan mahkota.
+      FadeSlideIn(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          decoration: BoxDecoration(
+            gradient: Brand.gradientViolet,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [BoxShadow(color: Brand.violet.withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 10))],
+          ),
+          child: Stack(clipBehavior: Clip.none, children: [
+            Positioned(
+              right: -10,
+              top: -14,
+              child: Icon(Icons.workspace_premium_rounded, size: 96, color: Colors.white.withValues(alpha: 0.16)),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text('Premium', style: text.headlineMedium?.copyWith(color: Colors.white)),
+                const SizedBox(width: 8),
+                if (isPremium) const PremiumBadge(),
+              ]),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(999)),
+                child: Text(
+                  isPremium ? 'Paketmu: Premium' : 'Paketmu: Gratis',
+                  key: const Key('current-plan'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (sub != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subStatusText(sub),
+                  style: TextStyle(color: sub.paymentIssue ? const Color(0xFFFFD6D6) : Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+                ),
+              ],
+              if (s.premiumGrantExpiresAt != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Premium dari tim PaceTara sampai ${_date(s.premiumGrantExpiresAt!)}',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+                ),
+              ],
+            ]),
+          ]),
+        ),
+      ),
+      const SizedBox(height: 16),
+      FadeSlideIn(
+        index: 1,
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: _ComparisonTable(headers: const ['Gratis', 'Premium'], rows: [for (final r in premiumFeatures) [r.$1, r.$2, r.$3]]),
+          ),
+        ),
+      ),
       const SizedBox(height: 12),
       ..._premiumActions(s, store),
-      const SizedBox(height: 24),
-      Text('Komunitas Pro', style: text.headlineSmall),
+      const SizedBox(height: 28),
+      Row(children: [
+        const GradientIcon(icon: Icons.groups_rounded, size: 36),
+        const SizedBox(width: 10),
+        Text('Komunitas Pro', style: text.headlineSmall),
+      ]),
       const SizedBox(height: 4),
       const Text('Langganan per komunitas, dibeli oleh pemilik komunitas. Lencana Pro melekat pada komunitas.'),
       if (s.communities.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Kamu belum memiliki komunitas.')),
