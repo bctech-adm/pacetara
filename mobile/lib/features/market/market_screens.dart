@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../communities/widgets.dart';
 import '../moderation/moderation.dart';
 import 'market_repository.dart';
@@ -127,7 +129,17 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
               controller: _q,
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => _load(reset: true),
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Cari sepatu, jam, jersey…', border: OutlineInputBorder(), isDense: true),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: 'Cari sepatu, jam, jersey…',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: const BorderSide(color: Brand.orange, width: 1.5),
+                ),
+              ),
             ),
           ),
           SizedBox(
@@ -148,8 +160,14 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
             ]),
           ),
           if (_error != null) Padding(padding: const EdgeInsets.all(24), child: Text(ApiError.from(_error!).message, textAlign: TextAlign.center)),
-          if (!_loading && _error == null && _items.isEmpty) const Padding(padding: EdgeInsets.all(32), child: Text('Belum ada barang yang cocok.', textAlign: TextAlign.center)),
-          for (final l in _items) _ListingTile(l, onTap: () => context.push('/market/listings/${l.id}')),
+          if (!_loading && _error == null && _items.isEmpty)
+            const EmptyState(icon: Icons.storefront_rounded, gradient: Brand.gradientRose, title: 'Belum ada barang yang cocok.'),
+          for (var i = 0; i < _items.length; i++)
+            FadeSlideIn(
+              key: ValueKey(_items[i].id),
+              index: i <= 6 ? i : 0,
+              child: _ListingTile(_items[i], onTap: () => context.push('/market/listings/${_items[i].id}')),
+            ),
           if (_loading) const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
           if (!_loading && _next != null) TextButton(onPressed: _load, child: const Text('Muat lebih banyak')),
         ]),
@@ -165,18 +183,62 @@ class _ListingTile extends StatelessWidget {
   final bool showStatus;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-        onTap: onTap,
-        leading: SizedBox(width: 64, height: 64, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: l.photos.isEmpty ? const Icon(Icons.image_outlined) : _Photo(l.photos.first))),
-        title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Text([
-          rupiah(l.price),
-          l.city,
-          if (showStatus) l.statusLabel else l.modelLabel,
-          if (l.boosted) 'Unggulan',
-        ].join(' · ')),
-        trailing: l.sellerVerified ? const Icon(Icons.verified, size: 18) : null,
-      );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      child: Pressable(
+        scale: 0.98,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(children: [
+              SizedBox(
+                width: 84,
+                height: 84,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: l.photos.isEmpty
+                      ? ColoredBox(color: scheme.surfaceContainer, child: Icon(Icons.image_outlined, color: scheme.onSurfaceVariant))
+                      : _Photo(l.photos.first),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(child: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall)),
+                    if (l.sellerVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 18, color: Brand.success)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      rupiah(l.price),
+                      l.city,
+                      if (showStatus) l.statusLabel else l.modelLabel,
+                    ].join(' · '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  if (l.boosted)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(gradient: Brand.gradientGold, borderRadius: BorderRadius.circular(999)),
+                      child: const Text('Unggulan', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Detail listing: foto, harga, penjual, dan aksi sesuai model (hubungi, kunjungi toko, beli).

@@ -10,7 +10,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/http/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../auth/auth_controller.dart';
 import '../communities/widgets.dart';
 import '../events/events_repository.dart';
@@ -76,19 +78,22 @@ class ChatListScreen extends ConsumerWidget {
           ]),
           data: (items) => items.isEmpty
               ? ListView(children: const [
-                  SizedBox(height: 80),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Belum ada percakapan. Gabung ke komunitas untuk mengobrol dengan sesama pelari.',
-                      textAlign: TextAlign.center,
-                    ),
+                  SizedBox(height: 40),
+                  EmptyState(
+                    icon: Icons.forum_rounded,
+                    gradient: Brand.gradientViolet,
+                    title: 'Belum ada percakapan',
+                    message: 'Belum ada percakapan. Gabung ke komunitas untuk mengobrol dengan sesama pelari.',
                   ),
                 ])
-              : ListView.separated(
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-                  itemBuilder: (context, i) => _ConversationTile(conv: items[i], now: now),
+                  itemBuilder: (context, i) => FadeSlideIn(
+                    key: ValueKey(items[i].id),
+                    index: i,
+                    child: _ConversationTile(conv: items[i], now: now),
+                  ),
                 ),
         ),
       ),
@@ -106,25 +111,83 @@ class _ConversationTile extends StatelessWidget {
     final theme = Theme.of(context);
     final last = conv.lastMessage;
     final unread = conv.unread > 0;
-    return ListTile(
-      onTap: () => context.push('/chat/${conv.id}'),
-      leading: CommunityLogo(name: conv.title, logoUrl: conv.avatarUrl, size: 48),
-      title: Row(children: [
-        if (conv.kind == ConversationKind.community) ...[const Icon(Icons.groups, size: 16), const SizedBox(width: 4)],
-        Expanded(child: Text(conv.title, overflow: TextOverflow.ellipsis, style: unread ? const TextStyle(fontWeight: FontWeight.w700) : null)),
-      ]),
-      subtitle: Text(
-        last?.describe(showSender: conv.kind == ConversationKind.community) ?? 'Belum ada pesan',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: Pressable(
+        scale: 0.98,
+        child: Material(
+          color: unread ? scheme.primaryContainer.withValues(alpha: 0.45) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => context.push('/chat/${conv.id}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              child: Row(children: [
+                Stack(clipBehavior: Clip.none, children: [
+                  CommunityLogo(name: conv.title, logoUrl: conv.avatarUrl, size: 52),
+                  if (conv.kind == ConversationKind.community)
+                    Positioned(
+                      right: -4,
+                      bottom: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(color: scheme.surface, shape: BoxShape.circle),
+                        child: const GradientIcon(icon: Icons.groups_rounded, size: 18),
+                      ),
+                    ),
+                ]),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(
+                          conv.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: unread ? FontWeight.w800 : FontWeight.w700),
+                        ),
+                      ),
+                      if (last != null)
+                        Text(
+                          formatListTime(last.createdAt, now),
+                          style: theme.textTheme.labelSmall?.copyWith(color: unread ? scheme.primary : null),
+                        ),
+                    ]),
+                    const SizedBox(height: 3),
+                    Row(children: [
+                      Expanded(
+                        child: Text(
+                          last?.describe(showSender: conv.kind == ConversationKind.community) ?? 'Belum ada pesan',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: unread ? scheme.onSurface : scheme.onSurfaceVariant,
+                            fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      if (unread)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          constraints: const BoxConstraints(minWidth: 22),
+                          decoration: BoxDecoration(gradient: Brand.gradient, borderRadius: BorderRadius.circular(999)),
+                          child: Text(
+                            conv.unread > 99 ? '99+' : '${conv.unread}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+                          ),
+                        ),
+                    ]),
+                  ]),
+                ),
+              ]),
+            ),
+          ),
+        ),
       ),
-      trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        if (last != null) Text(formatListTime(last.createdAt, now), style: theme.textTheme.labelSmall),
-        if (unread) ...[
-          const SizedBox(height: 4),
-          Badge(label: Text(conv.unread > 99 ? '99+' : '${conv.unread}')),
-        ],
-      ]),
     );
   }
 }
@@ -320,7 +383,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               : state.error != null && state.messages.isEmpty
                   ? Center(child: Text(state.error!))
                   : messages.isEmpty
-                      ? const Center(child: Text('Belum ada pesan. Mulai obrolan!'))
+                      ? const Center(
+                          child: EmptyState(icon: Icons.waving_hand_rounded, gradient: Brand.gradientViolet, title: 'Belum ada pesan. Mulai obrolan!'),
+                        )
                       : ListView.builder(
                           controller: _scroll,
                           reverse: true,
@@ -356,29 +421,74 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ]),
           )
         else
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                IconButton(tooltip: 'Lampirkan', onPressed: _attachMenu, icon: const Icon(Icons.add_circle_outline)),
-                Expanded(
-                  child: TextField(
-                    key: const Key('chat-input'),
-                    controller: _text,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 2000,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(hintText: 'Tulis pesan', counterText: '', border: OutlineInputBorder(), isDense: true),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, -4))],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 8, 10, 8),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  IconButton(tooltip: 'Lampirkan', onPressed: _attachMenu, icon: const Icon(Icons.add_circle_rounded), color: Brand.orange, iconSize: 30),
+                  Expanded(
+                    child: TextField(
+                      key: const Key('chat-input'),
+                      controller: _text,
+                      minLines: 1,
+                      maxLines: 5,
+                      maxLength: 2000,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'Tulis pesan',
+                        counterText: '',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: Brand.orange, width: 1.5),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                IconButton.filled(key: const Key('chat-send'), tooltip: 'Kirim', onPressed: _sendText, icon: const Icon(Icons.send)),
-              ]),
+                  const SizedBox(width: 8),
+                  _SendButton(onPressed: _sendText),
+                ]),
+              ),
             ),
           ),
       ]),
+    );
+  }
+}
+
+/// Tombol kirim bulat bergradien yang memantul saat ditekan.
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.85,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          gradient: Brand.gradient,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Brand.orange.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: IconButton(
+          key: const Key('chat-send'),
+          tooltip: 'Kirim',
+          onPressed: onPressed,
+          icon: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+        ),
+      ),
     );
   }
 }
@@ -406,8 +516,12 @@ class MessageBubble extends StatelessWidget {
     final m = message;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final bg = m.isMine ? scheme.primaryContainer : scheme.surfaceContainerHighest;
-    final fg = m.isMine ? scheme.onPrimaryContainer : scheme.onSurface;
+    // Pesan sendiri bergradien (kecuali kartu ajakan/event dan pesan gagal, agar teks galat tetap terbaca).
+    final gradient = m.isMine && m.sendState != SendState.failed && m.kind != 'run_invite' && m.kind != 'event';
+    final bg = m.isMine ? scheme.primaryContainer : scheme.surfaceContainerHigh;
+    final fg = gradient ? Colors.white : (m.isMine ? scheme.onPrimaryContainer : scheme.onSurface);
+    const r = Radius.circular(20);
+    const tail = Radius.circular(6);
 
     final Widget content;
     final muted = TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7));
@@ -426,10 +540,30 @@ class MessageBubble extends StatelessWidget {
                 : Text('Gambar sudah kedaluwarsa', style: TextStyle(fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.7))),
         'run_invite' => RunInviteCard(invite: m.invite!, onRsvp: m.isPending ? null : onRsvp),
         'event' => m.event == null ? const SizedBox.shrink() : EventChatCard(event: m.event!),
-        _ => SelectableText(m.text ?? '', style: TextStyle(color: fg)),
+        _ => SelectableText(m.text ?? '', style: TextStyle(color: fg, fontSize: 15, height: 1.35)),
       };
     }
 
+    return FadeSlideIn(
+      offset: m.isMine ? 24 : -24,
+      axis: Axis.horizontal,
+      duration: const Duration(milliseconds: 320),
+      child: _bubble(context, m, content, bg, fg, theme, scheme, gradient, r, tail),
+    );
+  }
+
+  Widget _bubble(
+    BuildContext context,
+    ChatMessage m,
+    Widget content,
+    Color bg,
+    Color fg,
+    ThemeData theme,
+    ColorScheme scheme,
+    bool gradient,
+    Radius r,
+    Radius tail,
+  ) {
     return Align(
       alignment: m.isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -439,10 +573,24 @@ class MessageBubble extends StatelessWidget {
           onTap: m.sendState == SendState.failed ? onRetry : null,
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 3),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+            padding: const EdgeInsets.fromLTRB(14, 9, 14, 7),
+            decoration: BoxDecoration(
+              color: gradient ? null : bg,
+              gradient: gradient ? Brand.gradient : null,
+              borderRadius: BorderRadius.only(
+                topLeft: r,
+                topRight: r,
+                bottomLeft: m.isMine ? r : tail,
+                bottomRight: m.isMine ? tail : r,
+              ),
+              boxShadow: gradient ? [BoxShadow(color: Brand.orange.withValues(alpha: 0.22), blurRadius: 10, offset: const Offset(0, 4))] : null,
+            ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              if (showSender) Text(m.senderName, style: theme.textTheme.labelMedium?.copyWith(color: scheme.primary, fontWeight: FontWeight.w700)),
+              if (showSender)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(m.senderName, style: theme.textTheme.labelMedium?.copyWith(color: scheme.primary, fontWeight: FontWeight.w800)),
+                ),
               content,
               const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [

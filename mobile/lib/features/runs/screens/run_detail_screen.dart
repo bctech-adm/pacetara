@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/api/api_error.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/motion.dart';
 import '../../auth/auth_controller.dart';
 import '../../feed/feed_screens.dart';
 import '../../imports/strava_brand.dart';
@@ -136,15 +138,30 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
                 ),
             ],
           ),
-          body: ListView(children: [
-            if (route.isNotEmpty)
-              RouteMap(segments: _toLatLng(route), height: 280)
-            else
-              Container(
-                height: 120,
-                alignment: Alignment.center,
-                child: Text(run.isOwner ? 'Tidak ada rute GPS' : 'Rute disembunyikan oleh zona privasi'),
+          body: ListView(padding: const EdgeInsets.only(top: 4), children: [
+            FadeSlideIn(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: route.isNotEmpty
+                      ? RouteMap(segments: _toLatLng(route), height: 280)
+                      : Container(
+                          height: 140,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(gradient: Brand.gradient),
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.route_rounded, color: Colors.white, size: 40),
+                            const SizedBox(height: 6),
+                            Text(
+                              run.isOwner ? 'Tidak ada rute GPS' : 'Rute disembunyikan oleh zona privasi',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                            ),
+                          ]),
+                        ),
+                ),
               ),
+            ),
             if (run.isOwner && run.publicRoute != null)
               SwitchListTile(
                 value: _showPublic,
@@ -159,16 +176,28 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
                   '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} · ${visibilityText(s.visibility)}',
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
-                const SizedBox(height: 16),
-                Row(children: [
-                  _Big(label: 'Jarak', value: '${formatDistanceKm(s.distanceM.toDouble())} km'),
-                  _Big(label: 'Waktu bergerak', value: formatDuration(s.movingTimeS)),
-                  _Big(label: 'Pace', value: '${formatPaceS(s.avgPaceSPerKm?.toDouble())} /km'),
-                ]),
-                if (run.elevationGainM != null) ...[
-                  const SizedBox(height: 8),
-                  Text('Total naik ${run.elevationGainM} m'),
-                ],
+                const SizedBox(height: 14),
+                // Kartu statistik bergradien ala hasil lari.
+                FadeSlideIn(
+                  index: 1,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                    decoration: BoxDecoration(
+                      gradient: Brand.gradient,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [BoxShadow(color: Brand.orange.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _Big(label: 'Jarak', value: '${formatDistanceKm(s.distanceM.toDouble())} km', hero: true),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        _Big(label: 'Waktu bergerak', value: formatDuration(s.movingTimeS)),
+                        _Big(label: 'Pace', value: '${formatPaceS(s.avgPaceSPerKm?.toDouble())} /km'),
+                        if (run.elevationGainM != null) _Big(label: 'Total naik', value: '${run.elevationGainM} m'),
+                      ]),
+                    ]),
+                  ),
+                ),
                 if (run.notes.isNotEmpty) ...[const SizedBox(height: 16), Text(run.notes)],
                 // Data dari Strava: tautan balik ke aktivitas asli + atribusi (pedoman merek Strava).
                 if (run.source == 'strava') ...[
@@ -199,19 +228,26 @@ class _RunDetailScreenState extends ConsumerState<RunDetailScreen> {
 }
 
 class _Big extends StatelessWidget {
-  const _Big({required this.label, required this.value});
+  const _Big({required this.label, required this.value, this.hero = false});
   final String label;
   final String value;
+  final bool hero;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Expanded(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value, style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-        Text(label, style: t.labelMedium),
-      ]),
-    );
+    final col = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: t.labelMedium?.copyWith(color: Colors.white.withValues(alpha: 0.85))),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          value,
+          style: (hero ? t.displaySmall : t.titleLarge)?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontFeatures: tabularFigures),
+        ),
+      ),
+    ]);
+    return hero ? col : Expanded(child: col);
   }
 }
 

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/widgets/motion.dart';
 import '../../passport/passport_repository.dart';
 import '../../passport/passport_screens.dart';
 import '../runs_repository.dart';
@@ -77,11 +79,8 @@ class _RunsListScreenState extends ConsumerState<RunsListScreen> {
               ],
               data: (h) => [
                 if (h.items.isEmpty && pending.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(48),
-                    child: Text('Belum ada lari. Mulai dari tab Lari.', textAlign: TextAlign.center),
-                  ),
-                for (final r in h.items) _RunTile(run: r),
+                  const EmptyState(icon: Icons.directions_run_rounded, title: 'Belum ada lari', message: 'Belum ada lari. Mulai dari tab Lari.'),
+                for (var i = 0; i < h.items.length; i++) FadeSlideIn(key: ValueKey(h.items[i].id), index: i, child: _RunTile(run: h.items[i])),
                 if (h.hiddenOlder > 0)
                   Padding(
                     padding: const EdgeInsets.all(16),
@@ -111,18 +110,37 @@ class _RunTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = run.startedAt;
     final date = '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-    return ListTile(
-      onTap: () => context.push('/runs/${run.id}'),
-      leading: const CircleAvatar(child: Icon(Icons.directions_run)),
-      title: Text(run.title),
-      subtitle: Text('$date · ${visibilityText(run.visibility)}'),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text('${formatDistanceKm(run.distanceM.toDouble())} km', style: const TextStyle(fontWeight: FontWeight.w700)),
-          Text('${formatPaceS(run.avgPaceSPerKm?.toDouble())} /km'),
-        ],
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      child: Pressable(
+        scale: 0.98,
+        child: InkWell(
+          onTap: () => context.push('/runs/${run.id}'),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              const GradientIcon(icon: Icons.directions_run_rounded, size: 48),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(run.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  Text('$date · ${visibilityText(run.visibility)}', style: theme.textTheme.bodySmall),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(
+                  '${formatDistanceKm(run.distanceM.toDouble())} km',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures),
+                ),
+                Text('${formatPaceS(run.avgPaceSPerKm?.toDouble())} /km', style: theme.textTheme.labelMedium),
+              ]),
+            ]),
+          ),
+        ),
       ),
     );
   }

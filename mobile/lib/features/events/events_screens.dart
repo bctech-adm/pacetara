@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/motion.dart';
 import '../ads/ads.dart';
 import '../chat/chat_repository.dart';
 import '../chat/chat_room.dart';
@@ -188,15 +190,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                         }
                         final e = _items[i];
                         final showMonth = i == 0 || _items[i - 1].date.substring(0, 7) != e.date.substring(0, 7);
-                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        return FadeSlideIn(
+                          key: ValueKey(e.id),
+                          index: i <= 6 ? i : 0,
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           if (showMonth)
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              child: Text(monthLabel(e.date.substring(0, 7)), style: Theme.of(context).textTheme.titleSmall),
+                              padding: const EdgeInsets.fromLTRB(20, 16, 16, 6),
+                              child: Text(
+                                monthLabel(e.date.substring(0, 7)),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                              ),
                             ),
                           EventTile(event: e, onTap: () => _open(e)),
                           if (AdCadence.events.after(i)) AdSlot(key: ValueKey('ad-$i'), placement: AdPlacement.events),
-                        ]);
+                        ]),
+                        );
                       },
                     ),
             ),
@@ -244,23 +253,65 @@ class EventTile extends StatelessWidget {
       if (event.iAmGoing) 'Kamu ikut',
       if (event.friendsGoing > 0) '${event.friendsGoing} anggota komunitasmu ikut',
     ].join(' · ');
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 48,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(10)),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${d.day}', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.w700)),
-          Text(formatEventDate(event.date, null).split(' ')[2], style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onPrimaryContainer)),
-        ]),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      child: Pressable(
+        scale: 0.98,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Container(
+                width: 58,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: event.iAmGoing ? Brand.gradient : Brand.gradientViolet,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('${d.day}', style: theme.textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, height: 1.1)),
+                  Text(
+                    formatEventDate(event.date, null).split(' ')[2].toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w800),
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(event.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Icon(Icons.place_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 3),
+                    Expanded(
+                      child: Text(
+                        '${event.city} · ${categoryLabels(event.categories)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ]),
+                  if (social.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(999)),
+                      child: Text(
+                        social,
+                        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                ]),
+              ),
+              Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurfaceVariant),
+            ]),
+          ),
+        ),
       ),
-      title: Text(event.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${event.city} · ${categoryLabels(event.categories)}', maxLines: 1, overflow: TextOverflow.ellipsis),
-        if (social.isNotEmpty) Text(social, style: TextStyle(color: theme.colorScheme.primary)),
-      ]),
-      isThreeLine: social.isNotEmpty,
     );
   }
 }
@@ -351,11 +402,23 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
           color: theme.colorScheme.surfaceContainerHighest,
           child: const ListTile(leading: Icon(Icons.history), title: Text('Event ini sudah lewat dan diarsipkan')),
         ),
-      Text(e.name, style: theme.textTheme.headlineSmall),
+      FadeSlideIn(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+          decoration: BoxDecoration(
+            gradient: Brand.gradientViolet,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [BoxShadow(color: Brand.violet.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(e.name, style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            _InfoRow(icon: Icons.event_rounded, text: formatEventDate(e.date, e.startTime), color: Colors.white),
+            _InfoRow(icon: Icons.place_rounded, text: e.venue.isEmpty ? e.city : '${e.venue}, ${e.city}', color: Colors.white),
+          ]),
+        ),
+      ),
       const SizedBox(height: 12),
-      _InfoRow(icon: Icons.event, text: formatEventDate(e.date, e.startTime)),
-      _InfoRow(icon: Icons.place_outlined, text: e.venue.isEmpty ? e.city : '${e.venue}, ${e.city}'),
-      const SizedBox(height: 8),
       Wrap(spacing: 6, runSpacing: 6, children: [for (final c in e.categories) Chip(label: Text(eventCategories[c] ?? c), visualDensity: VisualDensity.compact)]),
       // Banner sponsor slot detail event (modul 3.3): hanya banner yang tertaut ke event ini.
       SponsorBanner(slot: 'event_detail', city: e.city, eventId: e.id, padding: const EdgeInsets.only(top: 12)),
@@ -384,7 +447,7 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
         ]),
       ),
       const Divider(height: 32),
-      Text('Siapa ikut?', style: theme.textTheme.titleMedium),
+      Text('Siapa ikut?', style: theme.textTheme.titleLarge),
       const SizedBox(height: 4),
       Text(e.goingCount == 0 ? 'Belum ada pelari yang menandai ikut' : '${e.goingCount} pelari menandai ikut'),
       const SizedBox(height: 8),
@@ -432,14 +495,19 @@ class _EventDetailViewState extends ConsumerState<EventDetailView> {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text});
+  const _InfoRow({required this.icon, required this.text, this.color});
   final IconData icon;
   final String text;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 8), Expanded(child: Text(text))]),
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          Icon(icon, size: 18, color: color?.withValues(alpha: 0.9)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
+        ]),
       );
 }
 
