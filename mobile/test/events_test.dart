@@ -132,11 +132,13 @@ void main() {
     expect(find.text('Bandung Marathon'), findsOneWidget);
     expect(find.text('Sen, 14 Des 2026 · 05:00'), findsOneWidget);
     expect(find.text('3 pelari menandai ikut'), findsOneWidget);
-    expect(find.text('Teman'), findsOneWidget);
     expect(find.text('Daftar di contoh-lari.id'), findsOneWidget);
     // PRD 2.4: sumber dan tautan resmi selalu tampil.
     expect(find.text('Sumber: Kalender Lari Uji · '), findsOneWidget);
     expect(find.text('Lihat halaman resmi'), findsOneWidget);
+    // Daftar anggota komunitas yang ikut ada di bawah kartu judul; gulir dulu agar dirender.
+    await tester.scrollUntilVisible(find.text('Teman'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Teman'), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const Key('event-going')));
     await tester.tap(find.byKey(const Key('event-going')));
