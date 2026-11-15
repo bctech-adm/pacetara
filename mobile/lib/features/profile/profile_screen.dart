@@ -289,7 +289,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         children: [
           // Header bergradien: foto, nama, kota, status verifikasi.
           SizedBox(
-            height: 250 + top,
+            height: 262 + top,
             child: BrandBackdrop(
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
               child: Padding(
