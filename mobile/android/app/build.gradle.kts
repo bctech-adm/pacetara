@@ -83,6 +83,8 @@ android {
         release {
             // Tanpa kunci rilis (mis. build lokal cepat), pakai kunci debug agar tetap bisa dipasang.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Aturan R8 tambahan (Room/WorkManager), lihat proguard-rules.pro dan KEPUTUSAN.md.
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
