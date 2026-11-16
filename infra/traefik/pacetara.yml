@@ -21,7 +21,7 @@ http:
     # jadi batas lajunya sendiri (lebih longgar dari ratelimit-default) dan tanpa batas body (hanya GET).
     pacetara-tiles:
       entryPoints: [websecure]
-      rule: "Host(`pace-api.bimacreative.tech`) && PathPrefix(`/tiles/`) && Method(`GET`, `HEAD`)"
+      rule: "Host(`pace-api.bimacreative.tech`) && PathPrefix(`/tiles/`) && (Method(`GET`) || Method(`HEAD`))"
       priority: 50
       middlewares: [crowdsec-ban-only, security-headers, pacetara-ratelimit-tiles, pacetara-tiles-strip, pacetara-tiles-cache]
       service: pacetara-tiles
