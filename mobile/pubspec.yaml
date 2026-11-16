@@ -36,7 +36,7 @@ dependencies:
   in_app_purchase: ^3.2.3
   in_app_purchase_android: ^0.4.0
   # Absensi QR (modul 2.6): tampilan QR murni Dart, dan pemindai kamera flutter_zxing (MIT, zxing-cpp + plugin
-  # camera; menggantikan mobile_scanner yang memakai ML Kit tertutup, KEPUTUSAN #316). Izin CAMERA hanya
+  # camera; menggantikan mobile_scanner yang memakai ML Kit tertutup, KEPUTUSAN #318). Izin CAMERA hanya
   # diminta saat membuka pemindai.
   qr_flutter: ^4.1.0
   flutter_zxing: 3.1.0
