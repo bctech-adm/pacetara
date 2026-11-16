@@ -128,14 +128,18 @@ services:
     networks: [internal]
     security_opt: ["no-new-privileges:true"]
 
+  # Valkey (BSD-3, fork Redis di Linux Foundation): Redis 7.4+ tidak lagi berlisensi open source (KEPUTUSAN #314).
+  # Nama layanan tetap "redis" agar REDIS_URL dan protokol tidak berubah. Nama berkas data berbeda dari Redis
+  # (valkey.rdb, valkeyaof) supaya Valkey mulai bersih dan tidak gagal membaca format RDB Redis 7.4.
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--maxmemory-policy", "noeviction",
+              "--dbfilename", "valkey.rdb", "--appenddirname", "valkeyaof"]
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -190,6 +194,42 @@ services:
         exit 1
     networks: [internal]
 
+  # Tile peta sendiri (KEPUTUSAN #315): data OpenStreetMap Indonesia (skema OpenMapTiles) dirender jadi PNG oleh
+  # tileserver-gl (BSD-2). Gratis, tanpa kunci API, dan IP/area yang dilihat pengguna tidak keluar ke pihak ketiga.
+  # Disajikan Caddy/Traefik di https://${API_DOMAIN}/tiles/. Profil "tiles": baru dinyalakan setelah data dibangun
+  # (infra/tiles/build-tiles.sh), karena tileserver berhenti jika berkas tidak ada.
+  tiles:
+    image: maptiler/tileserver-gl:v5.7.0
+    profiles: ["tiles"]
+    restart: unless-stopped
+    command: ["--file", "/data/indonesia.mbtiles", "--port", "8080"]
+    volumes:
+      - tiles:/data:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+
+  # Pembangun data tile sekali jalan: Planetiler (Apache-2.0) mengunduh ekstrak OSM Indonesia dari Geofabrik
+  # lalu menulis MBTiles. Butuh internet keluar, ~4 GB disk sementara, RAM sesuai JAVA_TOOL_OPTIONS.
+  tiles-build:
+    image: ghcr.io/onthegomap/planetiler:0.10.2
+    profiles: ["tiles-build"]
+    restart: "no"
+    working_dir: /data
+    environment:
+      JAVA_TOOL_OPTIONS: ${TILES_BUILD_JAVA_OPTS:--Xmx2g}
+    command: ["--download", "--area=indonesia", "--output=/data/indonesia.new.mbtiles", "--force",
+              "--download_dir=/data/sources", "--tmpdir=/data/tmp"]
+    volumes:
+      - tiles:/data
+    networks: [internal, edge]
+    security_opt: ["no-new-privileges:true"]
+
   backup:
     image: ${REGISTRY:-ghcr.io/bctech-adm}/pacetara-backup:${IMAGE_TAG:-latest}
     build: ./infra/backup
@@ -235,3 +275,4 @@ volumes:
   caddy_data:
   caddy_config:
   backups:
+  tiles:

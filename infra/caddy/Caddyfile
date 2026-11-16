@@ -24,8 +24,15 @@
 	request_body {
 		max_size 15MB
 	}
+	# Tile peta sendiri (layanan "tiles", profil compose "tiles"). Data publik OSM; boleh di-cache lama.
+	handle_path /tiles/* {
+		header Cache-Control "public, max-age=604800"
+		reverse_proxy tiles:8080
+	}
 	# Caddy meneruskan X-Forwarded-Proto/For secara bawaan; API memakai trust proxy = 1.
-	reverse_proxy api:3000
+	handle {
+		reverse_proxy api:3000
+	}
 	log {
 		output stdout
 		# Jangan catat query string atau header Authorization.

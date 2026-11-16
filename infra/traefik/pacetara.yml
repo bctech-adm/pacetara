@@ -15,6 +15,16 @@ http:
       service: pacetara-api
       tls:
         certResolver: le-http
+    # Tile peta sendiri (KEPUTUSAN #315) → pacetara-tiles:8080. Satu layar peta memuat puluhan tile sekaligus,
+    # jadi batas lajunya sendiri (lebih longgar dari ratelimit-default) dan tanpa batas body (hanya GET).
+    pacetara-tiles:
+      entryPoints: [websecure]
+      rule: "Host(`pace-api.bimacreative.tech`) && PathPrefix(`/tiles/`) && Method(`GET`, `HEAD`)"
+      priority: 50
+      middlewares: [crowdsec, security-headers, pacetara-ratelimit-tiles, pacetara-tiles-strip, pacetara-tiles-cache]
+      service: pacetara-tiles
+      tls:
+        certResolver: le-http
     pacetara-api:
       entryPoints: [websecure]
       rule: "Host(`pace-api.bimacreative.tech`)"
@@ -47,6 +57,20 @@ http:
         period: 1m
         burst: 10
 
+    # 20 tile/detik per IP, burst 200 (membuka peta / menggeser cepat).
+    pacetara-ratelimit-tiles:
+      rateLimit:
+        average: 20
+        period: 1s
+        burst: 200
+    pacetara-tiles-strip:
+      stripPrefix:
+        prefixes: ["/tiles"]
+    pacetara-tiles-cache:
+      headers:
+        customResponseHeaders:
+          Cache-Control: "public, max-age=604800"
+
   services:
     pacetara-api:
       loadBalancer:
@@ -60,3 +84,7 @@ http:
       loadBalancer:
         servers:
           - url: "http://pacetara-admin:8080"
+    pacetara-tiles:
+      loadBalancer:
+        servers:
+          - url: "http://pacetara-tiles:8080"

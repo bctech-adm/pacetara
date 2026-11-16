@@ -12,13 +12,21 @@ class AppConfig {
   /// ber-`aud` client ini dan bisa diverifikasi server. Kosong = tombol Google disembunyikan.
   static const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
 
-  /// Sumber tile peta. Bawaan OpenStreetMap hanya untuk uji: kebijakan OSM melarang pemakaian berat
-  /// oleh aplikasi, jadi sebelum rilis ganti ke penyedia tile berbayar (lihat KEPUTUSAN.md).
+  /// Sumber tile peta: server tile sendiri (tileserver-gl + data OpenStreetMap, KEPUTUSAN #315) di domain API,
+  /// open source, gratis, tanpa kunci API, dan area yang dilihat pengguna tidak dikirim ke pihak ketiga.
   static const mapTileUrl = String.fromEnvironment(
     'MAP_TILE_URL',
+    defaultValue: '$apiBaseUrl/tiles/styles/basic-preview/{z}/{x}/{y}.png',
+  );
+
+  /// Dipakai hanya jika tile utama gagal dimuat (mis. server tile belum dinyalakan). Kosong = tanpa cadangan.
+  /// Server OSM publik tidak boleh dipakai berat, jadi ini hanya jaring pengaman masa transisi.
+  static const mapTileFallbackUrl = String.fromEnvironment(
+    'MAP_TILE_FALLBACK_URL',
     defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   );
-  static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: 'OpenStreetMap contributors');
+
+  static const mapAttribution = String.fromEnvironment('MAP_ATTRIBUTION', defaultValue: 'OpenMapTiles · OpenStreetMap contributors');
   static const mapAttributionUrl = String.fromEnvironment('MAP_ATTRIBUTION_URL', defaultValue: 'https://www.openstreetmap.org/copyright');
 
   /// Firebase Cloud Messaging untuk push (modul 1.9). Diisi CI dari variabel repo; kosong = push mati,

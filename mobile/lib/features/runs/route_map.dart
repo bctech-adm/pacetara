@@ -145,7 +145,13 @@ class _RouteMapState extends State<RouteMap> {
 }
 
 /// Lapisan tile peta, dipakai semua peta di aplikasi.
-Widget mapTileLayer() => TileLayer(urlTemplate: AppConfig.mapTileUrl, userAgentPackageName: 'tech.bimacreative.pacetara', maxZoom: 19);
+Widget mapTileLayer() => TileLayer(
+      urlTemplate: AppConfig.mapTileUrl,
+      fallbackUrl: AppConfig.mapTileFallbackUrl.isEmpty ? null : AppConfig.mapTileFallbackUrl,
+      userAgentPackageName: 'tech.bimacreative.pacetara',
+      // Data tile sendiri sampai zoom 14; di atasnya tileserver merender ulang (overzoom) dari zoom 14.
+      maxZoom: 19,
+    );
 
 /// Lisensi data OpenStreetMap (ODbL) mewajibkan atribusi. Tampil 5 detik lalu mengecil menjadi
 /// ikon (i) yang bisa diketuk, sesuai pedoman atribusi OSM untuk layar kecil.

@@ -61,6 +61,17 @@ Rute Traefik: `infra/traefik/pacetara.yml` → `/opt/infra/traefik/dynamic/clien
 
 WAF CrowdSec (OWASP CRS) di VPS menolak PATCH/PUT/DELETE secara bawaan. Pengecualian PaceTara ada di `infra/crowdsec/pacetara-api-exclusions.yaml`; pasang ke `/opt/infra/security/crowdsec/appsec-configs/` dan daftarkan di `acquis.d/appsec.yaml` (detail: docs/KEPUTUSAN.md #103).
 
+## Peta: server tile sendiri
+
+Peta aplikasi memakai tile dari `https://<API_DOMAIN>/tiles/` (tileserver-gl + data OpenStreetMap Indonesia yang diolah Planetiler; semuanya open source dan gratis, KEPUTUSAN #315). Selama server tile belum menyala, aplikasi memakai tile OSM publik sebagai cadangan. Menyalakan atau memperbarui (sebulan sekali cukup), dari folder stack:
+
+```sh
+sudo ./infra/tiles/build-tiles.sh          # VPS bersama
+LOCAL=1 ./infra/tiles/build-tiles.sh       # lokal
+```
+
+Butuh ±4 GB disk sementara, RAM 2–3 GB selama build (atur `TILES_BUILD_JAVA_OPTS`, mis. `-Xmx3g`), ±15–40 menit. Setelah itu salin ulang `infra/traefik/pacetara.yml` ke Traefik dan `kill -HUP 1`. Volume `tiles` tidak dicadangkan karena bisa dibangun ulang.
+
 ## Deploy ke VPS khusus (Caddy)
 
 1. Arahkan DNS `pace-api.bimacreative.tech` dan `pace-admin.bimacreative.tech` ke VPS.

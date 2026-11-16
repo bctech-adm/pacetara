@@ -15,7 +15,7 @@ Kerjakan **satu modul per sesi** sesuai urutan di PRD. Mulai dengan rencana sing
 | `mobile/` | Aplikasi Flutter (Android) |
 | `infra/` | Caddyfile, image backup, skrip cadangan/pemulihan |
 
-Database: PostgreSQL 16 + PostGIS. Redis untuk cache, antrean (BullMQ), dan status lari langsung. SeaweedFS (API S3) untuk berkas; MinIO tidak lagi merilis image (lihat KEPUTUSAN.md).
+Database: PostgreSQL 16 + PostGIS. Valkey (pengganti Redis berlisensi BSD, protokol sama) untuk cache, antrean (BullMQ), dan status lari langsung. SeaweedFS (API S3) untuk berkas; MinIO tidak lagi merilis image (lihat KEPUTUSAN.md).
 
 Perintah:
 - `./scripts/init-env.sh --local && docker compose up -d --build` — seluruh stack lokal, cek di https://api.localhost:8443/health
@@ -26,7 +26,7 @@ Perintah:
 
 - Satu `docker-compose.yml` mendefinisikan semuanya; tidak ada yang dipasang langsung di OS VPS.
 - Semua konfigurasi lewat `.env`. Tidak ada alamat IP atau domain yang di-hardcode di kode.
-- Data hanya di volume bernama: `pgdata`, `redisdata`, `s3data`, `baileys_session`, `caddy_data`, `backups`.
+- Data hanya di volume bernama: `pgdata`, `redisdata`, `s3data`, `baileys_session`, `caddy_data`, `backups`, `tiles` (tile peta, bisa dibangun ulang, tidak dicadangkan).
 - Image dibangun di GitHub Actions dan ditarik dari GHCR.
 - Database, Redis, S3, dan wa-otp tidak mem-publish port; hanya Caddy yang terbuka.
 - Skrip `infra/backup/backup.sh` dan `restore.sh` harus tetap berfungsi setiap ada perubahan skema.

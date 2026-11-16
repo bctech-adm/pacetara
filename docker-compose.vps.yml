@@ -68,6 +68,19 @@ services:
     <<: *logging
     mem_limit: 512m
 
+  tiles:
+    container_name: pacetara-tiles
+    <<: *logging
+    networks: [internal, web-edge]
+    mem_limit: 768m
+    cpus: 1.0
+
+  tiles-build:
+    container_name: pacetara-tiles-build
+    <<: *logging
+    mem_limit: 3g
+    cpus: 1.0
+
   backup:
     container_name: pacetara-backup
     <<: *logging

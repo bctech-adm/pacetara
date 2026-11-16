@@ -67,10 +67,10 @@ jobs:
         options: >-
           --health-cmd "pg_isready -h 127.0.0.1 -U ci" --health-interval 5s --health-retries 20
       redis:
-        image: redis:7-alpine
+        image: valkey/valkey:8.1.11-alpine
         ports: ["6379:6379"]
         options: >-
-          --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+          --health-cmd "valkey-cli ping" --health-interval 5s --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -117,10 +117,10 @@ jobs:
         options: >-
           --health-cmd "pg_isready -h 127.0.0.1 -U ci" --health-interval 5s --health-retries 20
       redis:
-        image: redis:7-alpine
+        image: valkey/valkey:8.1.11-alpine
         ports: ["6379:6379"]
         options: >-
-          --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+          --health-cmd "valkey-cli ping" --health-interval 5s --health-retries 20
     defaults:
       run:
         working-directory: backend
