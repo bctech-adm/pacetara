@@ -92,6 +92,24 @@ export function parseKtpText(text: string): { nik: string | null; name: string |
     }
   }
   if (!nik) {
+    // Label "NIK" salah baca, tetapi angkanya ada di satu baris yang terpecah spasi ("3175 0625 0586 0011").
+    for (const line of lines) {
+      const compact = line.replace(/\s+/g, '');
+      const run = /[0-9OoDQIl|!SsBZzGgT?]{16,}/.exec(compact);
+      if (!run || (run[0].match(/\d/g)?.length ?? 0) < 12) continue;
+      const digits = toDigits(run[0]);
+      // Deret lebih dari 16 (mis. ":" terbaca angka di depan): ambil jendela 16 digit yang struktur NIK-nya sah.
+      for (let i = 0; i + 16 <= digits.length; i++) {
+        const w = digits.slice(i, i + 16);
+        if (parseNik(w)) {
+          nik = w;
+          break;
+        }
+      }
+      if (nik) break;
+    }
+  }
+  if (!nik) {
     for (const token of text.split(/\s+/)) {
       const digits = toDigits(token);
       // Token panjang yang sebagian besar angka (bukan kata biasa yang kebetulan dipetakan ke angka).
@@ -106,8 +124,10 @@ export function parseKtpText(text: string): { nik: string | null; name: string |
   for (let i = 0; i < lines.length; i++) {
     const m = /^\s*N\s*a\s*m\s*a\b\s*[:;.]?\s*(.*)$/i.exec(lines[i]!);
     if (!m) continue;
-    let candidate = upperPrefix(m[1]!.replace(/^[:;.\s]+/, ''));
-    if (candidate.length < 2 && lines[i + 1]) candidate = upperPrefix(lines[i + 1]!);
+    // Pemisah label sering terbaca sebagai ":", "-", "—", atau tanda kutip; dengan PSM 11 nilainya ada di baris berikut.
+    const value = (l: string) => upperPrefix(l.replace(/^[\s:;.,\-–—"'“”‘’]+/, ''));
+    let candidate = value(m[1]!);
+    if (candidate.length < 2 && lines[i + 1]) candidate = value(lines[i + 1]!);
     if (candidate.length >= 2) name = candidate;
     break;
   }

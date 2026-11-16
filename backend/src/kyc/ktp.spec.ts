@@ -65,6 +65,21 @@ describe('parseKtpText', () => {
     expect(parseKtpText(`PROVINSI JAWA BARAT\n${NIK}\nNama : A`).nik).toBe(NIK);
   });
 
+  it('PSM 11: label dan nilai di baris terpisah, NIK terpecah spasi', () => {
+    // Keluaran nyata Tesseract (varian kanal merah) pada KTP sintetis.
+    const text = 'PROVINSI DKI JAKARTA\n\nNIK\n\n: 31740112 0590 0001\n\nNama\n\n: BUDI SANTOSO\n\nTempat/Tgi Lahir JAKARTA';
+    expect(parseKtpText(text)).toEqual({ nik: NIK, name: 'BUDI SANTOSO' });
+  });
+
+  it('pemisah label terbaca tanda hubung atau kutip', () => {
+    expect(parseKtpText(`NIK : ${NIK}\nNama —BUDI SANTOSO`).name).toBe('BUDI SANTOSO');
+    expect(parseKtpText(`NIK : ${NIK}\nNama “BUDI SANTOSO`).name).toBe('BUDI SANTOSO');
+  });
+
+  it('deret lebih dari 16 digit: jendela dengan struktur NIK sah', () => {
+    expect(parseKtpText(`PROVINSI\n7 ${NIK.slice(0, 8)} ${NIK.slice(8)}\nNama : A`).nik).toBe(NIK);
+  });
+
   it('tanpa NIK dan nama', () => {
     expect(parseKtpText('foto buram\ntidak ada apa-apa')).toEqual({ nik: null, name: null });
   });

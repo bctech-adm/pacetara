@@ -51,6 +51,35 @@ interface HumanLike {
 }
 interface TesseractWorker {
   recognize(image: Buffer): Promise<{ data: { text: string; confidence: number } }>;
+  setParameters(params: Record<string, string>): Promise<unknown>;
+}
+
+/** Mode tata letak Tesseract: 3 = otomatis (blok teks), 11 = teks tersebar (cocok untuk kartu berlabel). */
+type Psm = '3' | '11';
+
+/**
+ * Varian gambar untuk OCR, dicoba berurutan sampai NIK terbaca. Foto KTP sungguhan sering gagal di satu varian saja:
+ * latar guilloche biru, pantulan laminasi, foto dari layar (moiré), atau foto landscape tanpa tag orientasi EXIF.
+ * - red: kanal merah lalu ambang biner, mode teks tersebar; latar biru muda KTP jadi putih, tulisan hitam tetap
+ *   hitam. Pada KTP sintetis berlatar guilloche: keyakinan 94 dan semua baris bersih, varian abu-abu hanya 60.
+ * - red90/red270: varian merah diputar untuk foto KTP yang tersimpan menyamping tanpa tag orientasi EXIF.
+ * - gray: abu-abu dinormalkan dan dipertajam, cadangan terakhir untuk foto gelap/kontras rendah yang rusak oleh
+ *   ambang (paling lemah, jadi dicoba terakhir agar tidak mendahului varian merah yang diputar).
+ */
+const OCR_VARIANTS: { name: string; rotate: number; mode: 'gray' | 'red'; psm: Psm }[] = [
+  { name: 'red', rotate: 0, mode: 'red', psm: '11' },
+  { name: 'red90', rotate: 90, mode: 'red', psm: '11' },
+  { name: 'red270', rotate: 270, mode: 'red', psm: '11' },
+  { name: 'gray', rotate: 0, mode: 'gray', psm: '3' },
+];
+
+async function ocrImage(ktp: Buffer, v: (typeof OCR_VARIANTS)[number]): Promise<Buffer> {
+  // rotate() tanpa argumen = ikuti EXIF; lalu putaran tambahan varian.
+  let img = sharp(ktp, { limitInputPixels: 50_000_000 }).rotate();
+  if (v.rotate) img = sharp(await img.toBuffer()).rotate(v.rotate);
+  img = img.resize({ width: 1800, height: 1800, fit: 'inside' });
+  if (v.mode === 'gray') return img.grayscale().normalize().sharpen().png().toBuffer();
+  return img.extractChannel('red').normalize().sharpen().threshold(150).png().toBuffer();
 }
 
 let ready: Promise<{ human: HumanLike; ocr: TesseractWorker }> | null = null;
@@ -109,9 +138,10 @@ function toTensor(human: HumanLike, data: Buffer, info: { width: number; height:
   return human.tf.tensor4d(out, [1, info.height, info.width, 3], 'int32');
 }
 
-async function faces(human: HumanLike, input: Buffer, maxSide: number) {
-  const { data, info } = await sharp(input, { limitInputPixels: 50_000_000 })
-    .rotate()
+async function faces(human: HumanLike, input: Buffer, maxSide: number, extraRotate = 0) {
+  let img = sharp(input, { limitInputPixels: 50_000_000 }).rotate();
+  if (extraRotate) img = sharp(await img.toBuffer()).rotate(extraRotate);
+  const { data, info } = await img
     .resize(maxSide, maxSide, { fit: 'inside', withoutEnlargement: true })
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -144,29 +174,36 @@ async function analyze(ktp: Buffer, selfie: Buffer): Promise<KycAnalysis> {
   stage = 'init';
   const { human, ocr } = await init();
   stage = 'ocr';
-  // OCR: abu-abu, dinormalkan, dipertajam, lebar ±1800 px (tulisan KTP kecil).
-  const ocrInput = await sharp(ktp, { limitInputPixels: 50_000_000 })
-    .rotate()
-    .resize({ width: 1800, height: 1800, fit: 'inside' })
-    .grayscale()
-    .normalize()
-    .sharpen()
-    .png()
-    .toBuffer();
-  let text = '';
+  let parsed: { nik: string | null; name: string | null } = { nik: null, name: null };
   let confidence = 0;
-  try {
-    const { data } = await ocr.recognize(ocrInput);
-    text = data.text;
-    confidence = data.confidence;
-  } finally {
-    ocrInput.fill(0);
+  let psm: Psm | null = null;
+  // Putaran tambahan yang membuat NIK terbaca; dipakai juga untuk mendeteksi wajah KTP.
+  let ktpRotate = 0;
+  for (const v of OCR_VARIANTS) {
+    stage = `ocr_${v.name}`;
+    if (psm !== v.psm) {
+      await ocr.setParameters({ tessedit_pageseg_mode: v.psm });
+      psm = v.psm;
+    }
+    const input = await ocrImage(ktp, v);
+    try {
+      const { data } = await ocr.recognize(input);
+      const p = parseKtpText(data.text);
+      // Nama diambil dari varian mana pun yang membacanya; NIK menentukan kapan berhenti.
+      parsed = { nik: parsed.nik ?? p.nik, name: parsed.name ?? p.name };
+      if (p.nik) {
+        confidence = data.confidence;
+        ktpRotate = v.rotate;
+        break;
+      }
+      confidence = Math.max(confidence, data.confidence);
+    } finally {
+      input.fill(0);
+    }
   }
-  const parsed = parseKtpText(text);
-  text = '';
 
   stage = 'face_ktp';
-  const ktpFaces = await faces(human, ktp, 1600);
+  const ktpFaces = await faces(human, ktp, 1600, ktpRotate);
   stage = 'face_selfie';
   const selfieFaces = await faces(human, selfie, 1024);
   stage = 'done';
