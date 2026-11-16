@@ -17,7 +17,9 @@ services:
     container_name: pacetara-api
     <<: *logging
     networks: [internal, edge, web-edge]
-    mem_limit: 512m
+    # Mesin verifikasi KTP (OCR + model wajah) memakai ±360 MB di atas API (±150 MB); 512m membuat container
+    # mati kehabisan memori di tengah verifikasi (KEPUTUSAN #316).
+    mem_limit: 1g
     cpus: 1.0
     pids_limit: 256
     cap_drop: [ALL]

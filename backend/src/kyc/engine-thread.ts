@@ -137,8 +137,13 @@ function cosine(a: number[], b: number[]): number {
   return na && nb ? dot / Math.sqrt(na * nb) : 0;
 }
 
+/** Tahap analisis yang sedang berjalan; hanya nama tahap yang dilaporkan saat galat (untuk log, tanpa data). */
+let stage = 'idle';
+
 async function analyze(ktp: Buffer, selfie: Buffer): Promise<KycAnalysis> {
+  stage = 'init';
   const { human, ocr } = await init();
+  stage = 'ocr';
   // OCR: abu-abu, dinormalkan, dipertajam, lebar ±1800 px (tulisan KTP kecil).
   const ocrInput = await sharp(ktp, { limitInputPixels: 50_000_000 })
     .rotate()
@@ -160,8 +165,11 @@ async function analyze(ktp: Buffer, selfie: Buffer): Promise<KycAnalysis> {
   const parsed = parseKtpText(text);
   text = '';
 
+  stage = 'face_ktp';
   const ktpFaces = await faces(human, ktp, 1600);
+  stage = 'face_selfie';
   const selfieFaces = await faces(human, selfie, 1024);
+  stage = 'done';
   // Wajah lain di latar selfie yang jauh lebih kecil (orang lewat) tidak dihitung.
   const mainSelfie = selfieFaces[0];
   const selfieCount = mainSelfie ? selfieFaces.filter((f) => f.box[2] * f.box[3] >= 0.3 * mainSelfie.box[2] * mainSelfie.box[3]).length : 0;
@@ -194,7 +202,8 @@ parentPort?.on('message', async (msg: { id: number; type: 'warmup' } | { id: num
   } catch (err) {
     // Hanya kode galat; pesan pustaka bisa memuat potongan data.
     const unsupported = err instanceof Error && /unsupported image|Input buffer|corrupt|VipsJpeg|heif/i.test(err.message);
-    parentPort!.postMessage({ id: msg.id, ok: false, error: unsupported ? 'unsupported_image' : 'engine_error' });
+    const kind = err instanceof Error ? err.constructor.name : typeof err;
+    parentPort!.postMessage({ id: msg.id, ok: false, error: unsupported ? 'unsupported_image' : 'engine_error', stage, kind });
   } finally {
     ktp.fill(0);
     selfie.fill(0);

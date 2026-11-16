@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile_scanner/mobile_scanner.dart' show MobileScanner;
+import 'package:flutter_zxing/flutter_zxing.dart' show Code, Format, ReaderWidget;
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/api/api_error.dart';
@@ -405,16 +405,19 @@ class _QrScanScreenState extends State<QrScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Pindai QR absensi')),
-      body: MobileScanner(
-        onDetect: (capture) {
-          if (_done) return;
-          for (final b in capture.barcodes) {
-            final v = b.rawValue;
-            if (v != null && v.startsWith('PTQR1.')) {
-              _done = true;
-              Navigator.pop(context, v);
-              return;
-            }
+      // Kamera saja: tanpa pilih dari galeri (QR berganti tiap 30 detik, tangkapan layar lama tidak berguna).
+      body: ReaderWidget(
+        codeFormat: Format.qrCode,
+        showGallery: false,
+        showToggleCamera: false,
+        cropPercent: 0.7,
+        scanDelay: const Duration(milliseconds: 300),
+        onScan: (Code code) {
+          if (_done || !mounted) return;
+          final v = code.text;
+          if (code.isValid && v != null && v.startsWith('PTQR1.')) {
+            _done = true;
+            Navigator.pop(context, v);
           }
         },
       ),

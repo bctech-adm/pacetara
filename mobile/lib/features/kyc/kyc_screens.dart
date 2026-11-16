@@ -21,8 +21,11 @@ Future<Uint8List?> cameraCapture({required bool selfie}) async {
   final file = await ImagePicker().pickImage(
     source: ImageSource.camera,
     preferredCameraDevice: selfie ? CameraDevice.front : CameraDevice.rear,
-    maxWidth: 2000,
-    imageQuality: 90,
+    // Sisi terpanjang 1600 px cukup untuk OCR (server memperkecil ke 1800 px) dan wajah (1600/1024 px). Foto lebih
+    // besar hanya memperlambat unggahan dan menambah memori mesin verifikasi di server.
+    maxWidth: 1600,
+    maxHeight: 1600,
+    imageQuality: 85,
     requestFullMetadata: false,
   );
   if (file == null) return null;

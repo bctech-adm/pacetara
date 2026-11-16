@@ -61,19 +61,23 @@ export class KycEngine implements OnModuleDestroy {
     this.idleTimer = null;
     if (this.worker) return this.worker;
     const worker = new Worker(new URL('./engine-thread.js', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 1024 } });
-    worker.on('message', (msg: { id: number; ok: boolean; result?: KycAnalysis; error?: string }) => {
+    worker.on('message', (msg: { id: number; ok: boolean; result?: KycAnalysis; error?: string; stage?: string; kind?: string }) => {
       const p = this.pending.get(msg.id);
       if (!p) return;
       clearTimeout(p.timer);
       this.pending.delete(msg.id);
+      // Hanya kode, tahap, dan nama kelas galat (tanpa pesan pustaka yang bisa memuat data) agar kegagalan bisa dilacak.
+      if (!msg.ok) this.logger.warn(`Analisis gagal: ${msg.error ?? 'unknown'} di tahap ${msg.stage ?? '-'} (${msg.kind ?? '-'})`);
       if (msg.ok && msg.result) p.resolve(msg.result);
       else if (msg.error === 'unsupported_image') p.reject(new ApiError(415, 'unsupported_image', 'Berkas bukan gambar yang didukung (JPG, PNG, WebP, HEIC)'));
       else p.reject(new ApiError(503, 'kyc_engine_error', 'Verifikasi gagal diproses. Coba lagi'));
       this.scheduleIdle();
     });
-    worker.on('error', () => {
-      // Pesan galat tidak dicetak: bisa memuat potongan data dari pustaka.
-      this.logger.error('Thread mesin verifikasi berhenti karena galat');
+    worker.on('error', (err) => {
+      // Pesan galat tidak dicetak: bisa memuat potongan data dari pustaka. Kode galat Node (mis.
+      // ERR_WORKER_OUT_OF_MEMORY) aman dan membedakan kehabisan memori dari galat lain.
+      const code = (err as { code?: string }).code ?? err.constructor.name;
+      this.logger.error(`Thread mesin verifikasi berhenti karena galat (${code})`);
       this.failAll();
       this.worker = null;
     });

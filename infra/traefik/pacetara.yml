@@ -46,10 +46,12 @@ http:
   middlewares:
     # Batas ukuran body di tepi (sama dengan Caddyfile lokal): unggahan terbesar 8 MB + overhead multipart.
     # API juga membatasi sendiri (JSON 1 MB, file 8 MB, field multipart); ini lapisan pertama.
+    # memRequestBodyBytes = maxRequestBodyBytes: body di atas batas memori ditulis Traefik ke berkas sementara,
+    # padahal foto KTP/selfie tidak boleh menyentuh disk (KEPUTUSAN #316).
     pacetara-body-limit:
       buffering:
         maxRequestBodyBytes: 15000000
-        memRequestBodyBytes: 2000000
+        memRequestBodyBytes: 15000000
     # 10 req/menit per IP, burst 10 (pengguna seluler di balik NAT bisa berbagi IP).
     pacetara-ratelimit-auth:
       rateLimit:
