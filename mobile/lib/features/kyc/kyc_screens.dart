@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/theme/app_theme.dart';
@@ -12,14 +13,16 @@ import '../../core/widgets/motion.dart';
 import '../auth/auth_controller.dart';
 import 'kyc_repository.dart';
 
-/// Pengambil foto dari kamera. Bisa diganti di tes. Mengembalikan byte foto, atau null jika dibatalkan.
-typedef CapturePhoto = Future<Uint8List?> Function({required bool selfie});
+/// Pengambil foto. Bisa diganti di tes. Mengembalikan byte foto, atau null jika dibatalkan.
+/// [gallery] hanya untuk foto KTP; selfie selalu dari kamera depan (pencocokan wajah + liveness butuh foto langsung).
+typedef CapturePhoto = Future<Uint8List?> Function({required bool selfie, bool gallery});
 
-/// Kamera HP lewat image_picker. Plugin menulis hasil jepretan ke folder cache aplikasi; byte dibaca ke memori lalu
-/// berkasnya langsung dihapus agar foto KTP/selfie tidak tertinggal di HP.
-Future<Uint8List?> cameraCapture({required bool selfie}) async {
+/// Kamera HP atau galeri lewat image_picker. Plugin menulis hasil jepretan, atau salinan foto galeri, ke folder cache
+/// aplikasi; byte dibaca ke memori lalu salinan itu langsung dihapus agar foto KTP/selfie tidak tertinggal di HP.
+/// Hanya berkas di folder cache aplikasi yang dihapus, jadi foto asli di galeri pengguna tidak pernah tersentuh.
+Future<Uint8List?> cameraCapture({required bool selfie, bool gallery = false}) async {
   final file = await ImagePicker().pickImage(
-    source: ImageSource.camera,
+    source: gallery && !selfie ? ImageSource.gallery : ImageSource.camera,
     preferredCameraDevice: selfie ? CameraDevice.front : CameraDevice.rear,
     // Sisi terpanjang 1600 px cukup untuk OCR (server memperkecil ke 1800 px) dan wajah (1600/1024 px). Foto lebih
     // besar hanya memperlambat unggahan dan menambah memori mesin verifikasi di server.
@@ -33,7 +36,8 @@ Future<Uint8List?> cameraCapture({required bool selfie}) async {
     return await file.readAsBytes();
   } finally {
     try {
-      await File(file.path).delete();
+      final cache = (await getTemporaryDirectory()).path;
+      if (File(file.path).absolute.path.startsWith('$cache${Platform.pathSeparator}')) await File(file.path).delete();
     } catch (_) {
       // Berkas sementara sudah tidak ada.
     }
@@ -187,7 +191,7 @@ class _KycConsentScreenState extends State<KycConsentScreen> {
           'dan skor kecocokan tanpa data pribadi.\n\n'
           '• Jika verifikasi otomatis ragu, tim PaceTara meninjau skor serta nama yang terbaca dari KTP dan nama yang kamu ketik. '
           'Nama itu disimpan terenkripsi sampai ditinjau (paling lama 30 hari), lalu dihapus. Tim tidak bisa melihat fotomu.\n\n'
-          '• Di HP, foto dari kamera langsung dihapus dari folder sementara setelah dibaca.\n\n'
+          '• Di HP, foto dari kamera dan salinan sementara foto galeri langsung dihapus setelah dibaca. Foto asli di galerimu tidak diubah.\n\n'
           '• Kamu bisa menghapus akun kapan saja; status verifikasi dan kode NIK ikut terhapus.\n\n'
           '• Pakai hanya KTP milikmu sendiri. Memakai KTP orang lain melanggar hukum dan membuat akunmu diblokir.',
         ),
@@ -245,9 +249,37 @@ class _KycCaptureScreenState extends ConsumerState<KycCaptureScreen> {
     _selfie = null;
   }
 
-  Future<void> _capture({required bool selfie}) async {
+  /// Foto KTP boleh dari kamera atau galeri; pengguna memilih lewat lembar bawah.
+  Future<void> _pickKtp() async {
+    final gallery = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            key: const Key('kyc-ktp-camera'),
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Ambil dengan kamera'),
+            onTap: () => Navigator.pop(sheet, false),
+          ),
+          ListTile(
+            key: const Key('kyc-ktp-gallery'),
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Pilih dari galeri'),
+            subtitle: const Text('Foto KTP asli milikmu, bukan tangkapan layar atau foto dari layar lain'),
+            onTap: () => Navigator.pop(sheet, true),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (gallery == null) return;
+    await _capture(selfie: false, gallery: gallery);
+  }
+
+  Future<void> _capture({required bool selfie, bool gallery = false}) async {
     try {
-      final bytes = await ref.read(capturePhotoProvider)(selfie: selfie);
+      final bytes = await ref.read(capturePhotoProvider)(selfie: selfie, gallery: gallery);
       if (bytes == null || !mounted) return;
       setState(() {
         if (selfie) {
@@ -335,9 +367,9 @@ class _KycCaptureScreenState extends ConsumerState<KycCaptureScreen> {
           _PhotoTile(
             key: const Key('kyc-photo-ktp'),
             title: 'Foto KTP',
-            hint: 'KTP utuh, tegak, fokus, tanpa pantulan cahaya. Pakai kamera belakang.',
+            hint: 'KTP utuh, tegak, fokus, tanpa pantulan cahaya. Dari kamera atau galeri.',
             bytes: _ktp,
-            onTap: () => _capture(selfie: false),
+            onTap: _pickKtp,
           ),
           const SizedBox(height: 12),
           _PhotoTile(

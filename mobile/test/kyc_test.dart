@@ -57,11 +57,11 @@ void main() {
     expect(find.byKey(const Key('kyc-start')), findsNothing);
   });
 
-  testWidgets('alur: persetujuan wajib, foto dari kamera, kirim multipart tanpa data di URL', (tester) async {
+  testWidgets('alur: persetujuan wajib, KTP dari galeri, selfie dari kamera, kirim multipart tanpa data di URL', (tester) async {
     final seen = <RequestOptions>[];
-    final captured = <bool>[];
-    Future<Uint8List?> fakeCapture({required bool selfie}) async {
-      captured.add(selfie);
+    final captured = <String>[];
+    Future<Uint8List?> fakeCapture({required bool selfie, bool gallery = false}) async {
+      captured.add('${selfie ? 'selfie' : 'ktp'}:${gallery ? 'gallery' : 'camera'}');
       // PNG 1×1 yang valid agar Image.memory bisa menggambar pratinjau.
       return base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
     }
@@ -91,11 +91,22 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('kyc-nik')), '3174011205900001');
     await tester.enterText(find.byKey(const Key('kyc-name')), 'BUDI SANTOSO');
+    // Foto KTP: lembar bawah kamera/galeri; dibatalkan dulu (tidak mengambil apa pun), lalu pilih galeri.
     await tester.tap(find.byKey(const Key('kyc-photo-ktp')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('kyc-ktp-camera')), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(captured, isEmpty);
+    await tester.tap(find.byKey(const Key('kyc-photo-ktp')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('kyc-ktp-gallery')));
+    await tester.pumpAndSettle();
+    // Selfie langsung kamera, tanpa pilihan galeri.
     await tester.tap(find.byKey(const Key('kyc-photo-selfie')));
     await tester.pumpAndSettle();
-    expect(captured, [false, true]);
+    expect(find.byKey(const Key('kyc-ktp-gallery')), findsNothing);
+    expect(captured, ['ktp:gallery', 'selfie:camera']);
 
     await tester.tap(find.byKey(const Key('kyc-submit')));
     // Tombol tetap memutar indikator selama dialog hasil terbuka, jadi tidak memakai pumpAndSettle.
