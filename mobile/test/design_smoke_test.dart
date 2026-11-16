@@ -120,6 +120,16 @@ void main() {
       // Tombol mulai berdenyut terus: jangan pumpAndSettle.
       await tester.pump(const Duration(seconds: 1));
       expect(find.text('Mulai lari'), findsOneWidget);
+      // Panel statistik bisa digeser ke bawah (ringkas) dan ke atas lagi; tombol mulai tetap ada.
+      await tester.drag(find.byKey(const Key('panel-handle')), const Offset(0, 200));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('panel-compact')), findsOneWidget);
+      expect(find.text('Jarak (km)'), findsNothing);
+      expect(find.text('Mulai lari'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.drag(find.byKey(const Key('panel-handle')), const Offset(0, -200));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Jarak (km)'), findsOneWidget);
       // Atribusi flutter_map memasang timer; bongkar pohon lalu habiskan timernya.
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(minutes: 1));

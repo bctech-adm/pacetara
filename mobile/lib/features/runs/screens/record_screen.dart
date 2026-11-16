@@ -47,6 +47,20 @@ class RecordScreen extends ConsumerStatefulWidget {
 class _RecordScreenState extends ConsumerState<RecordScreen> {
   bool _checkedDraft = false;
 
+  /// Panel statistik bisa digeser ke bawah agar peta lebih lega; tombol aksi tetap terlihat.
+  bool _panelCollapsed = false;
+  double _panelDragDy = 0;
+
+  void _onPanelDragStart(DragStartDetails _) => _panelDragDy = 0;
+  void _onPanelDragUpdate(DragUpdateDetails d) => _panelDragDy += d.delta.dy;
+  void _onPanelDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    final collapse = v > 250 || (v.abs() <= 250 && _panelDragDy > 24);
+    final expand = v < -250 || (v.abs() <= 250 && _panelDragDy < -24);
+    if (collapse && !_panelCollapsed) setState(() => _panelCollapsed = true);
+    if (expand && _panelCollapsed) setState(() => _panelCollapsed = false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -241,7 +255,13 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                 right: 0,
                 bottom: -1,
                 height: 29,
-                child: IgnorePointer(
+                child: GestureDetector(
+                  key: const Key('panel-handle'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _panelCollapsed = !_panelCollapsed),
+                  onVerticalDragStart: _onPanelDragStart,
+                  onVerticalDragUpdate: _onPanelDragUpdate,
+                  onVerticalDragEnd: _onPanelDragEnd,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
@@ -261,14 +281,36 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
               ),
             ]),
           ),
-          Container(
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragStart: _onPanelDragStart,
+            onVerticalDragUpdate: _onPanelDragUpdate,
+            onVerticalDragEnd: _onPanelDragEnd,
+            child: Container(
             color: theme.colorScheme.surface,
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: SafeArea(
               top: false,
-              child: Column(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.bottomCenter,
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_panelCollapsed) ...[
+                    // Ringkas: satu baris statistik, tombol aksi tetap di bawahnya.
+                    Row(
+                      key: const Key('panel-compact'),
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _CompactStat(label: 'km', value: formatDistanceKm(track?.distanceM ?? 0)),
+                        _CompactStat(label: 'Durasi', value: formatDuration(s.activeSeconds)),
+                        _CompactStat(label: 'Pace kini', value: formatPaceS(track?.currentPaceSPerKm)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ] else ...[
                   // Jarak besar ala odometer.
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -305,6 +347,7 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  ],
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 320),
                     switchInCurve: Curves.easeOutBack,
@@ -345,13 +388,15 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                         ),
                     },
                   ),
-                  if (s.status == RecorderStatus.idle) ...[
+                  if (s.status == RecorderStatus.idle && !_panelCollapsed) ...[
                     const SizedBox(height: 6),
                     Text('Rekaman tetap berjalan saat layar mati.', style: theme.textTheme.bodySmall),
                   ],
                 ],
               ),
+              ),
             ),
+          ),
           ),
         ],
       ),
@@ -495,6 +540,21 @@ class _GradientButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _CompactStat extends StatelessWidget {
+  const _CompactStat({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(value, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures)),
+      Text(label, style: theme.textTheme.labelSmall),
+    ]);
   }
 }
 
